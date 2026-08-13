@@ -12,6 +12,7 @@ import { Input } from 'src/components/ui/input';
 import { Label } from 'src/components/ui/label';
 import { Button } from 'src/components/ui/button';
 import { createJobSchema  } from "../validation";
+import Spinner from "src/shared/components/Spinner";
 
 function EditJob() {
   const { id } = useParams();
@@ -27,6 +28,7 @@ function EditJob() {
   control,
   watch,
   handleSubmit,
+  setError,
   reset,
   formState: { errors },
 } = useForm({
@@ -64,33 +66,46 @@ function EditJob() {
     if (!id) return;
     console.log(data);
     try {
+      setIsLoading(true);
       await updateJob(Number(id),data);
 
       toast.success(t("JOB_UPDATED_SUCCESSFULLY"));
       navigate("/jobs");
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        if (error.response?.status === 409) {
-          await Swal.fire({
-            icon: 'error',
-            title: t('ERROR'),
-            text: t(error.response?.data.error.message),
-            confirmButtonText: t('OK'),
-          });
-          console.log(error.response?.data);
-        } else if(error.response?.status === 404) {
-          await Swal.fire({
-            icon: 'error',
-            title: t('ERROR'),
-            text: t(error.response?.data.error.message),
-            confirmButtonText: t('OK'),
-          });
-          console.log(error.response?.data);
+    if (axios.isAxiosError(error)) {
+        const message = error.response?.data?.error?.message;
+
+        console.log("Backend message:", message);
+
+        if (t(message) === t("JOB_CODE_ALREADY_EXISTS")) {
+            setError("jobCode", {
+                type: "server",
+                message: "JOB_CODE_ALREADY_EXISTS",
+            });
+            return;
         }
-      } else {
-        console.log('Unexpected error');
-      }
-    } 
+
+        if (t(message) === t("JOB_TITLE_EN_ALREADY_EXISTS")) {
+            setError("jobTitleEn", {
+                type: "server",
+                message: "JOB_TITLE_EN_ALREADY_EXISTS",
+            });
+            return;
+        }
+
+        if (t(message) === t("JOB_TITLE_AR_ALREADY_EXISTS")) {
+            setError("jobTitleAr", {
+                type: "server",
+                message: "JOB_TITLE_AR_ALREADY_EXISTS",
+            });
+            return;
+        }
+    }
+
+    console.error("Unexpected error:", error);
+} finally{
+      setIsLoading(false);
+    }
   };
 
  
@@ -102,6 +117,8 @@ function EditJob() {
       className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6"
       onSubmit={handleSubmit(handleSave)}
     >
+
+   
       <div>
         <Label htmlFor="jobCode">{t('JOB_CODE')}</Label>
         <Input id="jobCode" className="mt-2 w-full" {...register('jobCode')} />

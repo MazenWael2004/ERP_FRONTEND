@@ -2,7 +2,7 @@ import i18n from "../../config/i18n";
 import { api } from "../../shared/api/axios";
 import type {
     LoginFormRequest,
-    LoginFormResponse
+    LoginFormResponse,
 } from "./types";
 
 export const loginApi = async (
@@ -13,6 +13,7 @@ export const loginApi = async (
         `${data.userName}:${data.password}`
     );
 
+    // 1. Login
     const response = await api.post(
         "/auth/login",
         {},
@@ -24,18 +25,32 @@ export const loginApi = async (
         }
     );
 
+    const token = response.data.token;
+    const user = response.data.data;
+
+    // 2. Store authentication data
+    localStorage.setItem("access", token);
+    localStorage.setItem("user", JSON.stringify(user));
+
+    // 3. Get user's permissions
+    const permissionsResponse = await getUserPermissions(user.id);
+
+    const permissions = permissionsResponse.data;
+
+    // 4. Store permissions
     localStorage.setItem(
-        "access",
-        response.data.token
+        "permissions",
+        JSON.stringify(permissions)
     );
 
-    localStorage.setItem(
-        "user",
-        JSON.stringify(response.data.data)
-    );
-
-    return response.data;
+    // 5. Return everything together
+    return {
+        ...response.data,
+        data: user,
+        permissions,
+    };
 };
+
 
 export const getUserPermissions = async (
     userId: number

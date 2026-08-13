@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import toast from "react-hot-toast";
 import axios from "axios";
 import { getUserById, updateUser } from "../api/userService";
+import { fetchEmployees } from "src/features/employees/api/employeeService";
 import { useAuth } from '../../auth/hooks/useAuth';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -26,7 +27,7 @@ function EditUser() {
   const [isLoading, setIsLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [roles, setRoles] = useState([]);
-
+  const [employees,setEmployees] = useState([]);
 
   const {
   register,
@@ -65,6 +66,19 @@ function EditUser() {
     fetchUser();
   }, [id,reset]);
 
+  useEffect(() => {
+      const loadEmployees = async () => {
+        try {
+          const response = await fetchEmployees();
+          setEmployees(response.data);
+        } catch (err) {
+          console.error(err);
+        }
+      };
+  
+      loadEmployees();
+    }, []);
+
   const handleSave = async (data:any) => {
     if (!id) return;
     console.log(data);
@@ -72,7 +86,7 @@ function EditUser() {
       await updateUser(Number(id),data);
 
       toast.success(t("USER_UPDATED_SUCCESSFULLY"));
-      navigate("/employees");
+      navigate("/users");
     } catch (error) {
       if (axios.isAxiosError(error)) {
         if (error.response?.status === 409) {
@@ -127,13 +141,34 @@ function EditUser() {
         )}
       </div>
 
-      <div>
-        <Label htmlFor="employeeId">Employee ID</Label>
-        <Input id="employeeId" className="mt-2 w-full"  {...register("employeeId", { valueAsNumber: true })} />
-        {errors.employeeId && (
-          <span className="error-message">{t(errors.employeeId.message!)}</span>
-        )}
-      </div>
+       <Controller
+              name="employeeId"
+              control={control}
+              render={({ field }) => (
+                <div>
+                  <Label>Employee Name</Label>
+      
+                  <Select
+                    value={field.value ? String(field.value) : ''}
+                    onValueChange={(value) => field.onChange(Number(value))}
+                  >
+                    <SelectTrigger className="mt-2 w-full">
+                      <SelectValue placeholder="Select an employee" />
+                    </SelectTrigger>
+      
+                    <SelectContent>
+                      {employees.map((employee) => (
+                        <SelectItem key={employee.id} value={String(employee.id)}>
+                          {t('LANG') === 'ar' ? employee.name_ar : employee.name_en}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+      
+                  {errors.employeeId && <span className="error-message">{t(errors.employeeId.message!)}</span>}
+                </div>
+              )}
+            />
 
         <div className="form-group">
           <Controller

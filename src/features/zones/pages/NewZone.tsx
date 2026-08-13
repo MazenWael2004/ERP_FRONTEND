@@ -1,29 +1,16 @@
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../auth/hooks/useAuth.tsx';
-import toast from 'react-hot-toast';
 import { useEffect } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm} from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { createZoneSchema } from '../validation.ts';
 import axios from 'axios';
-import { Icon } from '@iconify/react/dist/iconify.js';
 import { useNavigate } from 'react-router-dom';
-import { Calendar } from 'src/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from 'src/components/ui/popover';
 import { createZone,fetchZones } from '../api/zoneService.ts';
 import Swal from 'sweetalert2';
-import { fetchRoles } from '../../roles/api/roleService.ts';
 import { useState } from 'react';
-import { Autocomplete, TextField } from '@mui/material';
 import { Input } from 'src/components/ui/input';
 import { Label } from 'src/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectTrigger,
-  SelectValue,
-  SelectItem,
-} from 'src/components/ui/select';
 import { Button } from 'src/components/ui/button';
 
 function NewZone() {
@@ -54,28 +41,30 @@ function NewZone() {
 
       nav('/zones');
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        if (error.response?.status === 409) {
-          await Swal.fire({
-            icon: 'error',
-            title: t('ERROR'),
-            text: t(error.response?.data.error.message),
-            confirmButtonText: t('OK'),
-          });
-          console.log(error.response?.data);
-        } else if(error.response?.status === 404) {
-          await Swal.fire({
-            icon: 'error',
-            title: t('ERROR'),
-            text: t(error.response?.data.error.message),
-            confirmButtonText: t('OK'),
-          });
-          console.log(error.response?.data);
+    if (axios.isAxiosError(error)) {
+        const message = error.response?.data?.error?.message;
+
+        console.log("Backend message:", message);
+
+        if (t(message) === t("ZONE_EN_ALREADY_EXISTS")) {
+            setError("zoneNameEn", {
+                type: "server",
+                message: "ZONE_EN_ALREADY_EXISTS",
+            });
+            return;
         }
-      } else {
-        console.log('Unexpected error');
-      }
-    } finally {
+
+        if (t(message) === t("ZONE_AR_ALREADY_EXISTS")) {
+            setError("zoneNameAr", {
+                type: "server",
+                message: "ZONE_AR_ALREADY_EXISTS",
+            });
+            return;
+        }
+    }
+
+    console.error("Unexpected error:", error);
+} finally {
       setIsLoading(false);
     }
   };
@@ -85,6 +74,7 @@ function NewZone() {
     handleSubmit,
     control,
     watch,
+    setError,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(createZoneSchema),

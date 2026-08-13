@@ -30,6 +30,12 @@ export const getRoleById = async (roleId:any)=>{
 };
 
 
+export const fetchPages = async()=>{
+        const response = await api.get("pages");
+        return response.data;
+}
+
+
 
 
 // but we have serveral problems.. what if several users has this role??

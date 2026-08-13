@@ -7,7 +7,7 @@ import { getEmployeeById, updateEmployee } from "../api/employeeService";
 import { useAuth } from '../../auth/hooks/useAuth';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { createEmployeeSchema } from '../../employees/validation';
+import { createEmployeeSchema, editEmployeeSchema } from '../../employees/validation';
 import {fetchJobs} from "../../jobs/api/jobService";
 import { Icon } from '@iconify/react/dist/iconify.js';
 import { Calendar } from 'src/components/ui/calendar';
@@ -39,7 +39,7 @@ function EditEmployee() {
   reset,
   formState: { errors },
 } = useForm({
-  resolver: zodResolver(createEmployeeSchema),
+  resolver: zodResolver(editEmployeeSchema),
 });
 
 const jobId = watch("jobId");
@@ -165,6 +165,8 @@ const jobId = watch("jobId");
           <span className="error-message">{t(errors.employeeNum.message!)}</span>
         )}
       </div>
+
+      
 
       <Controller
         name="birthDate"
@@ -321,6 +323,19 @@ const jobId = watch("jobId");
         <Label htmlFor="password">Password</Label>
         <Input id="password" type="password" className="mt-2 w-full" />
       </div> */}
+
+      <div className="flex items-center space-x-2">
+        <Input
+          id="isTerminated"
+          type="checkbox"
+          className="h-4 w-4"
+          {...register('isTerminated')}
+        />
+
+        <Label htmlFor="isTerminated">{t('IS_TERMINATED')}</Label>
+      </div>
+
+
       <div className="md:col-span-2 flex justify-end">
         <Button type="submit" disabled={isLoading}>
           Save

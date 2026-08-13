@@ -46,6 +46,7 @@ export const updateEmployee = async (id:any, employeeData:any) => {
     birthDate: employeeData.birthDate,
     jobId: employeeData.jobId,
     zones: employeeData.zones,
+    isTerminated: employeeData.isTerminated,
   });
   return response.data;
 };

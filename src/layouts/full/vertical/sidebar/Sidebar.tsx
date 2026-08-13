@@ -2,7 +2,8 @@ import SimpleBar from 'simplebar-react';
 import { Icon } from '@iconify/react';
 import { Link, useLocation } from 'react-router';
 import { useState } from 'react';
-
+import companyLogo from '../../../../assets/images/logos/b_connect_egypt_logo-removebg-preview.png';
+import usersIcon from '../../../../assets/images/logos/users.png'
 import { useTheme } from 'src/components/provider/theme-provider';
 
 import {
@@ -22,6 +23,7 @@ const mockApps = [
   {
     id: 1,
     name: 'Administration',
+
 
     modules: [
       {
@@ -49,21 +51,6 @@ const mockApps = [
           },
         ],
       },
-
-      {
-        id: 2,
-        name: 'Access Control',
-
-        pages: [
-          {
-            id: 3,
-            name: 'Permissions',
-            icon: 'mdi:lock',
-            url: '/permissions',
-          },
-        ],
-      },
-
       {
         id: 3,
         name: 'Settings',
@@ -75,6 +62,12 @@ const mockApps = [
             icon: 'mdi:history',
             url: '/zones',
           },
+          {
+            id:5,
+            name:'Jobs',
+            icon: 'mdi:briefcase',
+            url:"/jobs",
+          }
         ],
       },
     ],
@@ -161,6 +154,7 @@ interface SidebarItemType {
   title?: string;
   icon?: string;
   url?: string;
+  iconImage?: string;
   children?: SidebarItemType[];
   disabled?: boolean;
   isPro?: boolean;
@@ -176,6 +170,10 @@ const renderSidebarItems = (
   currentPath: string,
   onClose?: () => void,
   isSubItem: boolean = false,
+  openModules?: Record<number, boolean>,
+  setOpenModules?: React.Dispatch<
+    React.SetStateAction<Record<number, boolean>>
+  >,
 ) => {
   return items.map((item) => {
 
@@ -184,39 +182,80 @@ const renderSidebarItems = (
     // --------------------------------------------------------
 
     if (item.heading) {
-      return (
-        <div
-          className="mb-4"
-          key={item.heading}
+  const moduleId = Number(item.id);
+
+  const isOpen =
+    openModules?.[moduleId] ?? false;
+
+  return (
+    <div
+      className="mb-2"
+      key={item.heading}
+    >
+      {/* Module Header */}
+      <button
+        type="button"
+        onClick={() =>
+          setOpenModules?.((prev) => ({
+            ...prev,
+            [moduleId]: !isOpen,
+          }))
+        }
+        className="
+          flex
+          w-full
+          items-center
+          justify-between
+          rounded-md
+          px-2
+          py-2
+          text-left
+          transition-colors
+          hover:bg-sidebar-accent
+          hover:text-sidebar-accent-foreground
+        "
+      >
+        <span
+          className="
+            text-xs
+            font-bold
+            uppercase
+            text-sidebar-foreground
+          "
         >
-          <AMMenu
-            subHeading={item.heading}
-            ClassName="
-              hide-menu
-              leading-21
-              text-sidebar-foreground
-              font-bold
-              uppercase
-              text-xs
-              dark:text-sidebar-foreground
-            "
-          />
+          {item.heading}
+        </span>
 
-          {/* Pages inside this module */}
-          {item.children && item.children.length > 0 && (
-            <div className="mt-1">
-              {renderSidebarItems(
-                item.children,
-                currentPath,
-                onClose,
-                true,
-              )}
-            </div>
-          )}
-        </div>
-      );
-    }
+        <Icon
+          icon={
+            isOpen
+              ? 'mdi:chevron-down'
+              : 'mdi:chevron-right'
+          }
+          width={26}
+          height={26}
+          className="text-primary" // or text-muted-foreground, text-gray-500, etc.
+        />
+      </button>
 
+      {/* Module Pages */}
+      {isOpen &&
+        item.children &&
+        item.children.length > 0 && (
+          <div className="mt-1">
+            {renderSidebarItems(
+              item.children,
+              currentPath,
+              onClose,
+              true,
+              openModules,
+              setOpenModules,
+            )}
+          </div>
+        )}
+    </div>
+  );
+}
 
     // --------------------------------------------------------
     // Submenu
@@ -226,19 +265,39 @@ const renderSidebarItems = (
 
       const IconComp = item.icon || null;
 
-      const iconElement = IconComp ? (
-        <Icon
-          icon={IconComp}
-          height={21}
-          width={21}
-        />
-      ) : (
-        <Icon
-          icon="ri:checkbox-blank-circle-line"
-          height={9}
-          width={9}
-        />
-      );
+      // const iconElement = IconComp ? (
+      //   <Icon
+      //     icon={IconComp}
+      //     height={21}
+      //     width={21}
+      //   />
+      // ) : (
+      //   <Icon
+      //     icon="ri:checkbox-blank-circle-line"
+      //     height={9}
+      //     width={9}
+      //   />
+      // );
+
+      const iconElement = item.iconImage ? (
+  <img
+    src={item.iconImage}
+    alt=""
+    className="h-[21px] w-[21px] object-contain"
+  />
+) : item.icon ? (
+  <Icon
+    icon={item.icon}
+    height={21}
+    width={21}
+  />
+) : (
+  <Icon
+    icon="ri:checkbox-blank-circle-line"
+    height={9}
+    width={9}
+  />
+);
 
       return (
         <div key={item.id}>
@@ -363,6 +422,7 @@ const SidebarLayout = ({
 }) => {
 
   const location = useLocation();
+  
 
   const pathname =
     location.pathname;
@@ -377,6 +437,7 @@ const SidebarLayout = ({
     setSelectedApp,
   ] = useState(1);
 
+  const [openModules, setOpenModules] = useState<Record<number, boolean>>({});
 
   // ----------------------------------------------------------
   // Find Selected App
@@ -408,23 +469,23 @@ const SidebarLayout = ({
   // Convert Modules → Sidebar Items
   // ----------------------------------------------------------
 
-  const sidebarItems: SidebarItemType[] =
-    currentApp?.modules.map(
-      (module) => ({
-        heading: module.name,
+ const sidebarItems: SidebarItemType[] =
+  currentApp?.modules.map(
+    (module) => ({
+      id: module.id,
+      heading: module.name,
 
-        children:
-          module.pages.map(
-            (page) => ({
-              id: page.id,
-              name: page.name,
-              icon: page.icon,
-              url: page.url,
-            }),
-          ),
-      }),
-    ) ?? [];
-
+      children:
+        module.pages.map(
+          (page) => ({
+            id: page.id,
+            name: page.name,
+            icon: page.icon,
+            url: page.url,
+          }),
+        ),
+    }),
+  ) ?? [];
 
   // ==========================================================
   // JSX
@@ -457,6 +518,18 @@ const SidebarLayout = ({
       >
 
         <div className="px-6">
+          {/* ==================================================
+        Company Logo
+    ================================================== */}
+
+    <div className="flex justify-center py-5">
+      <img
+        src={companyLogo}
+        alt="B-Connect"
+        className="h-32 w-auto object-contain"
+      />
+    </div>
+
 
 
           {/* ==================================================
@@ -546,10 +619,13 @@ const SidebarLayout = ({
           <div>
 
             {renderSidebarItems(
-              sidebarItems,
-              pathname,
-              onClose,
-            )}
+  sidebarItems,
+  pathname,
+  onClose,
+  false,
+  openModules,
+  setOpenModules,
+)}
 
           </div>
 

@@ -846,3 +846,9 @@ body {
   cursor: pointer;
   accent-color: var(--mantine-primary-color-filled);
 }
+
+.unauthorized-container{
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}

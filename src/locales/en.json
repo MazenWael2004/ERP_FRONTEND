@@ -27,13 +27,13 @@
     "ZONES":"Zones",
     "ADD_JOB":"Add a Job",
     "ADD_ZONE":"Add a Zone",
-    "ZONE_NAME_AR":"Zone Name Arabic",
+    "ZONE_NAME_AR":"Zone Name Ar",
     "ZONE_UPDATED_SUCCESSFULLY":"Zone updated successfully",
     "ZONE_NAME_EN_REQUIRED":"Zone Name English is required",
     "ZONE_NAME_AR_REQUIRED":"Zone Name Arabic is required",
     "ZONE_NAME_EN_ONLY_ENGLISH":"Zone name must be in english",
     "ZONE_NAME_AR_ONLY_ARABIC":"Zone name must be in arabic",
-    "ZONE_NAME_EN":"Zone Name in English",
+    "ZONE_NAME_EN":"Zone Name En",
     "ENTER_ZONE_NAME_EN":"Enter Zone name in English",
     "ENTER_ZONE_NAME_AR":"Enter Zone name in Arabic",
     "JOB_TITLE_EN":"Job Title English",
@@ -132,7 +132,16 @@
     "ROLE_NAME_AR_REQUIRED":"Role name arabic is required",
     "ARE_YOU_SURE":"Are you sure?",
     "CANNOT_UNDO_ACTION":"Cannot undo that action once performed",
+    "JOB_CODE_ALREADY_EXISTS":"Job code already exists",
     "YES_DELETE":"Yes, delete",
-    "CANCEL":"Cancel"
+    "CANCEL":"Cancel",
+    "ROLE_DELETED_SUCCESSFULLY":"Role successfully deleted",
+    "PASSWORDS_DO_NOT_MATCH":"Passwords don't match",
+    "ROLE_UPDATED_SUCCESSFULLY":"Role updated successfully",
+    "IS_TERMINATED":"Terminate Employee",
+    "JOB_TITLE_EN_ALREADY_EXISTS":"Job title En already exists",
+    "JOB_TITLE_AR_ALREADY_EXISTS":"Job title Ar already exists",
+    "ZONE_EN_ALREADY_EXISTS":"Zone name En already exists",
+    "ZONE_AR_ALREADY_EXISTS":"Zone name Ar already exists"
     
 }

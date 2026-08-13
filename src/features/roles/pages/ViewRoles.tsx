@@ -9,6 +9,7 @@ import { Button } from 'src/components/ui/button';
 import { Plus } from 'lucide-react';
 import Swal from 'sweetalert2';
 import rolesIcon from '../../../assets/images/logos/roles.png';
+import { useAuth } from 'src/features/auth/hooks/useAuth';
 
 const roleColumns = [
   {
@@ -30,6 +31,10 @@ export default function ViewRoles() {
   const [loading, setLoading] = useState(false);
   const nav = useNavigate();
   const { t } = useTranslation();
+  const { hasPermission } = useAuth();
+  const canAdd = hasPermission('/roles', 'CREATE');
+  const canEdit = hasPermission('/roles', 'WRITE');
+  const canDelete = hasPermission('/roles', 'DELETE');
 
   const loadRoles = async () => {
     try {
@@ -107,24 +112,22 @@ export default function ViewRoles() {
       <BreadcrumbComp title="Roles Table" breadCrumbBg={rolesIcon} />
       <div className="flex gap-6 flex-col ">
         <div className="flex justify-end">
-          <Button
-            onClick={() => nav('/roles/new-role')}
-            className="bg-green-600 hover:bg-green-700 text-white"
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add Role
-          </Button>
+          {canAdd && (
+            <Button
+              onClick={() => nav('/roles/new-role')}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add Role
+            </Button>
+          )}
         </div>
 
         <DataTable
           data={roles}
           columns={roleColumns}
-          onEdit={(role) => {
-            nav(`/roles/${role.id}`);
-          }}
-          onDelete={(role) => {
-            handleDelete(role);
-          }}
+          onEdit={canEdit? (role) => nav(`/roles/${role.id}`) : undefined}
+          onDelete={canDelete ? (role)=> nav(`/roles${role.id}`): undefined}
         />
       </div>
     </>

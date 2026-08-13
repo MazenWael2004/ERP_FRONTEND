@@ -6,10 +6,12 @@ import type { loggedUser } from "../types";
 // This file does not store anything.
 
 export interface AuthContextType {
-    user: loggedUser | null;
+    user: any | null;
     token: string | null;
-    login: (user: loggedUser, token: string) => void;
+    login: (user: any, token: string) => void;
     logout: () => void;
+    hasPermission: (route: string, action_code: string) => boolean;
+    refreshPermissions: () => Promise<void>;
 };
 
 export const AuthContext = createContext<AuthContextType | null>(null);

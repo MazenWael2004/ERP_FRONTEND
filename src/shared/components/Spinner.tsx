@@ -2,15 +2,14 @@ import { Oval } from 'react-loader-spinner'
 
 export default function Spinner(){
     return (
-        <Oval
-  height={80}
-  width={80}
-  color="#3170a8"
-  visible={true}
-  ariaLabel="oval-loading"
-  secondaryColor="#242e6c"
-  strokeWidth={3}
-  strokeWidthSecondary={3}
-/>
+      <div className="flex min-h-screen items-center justify-center">
+  <Oval
+    height={50}
+    width={50}
+    color="#2563eb"
+    visible={true}
+    ariaLabel="loading"
+  />
+</div>
     )
 }

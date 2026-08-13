@@ -1,30 +1,18 @@
+export function buildPermissionMap(permissions:any) {
 
+    const map = {};
 
+    for (const permission of permissions) {
 
-export type PermissionMap = Record<number, any>;
+        const page = permission.route;
+        const action = permission.action_code;
 
-export const buildPermissionMap = (
-    permissions: any[]
-): PermissionMap => {
-    return permissions.reduce<PermissionMap>((acc, permission) => {
-        const pageId = permission.page_id;
-
-        if (!acc[pageId]) {
-            acc[pageId] = {
-                pageId,
-                page: permission.title_en,
-                actions: {},
-            };
+        if (!map[page]) {
+            map[page] = {};
         }
 
-        const action = permission.name_en[1]?.toLowerCase();
+        map[page][action] = true;
+    }
 
-        if (action) {
-            acc[pageId].actions[
-                action as keyof["actions"]
-            ] = true;
-        }
-
-        return acc;
-    }, {});
-};
+    return map;
+}

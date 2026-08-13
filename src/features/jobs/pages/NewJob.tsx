@@ -1,30 +1,19 @@
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../auth/hooks/useAuth.tsx';
-import toast from 'react-hot-toast';
 import { useEffect } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { createJobSchema } from '../validation.ts';
 import axios from 'axios';
-import { Icon } from '@iconify/react/dist/iconify.js';
 import { useNavigate } from 'react-router-dom';
-import { Calendar } from 'src/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from 'src/components/ui/popover';
 import { createJob } from '../api/jobService.ts';
 import Swal from 'sweetalert2';
 import { fetchRoles } from '../../roles/api/roleService.ts';
 import { useState } from 'react';
-import { Autocomplete, TextField } from '@mui/material';
 import { Input } from 'src/components/ui/input';
 import { Label } from 'src/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectTrigger,
-  SelectValue,
-  SelectItem,
-} from 'src/components/ui/select';
 import { Button } from 'src/components/ui/button';
+import Spinner from 'src/shared/components/Spinner.tsx';
 
 function NewJob() {
   const [open, setOpen] = useState(false);
@@ -53,29 +42,40 @@ function NewJob() {
       });
 
       nav('/jobs');
+      // error.reponse?.status === 409
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        if (error.response?.status === 409) {
-          await Swal.fire({
-            icon: 'error',
-            title: t('ERROR'),
-            text: t(error.response?.data.error.message),
-            confirmButtonText: t('OK'),
-          });
-          console.log(error.response?.data);
-        } else if(error.response?.status === 404) {
-          await Swal.fire({
-            icon: 'error',
-            title: t('ERROR'),
-            text: t(error.response?.data.error.message),
-            confirmButtonText: t('OK'),
-          });
-          console.log(error.response?.data);
+    if (axios.isAxiosError(error)) {
+        const message = error.response?.data?.error?.message;
+
+        console.log("Backend message:", message);
+
+        if (t(message) === t("JOB_CODE_ALREADY_EXISTS")) {
+            setError("jobCode", {
+                type: "server",
+                message: "JOB_CODE_ALREADY_EXISTS",
+            });
+            return;
         }
-      } else {
-        console.log('Unexpected error');
-      }
-    } finally {
+
+        if (t(message) === t("JOB_TITLE_EN_ALREADY_EXISTS")) {
+            setError("jobTitleEn", {
+                type: "server",
+                message: "JOB_TITLE_EN_ALREADY_EXISTS",
+            });
+            return;
+        }
+
+        if (t(message) === t("JOB_TITLE_AR_ALREADY_EXISTS")) {
+            setError("jobTitleAr", {
+                type: "server",
+                message: "JOB_TITLE_AR_ALREADY_EXISTS",
+            });
+            return;
+        }
+    }
+
+    console.error("Unexpected error:", error);
+} finally {
       setIsLoading(false);
     }
   };
@@ -85,6 +85,7 @@ function NewJob() {
     handleSubmit,
     control,
     watch,
+    setError,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(createJobSchema),
@@ -114,12 +115,12 @@ function NewJob() {
         {errors.jobCode && <span className="error-message">{t(errors.jobCode.message!)}</span>}
       </div>
 
-  
-
       <div>
         <Label htmlFor="jobTitleEn">{t('JOB_TITLE_EN')}</Label>
         <Input id="jobTitleEn" className="mt-2 w-full" {...register('jobTitleEn')} />
-        {errors.jobTitleEn && <span className="error-message">{t(errors.jobTitleEn.message!)}</span>}
+        {errors.jobTitleEn && (
+          <span className="error-message">{t(errors.jobTitleEn.message!)}</span>
+        )}
       </div>
 
       <div>
@@ -131,19 +132,16 @@ function NewJob() {
       </div>
 
       <div className="flex items-center space-x-2">
-  <Input
-    id="isZoneMandatory"
-    type="checkbox"
-    className="h-4 w-4"
-    {...register("isZoneMandatory")}
-  />
+        <Input
+          id="isZoneMandatory"
+          type="checkbox"
+          className="h-4 w-4"
+          {...register('isZoneMandatory')}
+        />
 
-  <Label htmlFor="isZoneMandatory">
-    {t("IS_ZONE_MANDATORY")}
-  </Label>
-</div>
+        <Label htmlFor="isZoneMandatory">{t('IS_ZONE_MANDATORY')}</Label>
+      </div>
 
-    
       <div className="md:col-span-2 flex justify-end">
         <Button type="submit" disabled={isLoading}>
           Save

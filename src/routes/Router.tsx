@@ -14,6 +14,8 @@ import EditRole from 'src/features/roles/pages/EditRole';
 import ViewRoles from 'src/features/roles/pages/ViewRoles';
 import NewRole from 'src/features/roles/pages/NewRole';
 import EditJob from 'src/features/jobs/pages/EditJob';
+import Unauthorized from 'src/shared/pages/Unauthorized';
+import ViewJobs from '../features/jobs/pages/ViewJobs';
 /* ***Layouts**** */
 const FullLayout = Loadable(lazy(() => import('../layouts/full/FullLayout')));
 const BlankLayout = Loadable(lazy(() => import('../layouts/blank/BlankLayout')));
@@ -52,6 +54,8 @@ const SolarIcon = Loadable(lazy(() => import('../views/icons/SolarIcon')));
 // Error
 const Error = Loadable(lazy(() => import('../views/authentication/Error')));
 
+
+// pageId is HARDCODED ,, fix later.....
 const Router = [
   {
     path: '/',
@@ -75,18 +79,47 @@ const Router = [
       { path: 'employees', element: <Employees /> },
       { path: 'employees/new-employee', element: <NewEmployee /> },
       { path: 'employees/:id', element: <EditEmployee /> },
-      { path: 'users', element: <ViewUsers /> },
+       {
+        path: 'users',
+        element: (
+          <ProtectedRoute route = '/users' action_code = 'READ'>
+            <ViewUsers />
+          </ProtectedRoute>
+        ),
+      },
       { path: 'users/new-user', element: <NewUser /> },
       { path: 'users/:id', element: <EditUser /> },
-      { path: 'jobs', element: <Jobs /> },
+      {
+        path: 'jobs',
+        element: (
+          <ProtectedRoute  route = '/jobs' action_code = 'READ'>
+            <ViewJobs />
+          </ProtectedRoute>
+        ),
+      },
       {path: 'jobs/new-job', element: <NewJob /> },
-      {path: 'zones', element: <ViewZones /> },
+      {
+        path: 'zones',
+        element: (
+          <ProtectedRoute  route = '/zones' action_code = 'READ'>
+            <ViewZones />
+          </ProtectedRoute>
+        ),
+      },
       {path:"zones/new-zone", element: <NewZone />},
       {path:"zones/:id",element: <EditZone /> },
       {path:"roles/:id",element: <EditRole /> },
       {path:"jobs/:id",element: <EditJob />},
-      {path:"roles", element: <ViewRoles />},
+      {
+        path: 'roles',
+        element: (
+          <ProtectedRoute  route = '/roles' action_code = 'READ'>
+            <ViewRoles />
+          </ProtectedRoute>
+        ),
+      },
       {path:"roles/new-role", element: <NewRole />},
+      {path:"/unauthorized",element: <Unauthorized />},
       { path: '*', element: <Navigate to="/auth/404" replace /> },
     ],
   },

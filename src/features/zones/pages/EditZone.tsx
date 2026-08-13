@@ -102,7 +102,7 @@ function EditUser() {
       onSubmit={handleSubmit(handleSave)}
     >
       <div>
-        <Label htmlFor="zoneNameEn">{t("zoneNameEn")}</Label>
+        <Label htmlFor="zoneNameEn">{t("ZONE_NAME_EN")}</Label>
         <Input id="zoneNameEn" className="mt-2 w-full" {...register('zoneNameEn')} />
         {errors.zoneNameEn && (
           <span className="error-message">{t(errors.zoneNameEn.message!)}</span>
@@ -110,7 +110,7 @@ function EditUser() {
       </div>
 
       <div>
-        <Label htmlFor="zoneNameAr">{t("zoneNameAr")}</Label>
+        <Label htmlFor="zoneNameAr">{t("ZONE_NAME_AR")}</Label>
         <Input id="zoneNameAr" className="mt-2 w-full" {...register('zoneNameAr')} />
         {errors.zoneNameAr && (
           <span className="error-message">{t(errors.zoneNameAr.message!)}</span>

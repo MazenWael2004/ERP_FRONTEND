@@ -1,4 +1,4 @@
-import { MainLayout } from "../../layouts/MainLayout";
+
 import Header from "../components/Header";
 import ErrorPageIcon from "../../assets/404 Error-rafiki.png";
 import { replace, useNavigate } from "react-router-dom";

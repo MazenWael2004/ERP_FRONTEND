@@ -32,3 +32,8 @@ export const createEmployeeSchema = z.object({
 
   zones: z.array(z.number().int()).optional(),
 });
+
+// Used only when editing an employee
+export const editEmployeeSchema = createEmployeeSchema.extend({
+    isTerminated: z.boolean(),
+});

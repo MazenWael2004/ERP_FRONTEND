@@ -18,6 +18,7 @@ import { useState } from 'react';
 import { Autocomplete, TextField } from '@mui/material';
 import { Input } from 'src/components/ui/input';
 import { Label } from 'src/components/ui/label';
+import { useAuth } from '../../auth/hooks/useAuth.tsx';
 import {
   Select,
   SelectContent,
@@ -31,10 +32,12 @@ function NewUser() {
   const [open, setOpen] = useState(false);
   const nav = useNavigate();
   const { t } = useTranslation();
-  const { user } = useAuth();
+  const { user,hasPermission } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [showPasswordFields, setPasswordFields] = useState(true);
   const [roles, setRoles] = useState([]);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // console.log(user);
 
@@ -64,7 +67,7 @@ function NewUser() {
             confirmButtonText: t('OK'),
           });
           console.log(error.response?.data);
-        } else if(error.response?.status === 404) {
+        } else if (error.response?.status === 404) {
           await Swal.fire({
             icon: 'error',
             title: t('ERROR'),
@@ -91,9 +94,8 @@ function NewUser() {
     resolver: zodResolver(createUserSchema),
   });
 
-    const [employees, setEmployees] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const employeeId = watch('employeeId');
-
 
   useEffect(() => {
     const loadRoles = async () => {
@@ -127,33 +129,100 @@ function NewUser() {
       onSubmit={handleSubmit(handleSave)}
     >
       <div>
-        <Label htmlFor="userName">{t('USERNAME')}</Label>
+        <Label htmlFor="userName">
+          {t('USERNAME')}
+          <span className="ml-1 text-red-500">*</span>
+        </Label>
+
         <Input id="userName" className="mt-2 w-full" {...register('userName')} />
+
         {errors.userName && <span className="error-message">{t(errors.userName.message!)}</span>}
       </div>
 
       {/* Passwords */}
 
       <div>
-        <Label htmlFor="password">{t('PASSWORD')}</Label>
-        <Input id="password" className="mt-2 w-full" {...register('password')} />
+        <Label htmlFor="password">
+          {t('PASSWORD')}
+          <span className="ml-1 text-red-500">*</span>
+        </Label>
+
+        <div className="relative mt-2">
+          <Input
+            id="password"
+            type={showPassword ? 'text' : 'password'}
+            className="w-full pr-10"
+            {...register('password')}
+          />
+
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="
+        absolute
+        right-3
+        top-1/2
+        -translate-y-1/2
+        text-gray-500
+        hover:text-gray-700
+        dark:hover:text-gray-300
+      "
+          >
+            <Icon
+              icon={showPassword ? 'mdi:eye-off-outline' : 'mdi:eye-outline'}
+              width="20"
+              height="20"
+            />
+          </button>
+        </div>
+
         {errors.password && <span className="error-message">{t(errors.password.message!)}</span>}
       </div>
 
       <div>
-        <Label htmlFor="confirmPassword">{t('CONFIRM_PASSWORD')}</Label>
-        <Input id="confirmPassword" className="mt-2 w-full" {...register('confirmPassword')} />
+        <Label htmlFor="confirmPassword">
+          {t('CONFIRM_PASSWORD')}
+          <span className="ml-1 text-red-500">*</span>
+        </Label>
+
+        <div className="relative mt-2">
+          <Input
+            id="confirmPassword"
+            type={showConfirmPassword ? 'text' : 'password'}
+            className="w-full pr-10"
+            {...register('confirmPassword')}
+          />
+
+          <button
+            type="button"
+            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+            className="
+        absolute
+        right-3
+        top-1/2
+        -translate-y-1/2
+        text-gray-500
+        hover:text-gray-700
+        dark:hover:text-gray-300
+      "
+          >
+            <Icon
+              icon={showConfirmPassword ? 'mdi:eye-off-outline' : 'mdi:eye-outline'}
+              width="20"
+              height="20"
+            />
+          </button>
+        </div>
+
         {errors.confirmPassword && (
           <span className="error-message">{t(errors.confirmPassword.message!)}</span>
         )}
       </div>
 
-      
-
       {/* Roles */}
       <div>
         {t('ROLE')}
-        <span className="required">*</span>
+        <span className="ml-1 text-red-500">*</span>
         <Controller
           name="roles"
           control={control}
@@ -179,33 +248,37 @@ function NewUser() {
       </div>
 
       <Controller
-              name="employeeId"
-              control={control}
-              render={({ field }) => (
-                <div>
-                  <Label>Employee Name</Label>
-      
-                  <Select
-                    value={field.value ? String(field.value) : ''}
-                    onValueChange={(value) => field.onChange(Number(value))}
-                  >
-                    <SelectTrigger className="mt-2 w-full">
-                      <SelectValue placeholder="Select an employee" />
-                    </SelectTrigger>
-      
-                    <SelectContent>
-                      {employees.map((employee) => (
-                        <SelectItem key={employee.id} value={String(employee.id)}>
-                          {t('LANG') === 'ar' ? employee.name_ar : employee.name_en}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-      
-                  {errors.employeeId && <span className="error-message">{t(errors.employeeId.message!)}</span>}
-                </div>
-              )}
-            />
+        name="employeeId"
+        control={control}
+        render={({ field }) => (
+          <div>
+            <Label>Employee Name
+              <span className="ml-1 text-red-500">*</span>
+            </Label>
+
+            <Select
+              value={field.value ? String(field.value) : ''}
+              onValueChange={(value) => field.onChange(Number(value))}
+            >
+              <SelectTrigger className="mt-2 w-full">
+                <SelectValue placeholder="Select an employee" />
+              </SelectTrigger>
+
+              <SelectContent>
+                {employees.map((employee) => (
+                  <SelectItem key={employee.id} value={String(employee.id)}>
+                    {t('LANG') === 'ar' ? employee.name_ar : employee.name_en}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {errors.employeeId && (
+              <span className="error-message">{t(errors.employeeId.message!)}</span>
+            )}
+          </div>
+        )}
+      />
 
       {/* <div>
         <Label htmlFor="countries">Select Input</Label>
