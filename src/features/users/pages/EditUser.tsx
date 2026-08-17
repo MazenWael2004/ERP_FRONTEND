@@ -19,16 +19,19 @@ import { Label } from 'src/components/ui/label';
 import { Select, SelectContent, SelectTrigger, SelectValue,SelectItem } from 'src/components/ui/select';
 import { Button } from 'src/components/ui/button';
 import { editUserSchema  } from "../validation";
+import { useLocation } from 'react-router-dom';
+
 
 function EditUser() {
   const { id } = useParams();
+  const location = useLocation();
+  const user = location.state?.user;
   const navigate = useNavigate();
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [roles, setRoles] = useState([]);
   const [employees,setEmployees] = useState([]);
-
   const {
   register,
   control,
@@ -43,47 +46,47 @@ function EditUser() {
 
 
   useEffect(() => {
-    if (!id) return;
+  if (!user) return;
 
-    const fetchUser = async () => {
-      try {
-        const response = await getUserById(Number(id));
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
 
-        reset({
-          userName: response.data.username,
-          employeeId: response.data.employee_id,
-          roles: response.data.roles
-        });
-      } catch (error) {
-        if (axios.isAxiosError(error) && error.response?.status === 404) {
-          navigate("/404", { replace: true });
-          return;
-        }
-        console.error(error);
+      const [userResponse, employeesResponse] = await Promise.all([
+        getUserById(Number(user.id)),
+        fetchEmployees(),
+      ]);
+
+      setEmployees(employeesResponse.data);
+
+      reset({
+        userName: userResponse.data.username,
+        employeeId: userResponse.data.employee_id,
+        roles: userResponse.data.roles,
+      });
+    } catch (error) {
+      if (
+        axios.isAxiosError(error) &&
+        error.response?.status === 404
+      ) {
+        navigate("/404", { replace: true });
+        return;
       }
-    };
 
-    fetchUser();
-  }, [id,reset]);
+      console.error(error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  useEffect(() => {
-      const loadEmployees = async () => {
-        try {
-          const response = await fetchEmployees();
-          setEmployees(response.data);
-        } catch (err) {
-          console.error(err);
-        }
-      };
-  
-      loadEmployees();
-    }, []);
+  loadData();
+}, [user?.id, reset, navigate]);
 
   const handleSave = async (data:any) => {
-    if (!id) return;
+    if (!user) return;
     console.log(data);
     try {
-      await updateUser(Number(id),data);
+      await updateUser(user.id,data);
 
       toast.success(t("USER_UPDATED_SUCCESSFULLY"));
       navigate("/users");
@@ -125,7 +128,19 @@ function EditUser() {
     loadRoles();
   }, []);
   
+if (isLoading) {
+  return (
+    <div className="flex min-h-[400px] items-center justify-center">
+      <div className="flex flex-col items-center gap-3">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-primary" />
 
+        <p className="text-sm text-gray-500">
+          Loading user information...
+        </p>
+      </div>
+    </div>
+  );
+}
 
 
    return (

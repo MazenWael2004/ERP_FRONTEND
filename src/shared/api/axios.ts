@@ -6,3 +6,12 @@ export const api = axios.create({
     "Content-Type": "application/json",
   },
 });
+
+
+export const fetchApps = async ()=>{
+  const response = await api.get("/apps");
+  return response.data;
+};
+
+
+

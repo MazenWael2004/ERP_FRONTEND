@@ -6,6 +6,7 @@ import BreadcrumbComp from 'src/layouts/full/shared/breadcrumb/BreadcrumbComp';
 import { DataTable } from 'src/components/utilities/table/DataTable';
 import { Button } from 'src/components/ui/button';
 import { Plus } from 'lucide-react';
+
 import Swal from 'sweetalert2';
 import {
   DropdownMenu,
@@ -38,10 +39,15 @@ export default function ViewJobs() {
   const nav = useNavigate();
   const { t } = useTranslation();
   const { user, hasPermission } = useAuth();
-  const canEdit = hasPermission("/jobs", "WRITE");
-  const canDelete = hasPermission("/jobs", "DELETE");
-  const canAdd = hasPermission("/jobs","CREATE");
+  const canEdit = hasPermission('/jobs', 'WRITE');
+  const canDelete = hasPermission('/jobs', 'DELETE');
+  const canAdd = hasPermission('/jobs', 'CREATE');
 
+  const handleEditJob = (job: any) => {
+    nav('/jobs/edit', {
+      state: { job: job },
+    });
+  };
 
   const loadJobs = async () => {
     try {
@@ -117,7 +123,7 @@ export default function ViewJobs() {
           onEdit={
             canEdit
               ? (job) => {
-                  nav(`/jobs/${job.id}`);
+                  handleEditJob(job);
                 }
               : undefined
           }

@@ -33,6 +33,7 @@ function LoginPage() {
   });
 
   const onSubmit = async (data: any) => {
+    console.log('FORM SUBMITTED', data);
     setIsLoading(true);
 
     try {

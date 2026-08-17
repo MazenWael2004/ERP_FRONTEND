@@ -36,6 +36,13 @@ export default function ViewUsers() {
   const canEdit = hasPermission('/zones', 'WRITE');
   const canDelete = hasPermission('/zones', 'DELETE');
 
+    const handleEditZone = (zone: any) => {
+    nav('/zones/edit', {
+      state: { zone: zone },
+    });
+  };
+
+
   const loadZones = async () => {
     try {
       setLoading(true);
@@ -109,7 +116,7 @@ export default function ViewUsers() {
         <DataTable
           data={zones}
           columns={zoneColumns}
-          onEdit={canEdit ? (zone) => nav(`/zones/${zone.id}`) : undefined}
+          onEdit={canEdit ? (zone) => handleEditZone(zone) : undefined}
           onDelete={canDelete ? (zone) => handleDelete(zone) : undefined}
         />
       </div>

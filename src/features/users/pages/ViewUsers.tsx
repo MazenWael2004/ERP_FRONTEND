@@ -32,23 +32,21 @@ const userColumns = [
   },
 ];
 
-
 export default function ViewUsers() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const nav = useNavigate();
   const { t } = useTranslation();
-  const { user, hasPermission } = useAuth();
+  const { hasPermission } = useAuth();
   // HARDCODED FIX LATER.......
- const canEdit = hasPermission('/users', 'WRITE');
-const canDelete = hasPermission('/users', 'DELETE');
-const canAdd = hasPermission('/users', 'CREATE');
+  const canEdit = hasPermission('/users', 'WRITE');
+  const canDelete = hasPermission('/users', 'DELETE');
+  const canAdd = hasPermission('/users', 'CREATE');
   const handleEditUser = (user: any) => {
-  nav('/users/edit', {
-    state: { user },
-  });
-};
-
+    nav('/users/edit', {
+      state: { user: user },
+    });
+  };
 
   const loadUsers = async () => {
     try {
@@ -122,7 +120,7 @@ const canAdd = hasPermission('/users', 'CREATE');
         <DataTable
           data={users}
           columns={userColumns}
-          onEdit={canEdit ? (user) => nav(`/users/${user.id}`) : undefined}
+          onEdit={canEdit ? (user) => handleEditUser(user) : undefined}
           // onEdit={canEdit ? (user) => handleEditUser(user) : undefined}
           onDelete={canDelete ? (user) => handleDelete(user) : undefined}
         />

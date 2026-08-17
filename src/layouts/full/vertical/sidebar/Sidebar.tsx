@@ -1,10 +1,11 @@
 import SimpleBar from 'simplebar-react';
 import { Icon } from '@iconify/react';
 import { Link, useLocation } from 'react-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import companyLogo from '../../../../assets/images/logos/b_connect_egypt_logo-removebg-preview.png';
 import usersIcon from '../../../../assets/images/logos/users.png'
 import { useTheme } from 'src/components/provider/theme-provider';
+import { useAuth } from 'src/features/auth/hooks/useAuth';
 
 import {
   AMMenu,
@@ -13,134 +14,139 @@ import {
 } from 'tailwind-sidebar';
 
 import 'tailwind-sidebar/styles.css';
+import { fetchApps } from 'src/shared/api/axios';
+
+
+
 
 
 // ============================================================
 // Mock Data
 // ============================================================
 
-const mockApps = [
-  {
-    id: 1,
-    name: 'Administration',
+
+// const mockApps = [
+//   {
+//     id: 1,
+//     name: 'Administration',
 
 
-    modules: [
-      {
-        id: 1,
-        name: 'User Management',
+//     modules: [
+//       {
+//         id: 1,
+//         name: 'User Management',
 
-        pages: [
-          {
-            id: 1,
-            name: 'Users',
-            icon: 'mdi:account-group',
-            url: '/users',
-          },
-          {
-            id: 2,
-            name: 'Roles',
-            icon: 'mdi:shield-account',
-            url: '/roles',
-          },
-          {
-            id: 3,
-            name: 'Employees',
-            icon: 'mdi:users',
-            url: '/employees',
-          },
-        ],
-      },
-      {
-        id: 3,
-        name: 'Settings',
+//         pages: [
+//           {
+//             id: 1,
+//             name: 'Users',
+//             icon: 'mdi:account-group',
+//             url: '/users',
+//           },
+//           {
+//             id: 2,
+//             name: 'Roles',
+//             icon: 'mdi:shield-account',
+//             url: '/roles',
+//           },
+//           {
+//             id: 3,
+//             name: 'Employees',
+//             icon: 'mdi:users',
+//             url: '/employees',
+//           },
+//         ],
+//       },
+//       {
+//         id: 3,
+//         name: 'Settings',
 
-        pages: [
-          {
-            id: 4,
-            name: 'Zones',
-            icon: 'mdi:history',
-            url: '/zones',
-          },
-          {
-            id:5,
-            name:'Jobs',
-            icon: 'mdi:briefcase',
-            url:"/jobs",
-          }
-        ],
-      },
-    ],
-  },
+//         pages: [
+//           {
+//             id: 4,
+//             name: 'Zones',
+//             icon: 'mdi:history',
+//             url: '/zones',
+//           },
+//           {
+//             id:5,
+//             name:'Jobs',
+//             icon: 'mdi:briefcase',
+//             url:"/jobs",
+//           }
+//         ],
+//       },
+//     ],
+//   },
 
-  {
-    id: 2,
-    name: 'Human Resources',
+//   {
+//     id: 2,
+//     name: 'Human Resources',
 
-    modules: [
-      {
-        id: 4,
-        name: 'Employee Management',
+//     modules: [
+//       {
+//         id: 4,
+//         name: 'Employee Management',
 
-        pages: [
-          {
-            id: 5,
-            name: 'Employees',
-            icon: 'mdi:account-multiple',
-            url: '/employees',
-          },
-          {
-            id: 6,
-            name: 'Jobs',
-            icon: 'mdi:briefcase',
-            url: '/jobs',
-          },
-        ],
-      },
+//         pages: [
+//           {
+//             id: 5,
+//             name: 'Employees',
+//             icon: 'mdi:account-multiple',
+//             url: '/employees',
+//           },
+//           {
+//             id: 6,
+//             name: 'Jobs',
+//             icon: 'mdi:briefcase',
+//             url: '/jobs',
+//           },
+//         ],
+//       },
 
-      {
-        id: 5,
-        name: 'Attendance',
+//       {
+//         id: 5,
+//         name: 'Attendance',
 
-        pages: [
-          {
-            id: 7,
-            name: 'Attendance',
-            icon: 'mdi:calendar-check',
-            url: '/attendance',
-          },
-        ],
-      },
-    ],
-  },
+//         pages: [
+//           {
+//             id: 7,
+//             name: 'Attendance',
+//             icon: 'mdi:calendar-check',
+//             url: '/attendance',
+//           },
+//         ],
+//       },
+//     ],
+//   },
 
-  {
-    id: 3,
-    name: 'Operations',
+//   {
+//     id: 3,
+//     name: 'Operations',
 
-    modules: [
-      {
-        id: 6,
-        name: 'Operations Management',
+//     modules: [
+//       {
+//         id: 6,
+//         name: 'Operations Management',
 
-        pages: [
-          {
-            id: 8,
-            name: 'Tasks',
-            icon: 'mdi:clipboard-check',
-            url: '/tasks',
-          },
-          {
-            id: 9,
-            name: 'Projects',
-            icon: 'mdi:folder-multiple',
-            url: '/projects',
-          },
-        ],
-      },
-    ],
-  },
-];
+//         pages: [
+//           {
+//             id: 8,
+//             name: 'Tasks',
+//             icon: 'mdi:clipboard-check',
+//             url: '/tasks',
+//           },
+//           {
+//             id: 9,
+//             name: 'Projects',
+//             icon: 'mdi:folder-multiple',
+//             url: '/projects',
+//           },
+//         ],
+//       },
+//     ],
+//   },
+// ];
 
 
 // ============================================================
@@ -420,7 +426,41 @@ const SidebarLayout = ({
 }: {
   onClose?: () => void;
 }) => {
+ 
+  const [mockApps,setMockApps] = useState([]);
+  const [isLoading,setLoading] = useState(false);
+  const {hasPermission} = useAuth();
+  const loadApps = async () => {
+  try {
+    setLoading(true);
 
+    const response = await fetchApps();
+    const apps = response.data;
+
+    const filteredApps = apps.map((app) => ({
+      ...app,
+      modules: app.modules.map((module) => ({
+        ...module,
+        pages: module.pages.filter((page) =>
+          hasPermission(page.url, "READ")
+        ),
+      })),
+    }));
+
+    console.log(filteredApps);
+
+    setMockApps(filteredApps);
+
+  } catch (error) {
+    console.error("Failed to fetch apps:", error);
+  } finally {
+    setLoading(false);
+  }
+};
+  
+    useEffect(() => {
+      loadApps();
+    }, []);
   const location = useLocation();
   
 

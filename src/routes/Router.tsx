@@ -16,6 +16,7 @@ import NewRole from 'src/features/roles/pages/NewRole';
 import EditJob from 'src/features/jobs/pages/EditJob';
 import Unauthorized from 'src/shared/pages/Unauthorized';
 import ViewJobs from '../features/jobs/pages/ViewJobs';
+import ViewEmployees from '../features/employees/pages/ViewEmployees';
 /* ***Layouts**** */
 const FullLayout = Loadable(lazy(() => import('../layouts/full/FullLayout')));
 const BlankLayout = Loadable(lazy(() => import('../layouts/blank/BlankLayout')));
@@ -76,9 +77,23 @@ const Router = [
       { path: 'apps/blog/detail/:id', element: <BlogDetail /> },
       { path: 'user-profile', element: <UserProfile /> },
       { path: 'icons/iconify', element: <SolarIcon /> },
-      { path: 'employees', element: <Employees /> },
+       {
+        path: 'employees',
+        element: (
+          <ProtectedRoute route = '/employees' action_code = 'READ'>
+            <ViewEmployees />
+          </ProtectedRoute>
+        ),
+      },
       { path: 'employees/new-employee', element: <NewEmployee /> },
-      { path: 'employees/:id', element: <EditEmployee /> },
+       {
+        path: 'employees/edit',
+        element: (
+          <ProtectedRoute route = '/employees' action_code = 'WRITE'>
+            <EditEmployee />
+          </ProtectedRoute>
+        ),
+      },
        {
         path: 'users',
         element: (
@@ -88,7 +103,14 @@ const Router = [
         ),
       },
       { path: 'users/new-user', element: <NewUser /> },
-      { path: 'users/:id', element: <EditUser /> },
+      {
+        path: 'users/edit',
+        element: (
+          <ProtectedRoute route = '/users' action_code = 'WRITE'>
+            <EditUser />
+          </ProtectedRoute>
+        ),
+      },
       {
         path: 'jobs',
         element: (
@@ -107,9 +129,30 @@ const Router = [
         ),
       },
       {path:"zones/new-zone", element: <NewZone />},
-      {path:"zones/:id",element: <EditZone /> },
-      {path:"roles/:id",element: <EditRole /> },
-      {path:"jobs/:id",element: <EditJob />},
+      {
+        path: 'zones/edit',
+        element: (
+          <ProtectedRoute route = '/zones' action_code = 'WRITE'>
+            <EditZone />
+          </ProtectedRoute>
+        ),
+      },
+       {
+        path: 'roles/edit',
+        element: (
+          <ProtectedRoute route = '/roles' action_code = 'WRITE'>
+            <EditRole />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'jobs/edit',
+        element: (
+          <ProtectedRoute route = '/jobs' action_code = 'WRITE'>
+            <EditJob />
+          </ProtectedRoute>
+        ),
+      },
       {
         path: 'roles',
         element: (

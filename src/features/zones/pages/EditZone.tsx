@@ -13,14 +13,18 @@ import { Input } from 'src/components/ui/input';
 import { Label } from 'src/components/ui/label';
 import { Button } from 'src/components/ui/button';
 import { createZoneSchema  } from "../validation";
+import { useLocation } from "react-router-dom";
 
 function EditUser() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const location = useLocation();
   const [isLoading, setIsLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [roles, setRoles] = useState([]);
+  const currentZone = location.state?.zone;
+
 
 
   const {
@@ -37,11 +41,11 @@ function EditUser() {
 
 
   useEffect(() => {
-    if (!id) return;
+    if (!currentZone) return;
 
     const fetchUser = async () => {
       try {
-        const response = await getZoneById(Number(id));
+        const response = await getZoneById(currentZone.id);
 
         reset({
           zoneNameEn: response.data.name_en,
@@ -60,10 +64,10 @@ function EditUser() {
   }, [id,reset]);
 
   const handleSave = async (data:any) => {
-    if (!id) return;
+    if (!currentZone) return;
     console.log(data);
     try {
-      await updateZone(Number(id),data);
+      await updateZone(currentZone.id,data);
 
       toast.success(t("ZONE_UPDATED_SUCCESSFULLY"));
       navigate("/zones");

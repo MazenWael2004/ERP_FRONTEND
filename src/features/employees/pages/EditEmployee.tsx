@@ -1,27 +1,36 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { useTranslation } from "react-i18next";
-import toast from "react-hot-toast";
-import axios from "axios";
-import { getEmployeeById, updateEmployee } from "../api/employeeService";
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import toast from 'react-hot-toast';
+import axios from 'axios';
+import { getEmployeeById, updateEmployee } from '../api/employeeService';
 import { useAuth } from '../../auth/hooks/useAuth';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { createEmployeeSchema, editEmployeeSchema } from '../../employees/validation';
-import {fetchJobs} from "../../jobs/api/jobService";
+import { fetchJobs } from '../../jobs/api/jobService';
 import { Icon } from '@iconify/react/dist/iconify.js';
 import { Calendar } from 'src/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from 'src/components/ui/popover';
 import { createEmployee } from '../api/employeeService';
-import {fetchZones} from "../../zones/api/zoneService";
-import { Autocomplete, TextField } from "@mui/material";
+import { fetchZones } from '../../zones/api/zoneService';
+import { Autocomplete, TextField } from '@mui/material';
 import { Input } from 'src/components/ui/input';
 import { Label } from 'src/components/ui/label';
-import { Select, SelectContent, SelectTrigger, SelectValue,SelectItem } from 'src/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectTrigger,
+  SelectValue,
+  SelectItem,
+} from 'src/components/ui/select';
 import { Button } from 'src/components/ui/button';
+import { useLocation } from 'react-router-dom';
 
 function EditEmployee() {
   const { id } = useParams();
+  const location = useLocation();
+  const currentEmployee = location.state?.employee;
   const navigate = useNavigate();
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
@@ -30,115 +39,151 @@ function EditEmployee() {
   const [employee, setEmployee] = useState(null);
   const [jobs, setJobs] = useState([]);
 
-
   const {
-  register,
-  control,
-  watch,
-  handleSubmit,
-  reset,
-  formState: { errors },
-} = useForm({
-  resolver: zodResolver(editEmployeeSchema),
-});
+    register,
+    control,
+    watch,
+    handleSubmit,
+    setError,
+    reset,
+    formState: { errors },
+  } = useForm({
+    resolver: zodResolver(editEmployeeSchema),
+  });
 
-const jobId = watch("jobId");
+  const jobId = watch('jobId');
 
   useEffect(() => {
-    if (!id) return;
+    if (!currentEmployee?.id) navigate("/employees");
 
-    const fetchEmployee = async () => {
+    const loadData = async () => {
       try {
-        const response = await getEmployeeById(Number(id));
+        setIsLoading(true);
 
+        const [employeeResponse, jobsResponse, zonesResponse] = await Promise.all([
+          getEmployeeById(Number(currentEmployee.id)),
+          fetchJobs(),
+          fetchZones(),
+        ]);
+
+        const employeeData = employeeResponse.data;
+
+        console.log('EMPLOYEE:', employeeData);
+        console.log('JOB ID:', employeeData.job_id);
+
+        // Set all option data first
+        setJobs(jobsResponse.data);
+        setZones(zonesResponse.data);
+
+        // Then populate the form
         reset({
-          employeeNameAr: response.data.name_ar,
-          employeeNameEn: response.data.name_en,
-          email: response.data.email,
-          employeeNum: response.data.employee_number,
-          street: response.data.street,
-          city: response.data.city,
-          governorate: response.data.governorate,
-          telephoneNum: response.data.telephone_num,
-          birthDate: new Date(response.data.birth_date),
-          jobId: response.data.job_id,
-          zones: response.data.zones.map((z) => z.id) ?? [],
+          employeeNameAr: employeeData.name_ar,
+          employeeNameEn: employeeData.name_en,
+          email: employeeData.email,
+          employeeNum: employeeData.employee_number,
+          street: employeeData.street,
+          city: employeeData.city,
+          governorate: employeeData.governorate,
+          telephoneNum: employeeData.telephone_num,
+          birthDate: new Date(employeeData.birth_date),
+          jobId: Number(employeeData.job_id),
+          zones: employeeData.zones?.map((z) => z.id) ?? [],
+          isTerminated: employeeData.is_terminated ?? false,
         });
       } catch (error) {
         if (axios.isAxiosError(error) && error.response?.status === 404) {
-          navigate("/404", { replace: true });
+          navigate('/404', { replace: true });
           return;
         }
+
         console.error(error);
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    fetchEmployee();
-  }, [id,reset]);
+    loadData();
+  }, [currentEmployee?.id, reset, navigate]);
 
-  const handleSave = async (data:any) => {
-    if (!id) return;
+  const handleSave = async (data: any) => {
+    if (!currentEmployee) return;
     console.log(data);
     try {
-      await updateEmployee(Number(id),data);
+      await updateEmployee(Number(currentEmployee.id), data);
 
-      toast.success(t("EMPLOYEE_UPDATED_SUCCESSFULLY"));
-      navigate("/employees");
+      toast.success(t('EMPLOYEE_UPDATED_SUCCESSFULLY'));
+      navigate('/employees');
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        if (error.response?.status === 409) {
-          toast.error(t(error.response?.data.error.message));
-          console.log(error.response?.data);
-        } else {
-          console.log(error.response?.data);
+    if (axios.isAxiosError(error)) {
+        const message = error.response?.data?.error?.message;
+
+        console.log("Backend message:", message);
+
+        if (t(message) === "Employee Name En already exists") {
+            setError("employeeNameEn", {
+                type: "server",
+                message: "EMPLOYEE_NAME_EN_EXISTS",
+            });
+            return;
         }
-      } else {
-        console.log("Unexpected error");
-      }
-    } 
+
+        if (t(message) === "Employee Name Ar already exists") {
+            setError("employeeNameAr", {
+                type: "server",
+                message: "EMPLOYEE_NAME_AR_EXISTS",
+            });
+            return;
+        }
+
+        if (t(message) === "Employee Email already exists") {
+            setError("email", {
+                type: "server",
+                message: "EMPLOYEE_EMAIL_EXISTS",
+            });
+            return;
+        }
+
+        if (t(message) === "An Employee already owns this telephone number") {
+            setError("telephoneNum", {
+                type: "server",
+                message: "EMPLOYEE_TELEPHONE_NUMBER_EXISTS",
+            });
+            return;
+        }
+
+        if (t(message) === "Employee number already exists") {
+            setError("employeeNum", {
+                type: "server",
+                message: "EMPLOYEE_NUMBER_EXISTS",
+            });
+            return;
+        }
+    }
+
+    console.error("Unexpected error:", error);
+}
   };
 
-  useEffect(() => {
-    async function loadJobs() {
-      try {
-        const response = await fetchJobs(); // your API
-        setJobs(response.data);
-      } catch (err) {
-        console.error(err);
-      }
-    }
-  
-    loadJobs();
-  }, []);
-  
   const [zones, setZones] = useState([]);
-  
-  useEffect(() => {
-    async function loadZones() {
-      try {
-        const response = await fetchZones(); // your API
-        setZones(response.data);
-      } catch (err) {
-        console.error(err);
-      }
-    }
-  
-    loadZones();
-  }, []);
-  
-  useEffect(() => {
-    const job = jobs.find((job) => job.id === jobId);
-    setIsZonesInputDisabled(!job?.is_zone_mandatory);
-  }, [jobId, jobs]);
-  
 
-   return (
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-primary" />
+          <p className="text-sm text-gray-500">Loading employee information...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
     <form
       className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6"
       onSubmit={handleSubmit(handleSave)}
     >
       <div>
-        <Label htmlFor="employeeNameEn">{t("EMPLOYEE_NAME_EN")}</Label>
+        <Label htmlFor="employeeNameEn">{t('EMPLOYEE_NAME_EN')}</Label>
         <Input id="employeeNameEn" className="mt-2 w-full" {...register('employeeNameEn')} />
         {errors.employeeNameEn && (
           <span className="error-message">{t(errors.employeeNameEn.message!)}</span>
@@ -165,8 +210,6 @@ const jobId = watch("jobId");
           <span className="error-message">{t(errors.employeeNum.message!)}</span>
         )}
       </div>
-
-      
 
       <Controller
         name="birthDate"
@@ -213,17 +256,13 @@ const jobId = watch("jobId");
       <div>
         <Label htmlFor="street">Street</Label>
         <Input id="street" className="mt-2 w-full" {...register('street')} />
-        {errors.street && (
-          <span className="error-message">{t(errors.street.message!)}</span>
-        )}
+        {errors.street && <span className="error-message">{t(errors.street.message!)}</span>}
       </div>
 
       <div>
         <Label htmlFor="street">City</Label>
         <Input id="city" className="mt-2 w-full" {...register('city')} />
-        {errors.city && (
-          <span className="error-message">{t(errors.city.message!)}</span>
-        )}
+        {errors.city && <span className="error-message">{t(errors.city.message!)}</span>}
       </div>
 
       <div>
@@ -243,39 +282,35 @@ const jobId = watch("jobId");
       </div>
 
       <Controller
-  name="jobId"
-  control={control}
-  render={({ field }) => (
-    <div>
-      <Label>Job</Label>
+        name="jobId"
+        control={control}
+        render={({ field }) => (
+          <div>
+            <Label>Job</Label>
 
-      <Select
-        value={field.value ? String(field.value) : ""}
-        onValueChange={(value) => field.onChange(Number(value))}
-      >
-        <SelectTrigger className="mt-2 w-full">
-          <SelectValue placeholder="Select a job" />
-        </SelectTrigger>
+            <Select
+              value={field.value ? String(field.value) : ''}
+              onValueChange={(value) => field.onChange(Number(value))}
+            >
+              <SelectTrigger className="mt-2 w-full">
+                <SelectValue placeholder="Select a job" />
+              </SelectTrigger>
 
-        <SelectContent>
-          {jobs.map((job) => (
-            <SelectItem key={job.id} value={String(job.id)}>
-              {t("LANG") === "ar" ? job.title_ar : job.title_en}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+              <SelectContent>
+                {jobs.map((job) => (
+                  <SelectItem key={job.id} value={String(job.id)}>
+                    {t('LANG') === 'ar' ? job.title_ar : job.title_en}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-      {errors.jobId && (
-        <span className="error-message">
-          {t(errors.jobId.message!)}
-        </span>
-      )}
-    </div>
-  )}
-/>
+            {errors.jobId && <span className="error-message">{t(errors.jobId.message!)}</span>}
+          </div>
+        )}
+      />
 
-{!isZonesInputDisabled   && (
+      {!isZonesInputDisabled && (
         <div className="form-group">
           <Controller
             name="zones"
@@ -286,9 +321,7 @@ const jobId = watch("jobId");
                 multiple
                 options={zones}
                 isOptionEqualToValue={(option, value) => option.id === value.id}
-                getOptionLabel={(option) =>
-                  option.name_en
-                }
+                getOptionLabel={(option) => option.name_en}
                 value={zones.filter((z) => (field.value ?? []).includes(z.id))}
                 onChange={(_, selectedZones) => {
                   const ids = selectedZones.map((z) => z.id);
@@ -297,9 +330,9 @@ const jobId = watch("jobId");
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    label={t("ZONE")}
+                    label={t('ZONE')}
                     error={!!errors.zones}
-                    helperText={errors.zones ? t(errors.zones.message!) : ""}
+                    helperText={errors.zones ? t(errors.zones.message!) : ''}
                   />
                 )}
               />
@@ -307,7 +340,6 @@ const jobId = watch("jobId");
           />
         </div>
       )}
-
 
       {/* <div>
         <Label htmlFor="countries">Select Input</Label>
@@ -334,7 +366,6 @@ const jobId = watch("jobId");
 
         <Label htmlFor="isTerminated">{t('IS_TERMINATED')}</Label>
       </div>
-
 
       <div className="md:col-span-2 flex justify-end">
         <Button type="submit" disabled={isLoading}>

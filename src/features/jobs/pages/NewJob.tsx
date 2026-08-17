@@ -110,13 +110,13 @@ function NewJob() {
       onSubmit={handleSubmit(handleSave)}
     >
       <div>
-        <Label htmlFor="jobCode">{t('JOB_CODE')}</Label>
+        <Label htmlFor="jobCode">{t('JOB_CODE')} <span className="text-red-500">*</span></Label>
         <Input id="jobCode" className="mt-2 w-full" {...register('jobCode')} />
         {errors.jobCode && <span className="error-message">{t(errors.jobCode.message!)}</span>}
       </div>
 
       <div>
-        <Label htmlFor="jobTitleEn">{t('JOB_TITLE_EN')}</Label>
+        <Label htmlFor="jobTitleEn">{t('JOB_TITLE_EN')} <span className="text-red-500">*</span></Label>
         <Input id="jobTitleEn" className="mt-2 w-full" {...register('jobTitleEn')} />
         {errors.jobTitleEn && (
           <span className="error-message">{t(errors.jobTitleEn.message!)}</span>
@@ -124,7 +124,7 @@ function NewJob() {
       </div>
 
       <div>
-        <Label htmlFor="jobTitleAr">{t('JOB_TITLE_AR')}</Label>
+        <Label htmlFor="jobTitleAr">{t('JOB_TITLE_AR')} <span className="text-red-500">*</span></Label>
         <Input id="jobTitleAr" className="mt-2 w-full" {...register('jobTitleAr')} />
         {errors.jobTitleAr && (
           <span className="error-message">{t(errors.jobTitleAr.message!)}</span>

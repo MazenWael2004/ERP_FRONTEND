@@ -48,17 +48,54 @@ function NewEmployee() {
 
       nav('/employees');
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        if (error.response?.status === 409) {
-          toast.error(t(error.response?.data.error.message));
-          console.log(error.response?.data);
-        } else {
-          console.log(error.response?.data);
+    if (axios.isAxiosError(error)) {
+        const message = error.response?.data?.error?.message;
+
+        console.log("Backend message:", message);
+
+        if (t(message) === "Employee Name En already exists") {
+            setError("employeeNameEn", {
+                type: "server",
+                message: "EMPLOYEE_NAME_EN_EXISTS",
+            });
+            return;
         }
-      } else {
-        console.log('Unexpected error');
-      }
-    } finally {
+
+        if (t(message) === "Employee Name Ar already exists") {
+            setError("employeeNameAr", {
+                type: "server",
+                message: "EMPLOYEE_NAME_AR_EXISTS",
+            });
+            return;
+        }
+
+        if (t(message) === "Employee Email already exists") {
+            setError("email", {
+                type: "server",
+                message: "EMPLOYEE_EMAIL_EXISTS",
+            });
+            return;
+        }
+
+        if (t(message) === "An Employee already owns this telephone number") {
+            setError("telephoneNum", {
+                type: "server",
+                message: "EMPLOYEE_TELEPHONE_NUMBER_EXISTS",
+            });
+            return;
+        }
+
+        if (t(message) === "Employee number already exists") {
+            setError("employeeNum", {
+                type: "server",
+                message: "EMPLOYEE_NUMBER_EXISTS",
+            });
+            return;
+        }
+    }
+
+    console.error("Unexpected error:", error);
+} finally {
       setIsLoading(false);
     }
   };
@@ -68,6 +105,7 @@ function NewEmployee() {
     handleSubmit,
     control,
     watch,
+    setError,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(createEmployeeSchema),
@@ -115,7 +153,7 @@ function NewEmployee() {
       onSubmit={handleSubmit(handleSave)}
     >
       <div>
-        <Label htmlFor="employeeNameEn">{t('EMPLOYEE_NAME_EN')}</Label>
+        <Label htmlFor="employeeNameEn">{t('EMPLOYEE_NAME_EN')}  <span className="text-red-500">*</span></Label>
         <Input id="employeeNameEn" className="mt-2 w-full" {...register('employeeNameEn')} />
         {errors.employeeNameEn && (
           <span className="error-message">{t(errors.employeeNameEn.message!)}</span>
@@ -123,20 +161,20 @@ function NewEmployee() {
       </div>
 
       <div>
-        <Label htmlFor="employeeNameAr">Employee Name Ar</Label>
+        <Label htmlFor="employeeNameAr">{t('EMPLOYEE_NAME_AR')}  <span className="text-red-500">*</span></Label>
         <Input id="employeeNameAr" className="mt-2 w-full" {...register('employeeNameAr')} />
         {errors.employeeNameAr && (
           <span className="error-message">{t(errors.employeeNameAr.message!)}</span>
         )}
       </div>
       <div>
-        <Label htmlFor="email">Email</Label>
+        <Label htmlFor="email">{t("EMAIL")}<span className="text-red-500">*</span></Label>
         <Input id="email" className="mt-2 w-full" {...register('email')} />
         {errors.email && <span className="error-message">{t(errors.email.message!)}</span>}
       </div>
 
       <div>
-        <Label htmlFor="employeeNum">Employee Number</Label>
+        <Label htmlFor="employeeNum">{t("EMPLOYEE_NUM")}<span className="text-red-500">*</span></Label>
         <Input id="employeeNum" className="mt-2 w-full" {...register('employeeNum')} />
         {errors.employeeNum && (
           <span className="error-message">{t(errors.employeeNum.message!)}</span>
@@ -149,7 +187,8 @@ function NewEmployee() {
         render={({ field }) => (
           <div className="flex flex-col gap-3">
             <Label htmlFor="date" className="px-1">
-              Date of birth
+              {t("DATE_OF_BIRTH")}
+              <span className="text-red-500">*</span>
             </Label>
 
             <Popover open={open} onOpenChange={setOpen}>
@@ -186,19 +225,19 @@ function NewEmployee() {
       />
 
       <div>
-        <Label htmlFor="street">Street</Label>
+        <Label htmlFor="street">{t("STREET")}<span className="text-red-500">*</span></Label>
         <Input id="street" className="mt-2 w-full" {...register('street')} />
         {errors.street && <span className="error-message">{t(errors.street.message!)}</span>}
       </div>
 
       <div>
-        <Label htmlFor="street">City</Label>
+        <Label htmlFor="street">{t("CITY")}<span className="text-red-500">*</span></Label>
         <Input id="city" className="mt-2 w-full" {...register('city')} />
         {errors.city && <span className="error-message">{t(errors.city.message!)}</span>}
       </div>
 
       <div>
-        <Label htmlFor="governorate">Governorate</Label>
+        <Label htmlFor="governorate">{t("GOVERNORATE")}<span className="text-red-500">*</span></Label>
         <Input id="city" className="mt-2 w-full" {...register('governorate')} />
         {errors.governorate && (
           <span className="error-message">{t(errors.governorate.message!)}</span>
@@ -206,7 +245,7 @@ function NewEmployee() {
       </div>
 
       <div>
-        <Label htmlFor="telephoneNum">Telephone Number</Label>
+        <Label htmlFor="telephoneNum">{t("TELEPHONE_NUMBER")}<span className="text-red-500">*</span></Label>
         <Input id="city" className="mt-2 w-full" {...register('telephoneNum')} />
         {errors.telephoneNum && (
           <span className="error-message">{t(errors.telephoneNum.message!)}</span>
@@ -218,7 +257,7 @@ function NewEmployee() {
         control={control}
         render={({ field }) => (
           <div>
-            <Label>Job</Label>
+            <Label>{t("JOB")}<span className="text-red-500">*</span></Label>
 
             <Select
               value={field.value ? String(field.value) : ''}
@@ -264,7 +303,7 @@ function NewEmployee() {
                     {...params}
                     label={t('ZONE')}
                     error={!!errors.zones}
-                    helperText={errors.zones ? t(errors.zones.message) : ''}
+                    helperText={errors.zones ? t(errors.zones.message!) : ''}
                   />
                 )}
               />

@@ -13,14 +13,17 @@ import { Label } from 'src/components/ui/label';
 import { Button } from 'src/components/ui/button';
 import { createJobSchema  } from "../validation";
 import Spinner from "src/shared/components/Spinner";
+import { useLocation } from "react-router-dom";
 
 function EditJob() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
+  const location = useLocation();
   const [open, setOpen] = useState(false);
   const [roles, setRoles] = useState([]);
+  const currentJob = location.state?.job;
 
 
   const {
@@ -38,11 +41,11 @@ function EditJob() {
 
 
   useEffect(() => {
-    if (!id) return;
+    if (!currentJob) return;
 
     const fetchJob = async () => {
       try {
-        const response = await getJobById(Number(id));
+        const response = await getJobById(Number(currentJob.id));
 
         reset({
           jobCode: response.data.code,
@@ -63,11 +66,11 @@ function EditJob() {
   }, [id,reset]);
 
   const handleSave = async (data:any) => {
-    if (!id) return;
+    if (!currentJob) return;
     console.log(data);
     try {
       setIsLoading(true);
-      await updateJob(Number(id),data);
+      await updateJob(Number(currentJob.id),data);
 
       toast.success(t("JOB_UPDATED_SUCCESSFULLY"));
       navigate("/jobs");

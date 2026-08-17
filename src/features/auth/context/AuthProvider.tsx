@@ -41,7 +41,8 @@ export default function AuthProvider({ children }: Props) {
     window.location.replace("/desk");
       setUser(null);
       setToken(null);
-
+    
+  // localStorage.removeItem("permissions");
     
 
   };

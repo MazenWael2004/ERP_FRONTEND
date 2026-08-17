@@ -36,6 +36,12 @@ export default function ViewRoles() {
   const canEdit = hasPermission('/roles', 'WRITE');
   const canDelete = hasPermission('/roles', 'DELETE');
 
+   const handleEditRole = (role: any) => {
+    nav('/roles/edit', {
+      state: { role: role },
+    });
+  };
+
   const loadRoles = async () => {
     try {
       setLoading(true);
@@ -126,8 +132,8 @@ export default function ViewRoles() {
         <DataTable
           data={roles}
           columns={roleColumns}
-          onEdit={canEdit? (role) => nav(`/roles/${role.id}`) : undefined}
-          onDelete={canDelete ? (role)=> nav(`/roles${role.id}`): undefined}
+          onEdit={canEdit? (role) => handleEditRole(role) : undefined}
+          onDelete={canDelete ? (role)=> handleDelete(role): undefined}
         />
       </div>
     </>

@@ -7,6 +7,7 @@ import { DataTable } from 'src/components/utilities/table/DataTable';
 import { Button } from 'src/components/ui/button';
 import { Plus } from 'lucide-react';
 import Swal from 'sweetalert2';
+import { useAuth } from 'src/features/auth/hooks/useAuth';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +24,10 @@ const employeeColumns = [
   {
     accessorKey: 'name_en',
     header: 'English Name',
+  },
+  {
+    accessorKey: 'name_ar',
+    header: 'Arabic Name',
   },
   {
     accessorKey: 'email',
@@ -48,15 +53,25 @@ const employeeColumns = [
 
 export default function ViewEmployees() {
   const [employees, setEmployees] = useState([]);
+  const { hasPermission } = useAuth();
   const [loading, setLoading] = useState(false);
   const nav = useNavigate();
   const { t } = useTranslation();
   const [selectedRows, setSelectedRows] = useState([]);
+  const canEdit = hasPermission('/employees', 'WRITE');
+  const canAdd = hasPermission('/employees', 'CREATE');
+  const canDelete = hasPermission('/employees', 'DELETE');
   // const [visibleColumns, setVisibleColumns] = useState(employeeColumns.map((c) => c.accessorKey));
 
   // const displayedColumns = employeeColumns.filter((col) =>
   //   visibleColumns.includes(col.accessorKey),
   // );
+
+  const handleEditEmployee = (employee: any) => {
+    nav('/employees/edit', {
+      state: { employee: employee },
+    });
+  };
 
   const loadEmployees = async () => {
     try {
@@ -115,15 +130,18 @@ export default function ViewEmployees() {
     <>
       <BreadcrumbComp title="Employees Table" breadCrumbBg={employeesIcon} />
       <div className="flex gap-6 flex-col ">
-        <div className="flex justify-end">
-          <Button
-            onClick={() => nav('/employees/new-employee')}
-            className="bg-green-600 hover:bg-green-700 text-white"
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add Employee
-          </Button>
-        </div>
+        {canAdd && (
+          <div className="flex justify-end">
+            <Button
+              onClick={() => nav('/employees/new-employee')}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add Employee
+            </Button>
+          </div>
+        )}
+
         {/* <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline">Display Columns</Button>
@@ -150,12 +168,8 @@ export default function ViewEmployees() {
         <DataTable
           data={employees}
           columns={employeeColumns}
-          onEdit={(employee) => {
-            nav(`/employees/${employee.id}`);
-          }}
-          onDelete={(employee) => {
-            handleDelete(employee);
-          }}
+          onEdit={canEdit ? (employee) => handleEditEmployee(employee) : undefined}
+          onDelete={canDelete ? (employee) => handleDelete(employee) : undefined}
         />
       </div>
     </>

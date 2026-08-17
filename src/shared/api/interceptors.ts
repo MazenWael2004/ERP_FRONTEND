@@ -31,15 +31,17 @@ api.interceptors.response.use(
   },
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem("access");
-      localStorage.removeItem("user");
+      const requestUrl = error.config?.url;
 
-      window.location.href = "/login";
+      // Don't redirect if the 401 came from the login request
+      if (requestUrl !== "/auth/login") {
+        localStorage.removeItem("access");
+        localStorage.removeItem("user");
+        localStorage.removeItem("permissions");
+
+        window.location.href = "/login";
+      }
     }
-
-    // else if(error.response?.status === 403){
-    //   window.location.href = '/unauthorized';
-    // }
 
     return Promise.reject(error);
   }

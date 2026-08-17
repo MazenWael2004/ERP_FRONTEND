@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { useAuth } from '../../auth/hooks/useAuth.tsx';
+import { useAuth } from '../../../features/auth/hooks/useAuth.tsx';
 import toast from 'react-hot-toast';
 import { useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
@@ -18,7 +18,6 @@ import { useState } from 'react';
 import { Autocomplete, TextField } from '@mui/material';
 import { Input } from 'src/components/ui/input';
 import { Label } from 'src/components/ui/label';
-import { useAuth } from '../../auth/hooks/useAuth.tsx';
 import {
   Select,
   SelectContent,

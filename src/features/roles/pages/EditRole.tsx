@@ -11,6 +11,7 @@ import { Label } from 'src/components/ui/label';
 import { Button } from 'src/components/ui/button';
 import { createRoleSchema } from '../validation';
 import { useAuth } from 'src/features/auth/hooks/useAuth';
+import { useLocation } from 'react-router-dom';
 
 const availablePages = [
   {
@@ -58,10 +59,12 @@ const availableActions = [
 function EditRole() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useTranslation();
   const [selectedPage, setSelectedPage] = useState('');
   const [pages,setPages] = useState([]);
   const {user,refreshPermissions} = useAuth();
+  const currentRole = location.state?.role;
 
   const [isLoading, setIsLoading] = useState(false);
 
@@ -90,11 +93,11 @@ function EditRole() {
   // ==========================================
 
   useEffect(() => {
-    if (!id) return;
+    if (!currentRole) return;
 
     const fetchRole = async () => {
       try {
-        const response = await getRoleById(Number(id));
+        const response = await getRoleById(Number(currentRole.id));
 
         const role = response.data;
 
@@ -268,7 +271,7 @@ function EditRole() {
   // ==========================================
 
   const handleSave = async (data) => {
-    if (!id) return;
+    if (!currentRole) return;
 
     console.log("Submitting:", data);
 
@@ -276,7 +279,7 @@ function EditRole() {
         setIsLoading(true);
 
         // 1. Update role + permissions in DB
-        await editRole(Number(id), data);
+        await editRole(Number(currentRole.id), data);
 
       
         
