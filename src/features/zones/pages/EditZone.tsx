@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import toast from "react-hot-toast";
 import axios from "axios";
-import { getZoneById, updateZone } from "../api/zoneService";
+import { getZoneById, updateZone,checkZoneExists } from "../api/zoneService";
 import { useAuth } from '../../auth/hooks/useAuth';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -31,6 +31,8 @@ function EditUser() {
   register,
   control,
   watch,
+  setError,
+  clearErrors,
   handleSubmit,
   reset,
   formState: { errors },
@@ -43,7 +45,7 @@ function EditUser() {
   useEffect(() => {
     if (!currentZone) return;
 
-    const fetchUser = async () => {
+    const fetchZone = async () => {
       try {
         const response = await getZoneById(currentZone.id);
 
@@ -60,8 +62,73 @@ function EditUser() {
       }
     };
 
-    fetchUser();
+    fetchZone();
   }, [id,reset]);
+
+  const nameEn = watch("zoneNameEn");
+    const nameAr = watch("zoneNameAr");
+  
+    const checkFieldExists = async (
+    field: "name_en" | "name_ar",
+    value: string,
+    formField: "zoneNameEn" | "zoneNameAr",
+    errorMessage: string
+  ) => {
+    try {
+      const response = await checkZoneExists(field, value,currentZone.id);
+  
+      console.log(`${field} response:`, response);
+  
+      if (response.exists) {
+        setError(formField, {
+          type: "manual",
+          message: errorMessage,
+        });
+      } else {
+        clearErrors(formField);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+  
+  useEffect(() => {
+    if (!nameEn || nameEn.trim() === "") {
+      clearErrors("zoneNameEn");
+      return;
+    }
+  
+    const timer = setTimeout(() => {
+      checkFieldExists(
+        "name_en",
+        nameEn,
+        "zoneNameEn",
+        "ZONE_EN_ALREADY_EXISTS"
+      );
+    }, 500);
+  
+    return () => clearTimeout(timer);
+  }, [nameEn]);
+  
+  
+  useEffect(() => {
+    if (!nameAr || nameAr.trim() === "") {
+      clearErrors("zoneNameAr");
+      return;
+    }
+  
+    const timer = setTimeout(() => {
+      checkFieldExists(
+        "name_ar",
+        nameAr,
+        "zoneNameAr",
+        "ZONE_AR_ALREADY_EXISTS"
+      );
+    }, 500);
+  
+    return () => clearTimeout(timer);
+  }, [nameAr]);
+  
 
   const handleSave = async (data:any) => {
     if (!currentZone) return;
@@ -72,28 +139,30 @@ function EditUser() {
       toast.success(t("ZONE_UPDATED_SUCCESSFULLY"));
       navigate("/zones");
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        if (error.response?.status === 409) {
-          await Swal.fire({
-            icon: 'error',
-            title: t('ERROR'),
-            text: t(error.response?.data.error.message),
-            confirmButtonText: t('OK'),
-          });
-          console.log(error.response?.data);
-        } else if(error.response?.status === 404) {
-          await Swal.fire({
-            icon: 'error',
-            title: t('ERROR'),
-            text: t(error.response?.data.error.message),
-            confirmButtonText: t('OK'),
-          });
-          console.log(error.response?.data);
+    if (axios.isAxiosError(error)) {
+        const message = error.response?.data?.error?.message;
+
+        console.log("Backend message:", message);
+
+        if (t(message) === t("ZONE_EN_ALREADY_EXISTS")) {
+            setError("zoneNameEn", {
+                type: "server",
+                message: "ZONE_EN_ALREADY_EXISTS",
+            });
+            return;
         }
-      } else {
-        console.log('Unexpected error');
-      }
-    } 
+
+        if (t(message) === t("ZONE_AR_ALREADY_EXISTS")) {
+            setError("zoneNameAr", {
+                type: "server",
+                message: "ZONE_AR_ALREADY_EXISTS",
+            });
+            return;
+        }
+    }
+
+    console.error("Unexpected error:", error);
+}
   };
 
  

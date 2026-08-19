@@ -31,6 +31,14 @@ const jobColumns = [
     accessorKey: 'title_ar',
     header: 'Title Ar',
   },
+  {
+    accessorKey: 'code',
+    header: 'Code',
+  },
+  {
+    accessorKey: 'is_zone_mandatory',
+    header: 'Is Zone Mandatory',
+  }
 ];
 
 export default function ViewJobs() {

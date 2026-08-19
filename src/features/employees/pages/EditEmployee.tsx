@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 import axios from 'axios';
-import { getEmployeeById, updateEmployee } from '../api/employeeService';
+import { getEmployeeById, updateEmployee,checkEmployeeExists } from '../api/employeeService';
 import { useAuth } from '../../auth/hooks/useAuth';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -45,6 +45,7 @@ function EditEmployee() {
     watch,
     handleSubmit,
     setError,
+    clearErrors,
     reset,
     formState: { errors },
   } = useForm({
@@ -52,6 +53,101 @@ function EditEmployee() {
   });
 
   const jobId = watch('jobId');
+  const name_en = watch('employeeNameEn');
+    const name_ar = watch('employeeNameAr');
+    const employee_num = watch("employeeNum");
+    const telephone_num = watch("telephoneNum");
+    const email = watch("email");
+  
+    const checkFieldExists = async (
+      field: 'name_en' | 'name_ar' | 'email' | 'employee_number' | 'telephone_num',
+      value: string | string | string | number | string,
+      formField: 'employeeNameEn' | 'employeeNameAr' | 'email' | 'employeeNum' | 'telephoneNum',
+      errorMessage: string,
+    ) => {
+      try {
+        const response = await checkEmployeeExists(field, value,currentEmployee.id);
+  
+        console.log(`${field} response:`, response);
+  
+        if (response.exists) {
+          setError(formField, {
+            type: 'manual',
+            message: errorMessage,
+          });
+        } else {
+          clearErrors(formField);
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    };
+  
+    useEffect(() => {
+      if (!name_en || name_en.trim() === '') {
+        clearErrors('employeeNameEn');
+        return;
+      }
+  
+      const timer = setTimeout(() => {
+        checkFieldExists('name_en', name_en, 'employeeNameEn', 'EMPLOYEE_NAME_EN_EXISTS');
+      }, 500);
+  
+      return () => clearTimeout(timer);
+    }, [name_en]);
+  
+    useEffect(() => {
+      if (!name_ar || name_ar.trim() === '') {
+        clearErrors('employeeNameAr');
+        return;
+      }
+  
+      const timer = setTimeout(() => {
+        checkFieldExists('name_ar', name_ar, 'employeeNameAr', 'EMPLOYEE_NAME_AR_EXISTS');
+      }, 500);
+  
+      return () => clearTimeout(timer);
+    }, [name_ar]);
+  
+    useEffect(() => {
+      if (!email || email.trim() === '') {
+        clearErrors('email');
+        return;
+      }
+  
+      const timer = setTimeout(() => {
+        checkFieldExists('email', email, 'email', 'EMPLOYEE_EMAIL_EXISTS');
+      }, 500);
+  
+      return () => clearTimeout(timer);
+    }, [email]);
+  
+    useEffect(() => {
+      if (!employee_num) {
+        clearErrors('employeeNum');
+        return;
+      }
+  
+      const timer = setTimeout(() => {
+        checkFieldExists('employee_number', employee_num, 'employeeNum', 'EMPLOYEE_NUMBER_EXISTS');
+      }, 500);
+  
+      return () => clearTimeout(timer);
+    }, [employee_num]);
+  
+    useEffect(() => {
+      if (!telephone_num) {
+        clearErrors('telephoneNum');
+        return;
+      }
+  
+      const timer = setTimeout(() => {
+        checkFieldExists('telephone_num', telephone_num, 'telephoneNum', 'EMPLOYEE_TELEPHONE_NUMBER_EXISTS');
+      }, 500);
+  
+      return () => clearTimeout(timer);
+    }, [telephone_num]);
+  
 
   useEffect(() => {
     if (!currentEmployee?.id) navigate("/employees");

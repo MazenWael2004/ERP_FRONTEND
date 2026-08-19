@@ -40,3 +40,15 @@ export const deleteUser = async (id:any)=>{
 };
 
 
+export const checkUserExists = async (field:any,value:any,excludeId:any) => {
+  const response = await api.get("/users/check", {
+    params: {
+      field,
+      value,
+      excludeId
+    },
+  });
+
+  return response.data;
+};
+

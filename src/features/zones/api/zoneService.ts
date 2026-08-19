@@ -22,11 +22,12 @@ export const updateZone = async (id:any, data:any) => {
   return api.patch(`/zones/${id}`, data);
 };
 
-export const checkZoneExists = async (field:any,value:any) => {
+export const checkZoneExists = async (field:any,value:any,excludeId:any) => {
   const response = await api.get("/zones/check", {
     params: {
       field,
       value,
+      excludeId
     },
   });
 

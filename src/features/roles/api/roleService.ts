@@ -36,6 +36,19 @@ export const fetchPages = async()=>{
 }
 
 
+export const checkRoleExists = async (field:any,value:any,excludeId:any) => {
+  const response = await api.get("/roles/check", {
+    params: {
+      field,
+      value,
+      excludeId
+    },
+  });
+
+  return response.data;
+};
+
+
 
 
 // but we have serveral problems.. what if several users has this role??

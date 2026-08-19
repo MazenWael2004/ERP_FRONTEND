@@ -50,3 +50,16 @@ export const updateEmployee = async (id:any, employeeData:any) => {
   });
   return response.data;
 };
+
+
+export const checkEmployeeExists = async (field:any,value:any,excludeId:any) => {
+  const response = await api.get("/employees/check", {
+    params: {
+      field,
+      value,
+      excludeId
+    },
+  });
+
+  return response.data;
+};

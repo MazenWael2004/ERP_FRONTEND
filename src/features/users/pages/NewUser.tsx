@@ -10,7 +10,7 @@ import { Icon } from '@iconify/react/dist/iconify.js';
 import { useNavigate } from 'react-router-dom';
 import { Calendar } from 'src/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from 'src/components/ui/popover';
-import { createUser } from '../api/userService.ts';
+import { createUser,checkUserExists } from '../api/userService.ts';
 import Swal from 'sweetalert2';
 import { fetchRoles } from '../../roles/api/roleService.ts';
 import { fetchEmployees } from 'src/features/employees/api/employeeService.ts';
@@ -31,7 +31,7 @@ function NewUser() {
   const [open, setOpen] = useState(false);
   const nav = useNavigate();
   const { t } = useTranslation();
-  const { user,hasPermission } = useAuth();
+  const { user, hasPermission } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [showPasswordFields, setPasswordFields] = useState(true);
   const [roles, setRoles] = useState([]);
@@ -52,32 +52,34 @@ function NewUser() {
         icon: 'success',
         title: t('SUCCESS'),
         text: t('USER_CREATED_SUCCESSFULLY'),
-        confirmButtonText: t('OK'),
+        showConfirmButton: false,
+        timer: 1500,
       });
-
       nav('/users');
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        if (error.response?.status === 409) {
-          await Swal.fire({
-            icon: 'error',
-            title: t('ERROR'),
-            text: t(error.response?.data.error.message),
-            confirmButtonText: t('OK'),
+        const message = error.response?.data?.error?.message;
+
+        console.log('Backend message:', message);
+
+        if (t(message) === 'Username already exists') {
+          setError('userName', {
+            type: 'server',
+            message: 'USERNAME_EXISTS',
           });
-          console.log(error.response?.data);
-        } else if (error.response?.status === 404) {
-          await Swal.fire({
-            icon: 'error',
-            title: t('ERROR'),
-            text: t(error.response?.data.error.message),
-            confirmButtonText: t('OK'),
-          });
-          console.log(error.response?.data);
+          return;
         }
-      } else {
-        console.log('Unexpected error');
+
+        if (t(message) === 'Employee is already linked to another user') {
+          setError('employeeId', {
+            type: 'server',
+            message: 'EMPLOYEE_ALREADY_ASSIGNED',
+          });
+          return;
+        }
       }
+
+      console.error('Unexpected error:', error);
     } finally {
       setIsLoading(false);
     }
@@ -88,13 +90,76 @@ function NewUser() {
     handleSubmit,
     control,
     watch,
+    setError,
+    clearErrors,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(createUserSchema),
   });
 
   const [employees, setEmployees] = useState([]);
-  const employeeId = watch('employeeId');
+  const username = watch("userName");
+  const employee_id = watch('employeeId');
+
+  const checkFieldExists = async (
+    field: "username" | "employee_id",
+    value: string | number,
+    formField: "userName" | "employeeId",
+    errorMessage: string
+  ) => {
+    try {
+      const response = await checkUserExists(field, value,null);
+  
+      console.log(`${field} response:`, response);
+  
+      if (response.exists) {
+        setError(formField, {
+          type: "manual",
+          message: errorMessage,
+        });
+      } else {
+        clearErrors(formField);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  useEffect(() => {
+    if (!username || username.trim() === "") {
+      clearErrors("userName");
+      return;
+    }
+  
+    const timer = setTimeout(() => {
+      checkFieldExists(
+        "username",
+        username,
+        "userName",
+        "USERNAME_EXISTS"
+      );
+    }, 500);
+  
+    return () => clearTimeout(timer);
+  }, [username]);
+
+  useEffect(() => {
+    if (!employee_id) {
+      clearErrors("employeeId");
+      return;
+    }
+  
+    const timer = setTimeout(() => {
+      checkFieldExists(
+        "employee_id",
+        employee_id,
+        "employeeId",
+        "EMPLOYEE_ALREADY_ASSIGNED"
+      );
+    }, 500);
+  
+    return () => clearTimeout(timer);
+  }, [employee_id]);
 
   useEffect(() => {
     const loadRoles = async () => {
@@ -251,7 +316,8 @@ function NewUser() {
         control={control}
         render={({ field }) => (
           <div>
-            <Label>Employee Name
+            <Label>
+              Employee Name
               <span className="ml-1 text-red-500">*</span>
             </Label>
 

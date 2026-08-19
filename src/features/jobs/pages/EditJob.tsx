@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import toast from "react-hot-toast";
 import axios from "axios";
-import { updateJob,getJobById } from "../api/jobService";
+import { updateJob,getJobById,checkJobExists } from "../api/jobService";
 import { useAuth } from '../../auth/hooks/useAuth';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -32,6 +32,7 @@ function EditJob() {
   watch,
   handleSubmit,
   setError,
+  clearErrors,
   reset,
   formState: { errors },
 } = useForm({
@@ -64,6 +65,91 @@ function EditJob() {
 
     fetchJob();
   }, [id,reset]);
+
+  const code = watch("jobCode");
+    const title_en = watch("jobTitleEn");
+    const title_ar = watch("jobTitleAr");
+  
+     const checkFieldExists = async (
+      field: "code" | "title_en" | "title_ar",
+      value: string,
+      formField: "jobCode" | "jobTitleEn" | "jobTitleAr",
+      errorMessage: string
+    ) => {
+      try {
+        const response = await checkJobExists(field, value,currentJob.id);
+    
+        console.log(`${field} response:`, response);
+    
+        if (response.exists) {
+          setError(formField, {
+            type: "manual",
+            message: errorMessage,
+          });
+        } else {
+          clearErrors(formField);
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    };
+  
+    useEffect(() => {
+      if (!code || code.trim() === "") {
+        clearErrors("jobCode");
+        return;
+      }
+    
+      const timer = setTimeout(() => {
+        checkFieldExists(
+          "code",
+          code,
+          "jobCode",
+          "JOB_CODE_ALREADY_EXISTS"
+        );
+      }, 500);
+    
+      return () => clearTimeout(timer);
+    }, [code]);
+  
+  
+    useEffect(() => {
+      if (!title_en || title_en.trim() === "") {
+        clearErrors("jobTitleEn");
+        return;
+      }
+    
+      const timer = setTimeout(() => {
+        checkFieldExists(
+          "title_en",
+          title_en,
+          "jobTitleEn",
+          "JOB_TITLE_EN_ALREADY_EXISTS"
+        );
+      }, 500);
+    
+      return () => clearTimeout(timer);
+    }, [title_en]);
+    
+  
+    useEffect(() => {
+      if (!title_ar || title_ar.trim() === "") {
+        clearErrors("jobTitleAr");
+        return;
+      }
+    
+      const timer = setTimeout(() => {
+        checkFieldExists(
+          "title_ar",
+          title_ar,
+          "jobTitleAr",
+          "JOB_TITLE_AR_ALREADY_EXISTS"
+        );
+      }, 500);
+    
+      return () => clearTimeout(timer);
+    }, [title_ar]);
+    
 
   const handleSave = async (data:any) => {
     if (!currentJob) return;

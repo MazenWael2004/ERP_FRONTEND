@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { createJobSchema } from '../validation.ts';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { createJob } from '../api/jobService.ts';
+import { createJob,checkJobExists } from '../api/jobService.ts';
 import Swal from 'sweetalert2';
 import { fetchRoles } from '../../roles/api/roleService.ts';
 import { useState } from 'react';
@@ -38,7 +38,8 @@ function NewJob() {
         icon: 'success',
         title: t('SUCCESS'),
         text: t('JOB_CREATED_SUCCESSFULLY'),
-        confirmButtonText: t('OK'),
+        showConfirmButton:false,
+        timer:1500,
       });
 
       nav('/jobs');
@@ -86,23 +87,111 @@ function NewJob() {
     control,
     watch,
     setError,
+    clearErrors,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(createJobSchema),
   });
 
-  useEffect(() => {
-    const loadRoles = async () => {
-      try {
-        const response = await fetchRoles();
-        setRoles(response.data);
-      } catch (err) {
-        console.error(err);
-      }
-    };
+  const code = watch("jobCode");
+  const title_en = watch("jobTitleEn");
+  const title_ar = watch("jobTitleAr");
 
-    loadRoles();
-  }, []);
+   const checkFieldExists = async (
+    field: "code" | "title_en" | "title_ar",
+    value: string,
+    formField: "jobCode" | "jobTitleEn" | "jobTitleAr",
+    errorMessage: string
+  ) => {
+    try {
+      const response = await checkJobExists(field, value,null);
+  
+      console.log(`${field} response:`, response);
+  
+      if (response.exists) {
+        setError(formField, {
+          type: "manual",
+          message: errorMessage,
+        });
+      } else {
+        clearErrors(formField);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  useEffect(() => {
+    if (!code || code.trim() === "") {
+      clearErrors("jobCode");
+      return;
+    }
+  
+    const timer = setTimeout(() => {
+      checkFieldExists(
+        "code",
+        code,
+        "jobCode",
+        "JOB_CODE_ALREADY_EXISTS"
+      );
+    }, 500);
+  
+    return () => clearTimeout(timer);
+  }, [code]);
+
+
+  useEffect(() => {
+    if (!title_en || title_en.trim() === "") {
+      clearErrors("jobTitleEn");
+      return;
+    }
+  
+    const timer = setTimeout(() => {
+      checkFieldExists(
+        "title_en",
+        title_en,
+        "jobTitleEn",
+        "JOB_TITLE_EN_ALREADY_EXISTS"
+      );
+    }, 500);
+  
+    return () => clearTimeout(timer);
+  }, [title_en]);
+  
+
+  useEffect(() => {
+    if (!title_ar || title_ar.trim() === "") {
+      clearErrors("jobTitleAr");
+      return;
+    }
+  
+    const timer = setTimeout(() => {
+      checkFieldExists(
+        "title_ar",
+        title_ar,
+        "jobTitleAr",
+        "JOB_TITLE_AR_ALREADY_EXISTS"
+      );
+    }, 500);
+  
+    return () => clearTimeout(timer);
+  }, [title_ar]);
+  
+  
+
+
+  // useEffect(() => {
+  //   const loadRoles = async () => {
+  //     try {
+  //       const response = await fetchRoles();
+  //       setRoles(response.data);
+  //     } catch (err) {
+  //       console.error(err);
+  //     }
+  //   };
+
+  //   loadRoles();
+  // }, []);
 
   return (
     <form

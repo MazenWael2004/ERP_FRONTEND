@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import toast from "react-hot-toast";
 import axios from "axios";
-import { getUserById, updateUser } from "../api/userService";
+import { getUserById, updateUser,checkUserExists } from "../api/userService";
 import { fetchEmployees } from "src/features/employees/api/employeeService";
 import { useAuth } from '../../auth/hooks/useAuth';
 import { useForm, Controller } from 'react-hook-form';
@@ -36,6 +36,8 @@ function EditUser() {
   register,
   control,
   watch,
+  setError,
+  clearErrors,
   handleSubmit,
   reset,
   formState: { errors },
@@ -43,10 +45,74 @@ function EditUser() {
   resolver: zodResolver(editUserSchema),
 });
 
+const username = watch("userName");
+  const employee_id = watch('employeeId');
+
+  const checkFieldExists = async (
+    field: "username" | "employee_id",
+    value: string | number,
+    formField: "userName" | "employeeId",
+    errorMessage: string
+  ) => {
+    try {
+      const response = await checkUserExists(field, value,user.id);
+  
+      console.log(`${field} response:`, response);
+  
+      if (response.exists) {
+        setError(formField, {
+          type: "manual",
+          message: errorMessage,
+        });
+      } else {
+        clearErrors(formField);
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  useEffect(() => {
+    if (!username || username.trim() === "") {
+      clearErrors("userName");
+      return;
+    }
+  
+    const timer = setTimeout(() => {
+      checkFieldExists(
+        "username",
+        username,
+        "userName",
+        "USERNAME_EXISTS"
+      );
+    }, 500);
+  
+    return () => clearTimeout(timer);
+  }, [username]);
+
+  useEffect(() => {
+    if (!employee_id) {
+      clearErrors("employeeId");
+      return;
+    }
+  
+    const timer = setTimeout(() => {
+      checkFieldExists(
+        "employee_id",
+        employee_id,
+        "employeeId",
+        "EMPLOYEE_ALREADY_ASSIGNED"
+      );
+    }, 500);
+  
+    return () => clearTimeout(timer);
+  }, [employee_id]);
+
+
 
 
   useEffect(() => {
-  if (!user) return;
+  if (!user) navigate("/users");
 
   const loadData = async () => {
     try {
@@ -90,29 +156,31 @@ function EditUser() {
 
       toast.success(t("USER_UPDATED_SUCCESSFULLY"));
       navigate("/users");
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        if (error.response?.status === 409) {
-          await Swal.fire({
-            icon: 'error',
-            title: t('ERROR'),
-            text: t(error.response?.data.error.message),
-            confirmButtonText: t('OK'),
-          });
-          console.log(error.response?.data);
-        } else if(error.response?.status === 404) {
-          await Swal.fire({
-            icon: 'error',
-            title: t('ERROR'),
-            text: t(error.response?.data.error.message),
-            confirmButtonText: t('OK'),
-          });
-          console.log(error.response?.data);
+    } catch (error)  {
+    if (axios.isAxiosError(error)) {
+        const message = error.response?.data?.error?.message;
+
+        console.log("Backend message:", message);
+
+        if (t(message) === "Username already exists") {
+            setError("userName", {
+                type: "server",
+                message: "USERNAME_EXISTS",
+            });
+            return;
         }
-      } else {
-        console.log('Unexpected error');
-      }
-    } 
+
+        if (t(message) === "Employee is already linked to another user") {
+            setError("employeeId", {
+                type: "server",
+                message: "EMPLOYEE_ALREADY_ASSIGNED",
+            });
+            return;
+        }
+    }
+
+    console.error("Unexpected error:", error);
+} 
   };
 
   useEffect(() => {

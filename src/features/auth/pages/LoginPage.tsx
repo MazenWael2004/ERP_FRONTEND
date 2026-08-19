@@ -44,6 +44,8 @@ function LoginPage() {
       await Swal.fire({
         icon: 'success',
         title: t('LOGIN_SUCCESSFUL'),
+        showConfirmButton:false,
+        timer:1500,
       });
       nav('/desk');
     } catch (error) {

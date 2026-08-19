@@ -47,6 +47,8 @@
   "USER_NAME_ONLY_ENGLISH": "User name must be in english only",
   "USER_NAME_REQUIRED": "User name is required",
   "USER_ALREADY_EXISTS": "This user already exists",
+  "USERNAME_EXISTS": "Username already exists",
+  "EMPLOYEE_ALREADY_ASSIGNED": "Employee is already linked to another user",
   "USER_CREATED_SUCCESSFULLY": "User created successfully",
   "USER_UPDATED_SUCCESSFULLY": "User updated successfully",
 
@@ -154,8 +156,11 @@
   "ROLE_NAME_EN_REQUIRED": "Role Name En is required",
   "ROLE_NAME_AR_REQUIRED": "Role name arabic is required",
   "ROLE_NAME_ONLY_ENGLISH": "Role name must contain only english letters",
+  "ROLE_CREATED_SUCCESSFULLY":"Role created successfully",
   "ROLE_DELETED_SUCCESSFULLY": "Role successfully deleted",
   "ROLE_UPDATED_SUCCESSFULLY": "Role updated successfully",
+  "ROLE_NAME_EN_EXISTS": "Role name En already exists",
+  "ROLE_NAME_AR_EXISTS":"Role name Ar already exists",
 
   "ARE_YOU_SURE": "Are you sure?",
   "CANNOT_UNDO_ACTION": "Cannot undo that action once performed",

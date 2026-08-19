@@ -31,13 +31,15 @@ export const deleteJob = async (id:any)=>{
 
 // jobService.ts
 
-export const checkJobExists = async (field:any,value:any) => {
+export const checkJobExists = async (field:any,value:any,excludeId:any) => {
   const response = await api.get("/jobs/check", {
     params: {
       field,
       value,
+      excludeId,
     },
   });
 
   return response.data;
 };
+

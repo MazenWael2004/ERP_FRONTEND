@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { createZoneSchema } from '../validation.ts';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { createZone,fetchZones } from '../api/zoneService.ts';
+import { createZone,fetchZones,checkZoneExists } from '../api/zoneService.ts';
 import Swal from 'sweetalert2';
 import { useState } from 'react';
 import { Input } from 'src/components/ui/input';
@@ -36,7 +36,8 @@ function NewZone() {
         icon: 'success',
         title: t('SUCCESS'),
         text: t('ZONE_CREATED_SUCCESSFULLY'),
-        confirmButtonText: t('OK'),
+        showConfirmButton:false,
+        timer:1500,
       });
 
       nav('/zones');
@@ -74,11 +75,77 @@ function NewZone() {
     handleSubmit,
     control,
     watch,
+    clearErrors,
     setError,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(createZoneSchema),
   });
+
+  const nameEn = watch("zoneNameEn");
+  const nameAr = watch("zoneNameAr");
+
+  const checkFieldExists = async (
+  field: "name_en" | "name_ar",
+  value: string,
+  formField: "zoneNameEn" | "zoneNameAr",
+  errorMessage: string
+) => {
+  try {
+    const response = await checkZoneExists(field, value,null);
+
+    console.log(`${field} response:`, response);
+
+    if (response.exists) {
+      setError(formField, {
+        type: "manual",
+        message: errorMessage,
+      });
+    } else {
+      clearErrors(formField);
+    }
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+useEffect(() => {
+  if (!nameEn || nameEn.trim() === "") {
+    clearErrors("zoneNameEn");
+    return;
+  }
+
+  const timer = setTimeout(() => {
+    checkFieldExists(
+      "name_en",
+      nameEn,
+      "zoneNameEn",
+      "ZONE_EN_ALREADY_EXISTS"
+    );
+  }, 500);
+
+  return () => clearTimeout(timer);
+}, [nameEn]);
+
+
+useEffect(() => {
+  if (!nameAr || nameAr.trim() === "") {
+    clearErrors("zoneNameAr");
+    return;
+  }
+
+  const timer = setTimeout(() => {
+    checkFieldExists(
+      "name_ar",
+      nameAr,
+      "zoneNameAr",
+      "ZONE_AR_ALREADY_EXISTS"
+    );
+  }, 500);
+
+  return () => clearTimeout(timer);
+}, [nameAr]);
+
 
   useEffect(() => {
     const loadZones = async () => {
@@ -99,15 +166,16 @@ function NewZone() {
       onSubmit={handleSubmit(handleSave)}
     >
       <div>
-        <Label htmlFor="zoneNameEn">{t('ZONE_NAME_EN')}</Label>
+        <Label htmlFor="zoneNameEn">{t('ZONE_NAME_EN')} <span className="ml-1 text-red-500">*</span></Label>
         <Input id="zoneNameEn" className="mt-2 w-full" {...register('zoneNameEn')} />
         {errors.zoneNameEn && <span className="error-message">{t(errors.zoneNameEn.message!)}</span>}
+        
       </div>
 
   
 
       <div>
-        <Label htmlFor="zoneNameAr">{t('ZONE_NAME_AR')}</Label>
+        <Label htmlFor="zoneNameAr">{t('ZONE_NAME_AR')} <span className="ml-1 text-red-500">*</span></Label>
         <Input id="zoneNameAr" className="mt-2 w-full" {...register('zoneNameAr')} />
         {errors.zoneNameAr && <span className="error-message">{t(errors.zoneNameAr.message!)}</span>}
       </div>

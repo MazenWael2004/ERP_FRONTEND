@@ -24,6 +24,7 @@ const zoneColumns = [
     accessorKey: 'name_ar',
     header: 'Name Ar',
   },
+  
 ];
 
 export default function ViewUsers() {

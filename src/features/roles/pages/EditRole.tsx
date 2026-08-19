@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 import axios from 'axios';
-import { editRole, getRoleById,fetchPages } from '../api/roleService';
+import { editRole, getRoleById,fetchPages,checkRoleExists } from '../api/roleService';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Input } from 'src/components/ui/input';
@@ -73,6 +73,8 @@ function EditRole() {
     handleSubmit,
     reset,
     setValue,
+    setError,
+    clearErrors,
     watch,
     formState: { errors },
   } = useForm({
@@ -81,7 +83,6 @@ function EditRole() {
     defaultValues: {
       roleNameEn: '',
       roleNameAr: '',
-      route: '',
       permissions: [],
     },
   });
@@ -134,7 +135,6 @@ function EditRole() {
         reset({
           roleNameEn: role.name_en,
           roleNameAr: role.name_ar,
-          route: role.route,
           permissions: rolePermissions,
         });
       } catch (error) {
@@ -168,6 +168,59 @@ function EditRole() {
       useEffect(() => {
         loadPages();
       }, []);
+
+      const name_en = watch('roleNameEn');
+        const name_ar = watch('roleNameAr');
+      
+        const checkFieldExists = async (
+          field: 'name_en' | 'name_ar',
+          value: string,
+          formField: 'roleNameEn' | 'roleNameAr',
+          errorMessage: string,
+        ) => {
+          try {
+            const response = await checkRoleExists(field, value,currentRole.id);
+      
+            console.log(`${field} response:`, response);
+      
+            if (response.exists) {
+              setError(formField, {
+                type: 'manual',
+                message: errorMessage,
+              });
+            } else {
+              clearErrors(formField);
+            }
+          } catch (error) {
+            console.error(error);
+          }
+        };
+      
+        useEffect(() => {
+          if (!name_en || name_en.trim() === '') {
+            clearErrors('roleNameEn');
+            return;
+          }
+      
+          const timer = setTimeout(() => {
+            checkFieldExists('name_en', name_en, 'roleNameEn', 'ROLE_NAME_EN_EXISTS');
+          }, 500);
+      
+          return () => clearTimeout(timer);
+        }, [name_en]);
+      
+        useEffect(() => {
+          if (!name_ar || name_ar.trim() === '') {
+            clearErrors('roleNameAr');
+            return;
+          }
+      
+          const timer = setTimeout(() => {
+            checkFieldExists('name_ar', name_ar, 'roleNameAr', 'ROLE_NAME_AR_EXISTS');
+          }, 500);
+      
+          return () => clearTimeout(timer);
+        }, [name_ar]);
 
   // ==========================================
   // CHECK PERMISSION
@@ -290,22 +343,30 @@ function EditRole() {
 
         navigate("/roles");
     } catch (error) {
-        if (axios.isAxiosError(error)) {
-            const message = error.response?.data?.error?.message;
+    if (axios.isAxiosError(error)) {
+        const message = error.response?.data?.error?.message;
 
-            console.error(error.response?.data);
+        console.log("Backend message:", message);
 
-            if (message) {
-                toast.error(t(message));
-            } else {
-                toast.error(t("SOMETHING_WENT_WRONG"));
-            }
-        } else {
-            console.error("Unexpected error:", error);
-
-            toast.error(t("SOMETHING_WENT_WRONG"));
+        if (t(message) === "Role name En already exists") {
+            setError("roleNameEn", {
+                type: "server",
+                message: "ROLE_NAME_EN_EXISTS",
+            });
+            return;
         }
-    } finally {
+
+        if (t(message) === "Role name Ar already exists") {
+            setError("roleNameAr", {
+                type: "server",
+                message: "ROLE_NAME_AR_EXISTS",
+            });
+            return;
+        }
+    }
+
+    console.error("Unexpected error:", error);
+} finally {
         setIsLoading(false);
     }
 };

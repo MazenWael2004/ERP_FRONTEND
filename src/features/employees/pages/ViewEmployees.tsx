@@ -35,7 +35,7 @@ const employeeColumns = [
   },
   {
     accessorKey: 'telephone_num',
-    header: 'Phone',
+    header: 'Telephone Number',
   },
   {
     accessorKey: 'street',
