@@ -29,6 +29,7 @@ import { Input } from 'src/components/ui/input';
 import { Button } from 'src/components/ui/button';
 import { Icon } from '@iconify/react/dist/iconify.js';
 import { ArrowUp, ArrowDown, ChevronsUpDown, Trash2, Pencil } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import {
   Select,
   SelectContent,
@@ -83,6 +84,7 @@ export const DataTable = <T extends Record<string, unknown>>({
   const [globalFilter, setGlobalFilter] = useState('');
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnVisibility, setColumnVisibility] = useState({});
+  const {t} = useTranslation();
   
   
 
@@ -428,7 +430,7 @@ export const DataTable = <T extends Record<string, unknown>>({
                   className="max-w-96 lg:min-w-96 min-w-full placeholder:text-gray-400 dark:placeholder:text-white/20"
                   value={globalFilter ?? ''}
                   onChange={(e) => setGlobalFilter(e.target.value)}
-                  placeholder="Search your relevant items..."
+                  placeholder={t("SEARCH_RELEVANT_ITEMS")}
                 />
                 <Button onClick={handleDownload} className="p-2 px-4 rounded-md ">
                   <Icon icon="material-symbols:download-rounded" width={24} height={24} />
@@ -437,7 +439,7 @@ export const DataTable = <T extends Record<string, unknown>>({
                <DropdownMenu>
     <DropdownMenuTrigger asChild>
       <Button variant="outline">
-        Display Columns
+        {t("DISPLAY_COLUMNS")}
       </Button>
     </DropdownMenuTrigger>
 
@@ -528,14 +530,14 @@ export const DataTable = <T extends Record<string, unknown>>({
                   variant={'secondary'}
                   //   className="disabled:bg-gray-300 dark:disabled:bg-white/30 disabled:cursor-not-allowed bg-blue-500 hover:bg-blue-600"
                 >
-                  Previous
+                  {t("PREVIOUS")}
                 </Button>
                 <Button
                   onClick={() => table.nextPage()}
                   disabled={!table.getCanNextPage()}
                   //   className="disabled:bg-gray-300 dark:disabled:bg-white/30 disabled:cursor-not-allowed bg-blue-500 hover:bg-blue-600"
                 >
-                  Next
+                 {t("NEXT")}
                 </Button>
               </div>
 
@@ -548,7 +550,7 @@ export const DataTable = <T extends Record<string, unknown>>({
                   htmlFor="pageSize"
                   className="mr-0 text-forest-black dark:text-white/90 text-base font-medium whitespace-nowrap min-w-32"
                 >
-                  Rows per page:
+                  {t("ROWS_PER_PAGE")}
                 </Label>
                 <Select
                   value={String(table.getState().pagination.pageSize)}

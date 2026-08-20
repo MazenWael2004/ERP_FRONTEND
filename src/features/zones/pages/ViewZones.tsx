@@ -11,22 +11,6 @@ import userIcon from '../../../assets/images/logos/working.png';
 import zoneIcon from '../../../assets/images/logos/zones.png';
 import { useAuth } from 'src/features/auth/hooks/useAuth';
 
-const zoneColumns = [
-  {
-    accessorKey: 'id',
-    header: 'ID',
-  },
-  {
-    accessorKey: 'name_en',
-    header: 'Name En',
-  },
-  {
-    accessorKey: 'name_ar',
-    header: 'Name Ar',
-  },
-  
-];
-
 export default function ViewUsers() {
   const [zones, setZones] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -37,12 +21,26 @@ export default function ViewUsers() {
   const canEdit = hasPermission('/zones', 'WRITE');
   const canDelete = hasPermission('/zones', 'DELETE');
 
-    const handleEditZone = (zone: any) => {
+  const zoneColumns = [
+    {
+      accessorKey: 'id',
+      header: 'ID',
+    },
+    {
+      accessorKey: 'name_en',
+      header: t('ZONE_NAME_EN'),
+    },
+    {
+      accessorKey: 'name_ar',
+      header: t('ZONE_NAME_AR'),
+    },
+  ];
+
+  const handleEditZone = (zone: any) => {
     nav('/zones/edit', {
       state: { zone: zone },
     });
   };
-
 
   const loadZones = async () => {
     try {
@@ -62,14 +60,14 @@ export default function ViewUsers() {
 
   const handleDelete = async (user: any) => {
     const result = await Swal.fire({
-      title: 'Are you sure?',
-      text: "You won't be able to undo this action!",
+      title: t('ARE_YOU_SURE'),
+      text: t('CANNOT_UNDO_ACTION'),
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#d33',
       cancelButtonColor: '#6b7280',
-      confirmButtonText: 'Yes, delete it!',
-      cancelButtonText: 'Cancel',
+      confirmButtonText: t('YES_DELETE'),
+      cancelButtonText: t('CANCEL'),
     });
 
     if (!result.isConfirmed) return;
@@ -78,8 +76,8 @@ export default function ViewUsers() {
       await deleteZone(user.id);
 
       await Swal.fire({
-        title: 'Deleted!',
-        text: 'The zone has been deleted successfully.',
+        title: t('DELETED'),
+        text: t('ZONE_DELETED_SUCCESSFULLY'),
         icon: 'success',
         timer: 1500,
         showConfirmButton: false,
@@ -98,7 +96,7 @@ export default function ViewUsers() {
   };
   return (
     <>
-      <BreadcrumbComp title="Zones Table" breadCrumbBg={zoneIcon} />
+      <BreadcrumbComp title={t('ZONES_TABLE')} breadCrumbBg={zoneIcon} />
       <div className="flex gap-6 flex-col ">
         {canAdd && (
           <div className="flex justify-end">
@@ -107,12 +105,10 @@ export default function ViewUsers() {
               className="bg-green-600 hover:bg-green-700 text-white"
             >
               <Plus className="mr-2 h-4 w-4" />
-              Add Zone
+              {t('ADD_ZONE')}
             </Button>
           </div>
         )}
-
-        
 
         <DataTable
           data={zones}

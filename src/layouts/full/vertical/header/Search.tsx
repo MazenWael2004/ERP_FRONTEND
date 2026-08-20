@@ -4,6 +4,7 @@ import SidebarContent, { ChildItem, MenuItem } from '../sidebar/sidebaritems';
 import { Link } from 'react-router';
 import SimpleBar from 'simplebar-react';
 import { Input } from 'src/components/ui/input';
+import { useTranslation } from 'react-i18next';
 
 interface SearchResult {
   name: string
@@ -14,6 +15,7 @@ interface SearchResult {
 
 function Search() {
   const [query, setQuery] = useState('');
+  const {t} = useTranslation();
 
   // 🔍 Recursive search through menu
   const searchItems = (items: (MenuItem | ChildItem)[], q: string, parentPath = ''): SearchResult[] => {
@@ -58,7 +60,7 @@ function Search() {
         />
 
         <Input
-          placeholder="Search...."
+          placeholder={t("SEARCH")}
           className="rounded-xl pl-10"
           required
           value={query}

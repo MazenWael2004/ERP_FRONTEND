@@ -9,6 +9,7 @@ import { Button } from 'src/components/ui/button';
 import { Plus } from 'lucide-react';
 import Swal from 'sweetalert2';
 
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from 'src/components/ui/dropdown-menu';
 import userIcon from '../../../assets/images/logos/working.png';
+import { t } from 'i18next';
 
 const userColumns = [
   {
@@ -24,11 +26,11 @@ const userColumns = [
   },
   {
     accessorKey: 'username',
-    header: 'Username',
+    header: t("USERNAME"),
   },
   {
     accessorKey: 'employee_name',
-    header: 'Employee Name',
+    header: t("EMPLOYEE_NAME"),
   },
 ];
 
@@ -66,14 +68,14 @@ export default function ViewUsers() {
 
   const handleDelete = async (user: any) => {
     const result = await Swal.fire({
-      title: 'Are you sure?',
-      text: "You won't be able to undo this action!",
+      title: t("ARE_YOU_SURE"),
+      text: t("CANNOT_UNDO_ACTION"),
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#d33',
       cancelButtonColor: '#6b7280',
-      confirmButtonText: 'Yes, delete it!',
-      cancelButtonText: 'Cancel',
+      confirmButtonText: t("YES_DELETE"),
+      cancelButtonText: t("CANCEL"),
     });
 
     if (!result.isConfirmed) return;
@@ -82,8 +84,8 @@ export default function ViewUsers() {
       await deleteUser(user.id);
 
       await Swal.fire({
-        title: 'Deleted!',
-        text: 'The user has been deleted successfully.',
+        title: t("DELETED"),
+        text: t("USER_DELETED_SUCCESSFULLY"),
         icon: 'success',
         timer: 1500,
         showConfirmButton: false,
@@ -102,7 +104,7 @@ export default function ViewUsers() {
   };
   return (
     <>
-      <BreadcrumbComp title="Users Table" breadCrumbBg={userIcon} />
+      <BreadcrumbComp title={t("USERS_TABLE")} breadCrumbBg={userIcon} />
       <div className="flex gap-6 flex-col ">
         <div className="flex justify-end">
           {/* HARDCODED FIX LATER..... */}
@@ -112,7 +114,7 @@ export default function ViewUsers() {
               className="bg-green-600 hover:bg-green-700 text-white"
             >
               <Plus className="mr-2 h-4 w-4" />
-              Add User
+              {t("ADD_USER")}
             </Button>
           )}
         </div>

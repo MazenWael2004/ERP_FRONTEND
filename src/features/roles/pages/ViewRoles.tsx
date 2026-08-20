@@ -11,20 +11,6 @@ import Swal from 'sweetalert2';
 import rolesIcon from '../../../assets/images/logos/roles.png';
 import { useAuth } from 'src/features/auth/hooks/useAuth';
 
-const roleColumns = [
-  {
-    accessorKey: 'id',
-    header: 'ID',
-  },
-  {
-    accessorKey: 'name_en',
-    header: 'Name En',
-  },
-  {
-    accessorKey: 'name_ar',
-    header: 'Name Ar',
-  },
-];
 
 export default function ViewRoles() {
   const [roles, setRoles] = useState([]);
@@ -35,6 +21,22 @@ export default function ViewRoles() {
   const canAdd = hasPermission('/roles', 'CREATE');
   const canEdit = hasPermission('/roles', 'WRITE');
   const canDelete = hasPermission('/roles', 'DELETE');
+
+  const roleColumns = [
+  {
+    accessorKey: 'id',
+    header: 'ID',
+  },
+  {
+    accessorKey: 'name_en',
+    header: t("ROLE_NAME_EN"),
+  },
+  {
+    accessorKey: 'name_ar',
+    header: t("ROLE_NAME_AR"),
+  },
+];
+
 
    const handleEditRole = (role: any) => {
     nav('/roles/edit', {
@@ -115,7 +117,7 @@ export default function ViewRoles() {
   };
   return (
     <>
-      <BreadcrumbComp title="Roles Table" breadCrumbBg={rolesIcon} />
+      <BreadcrumbComp title={t("ROLES_TABLE")} breadCrumbBg={rolesIcon} />
       <div className="flex gap-6 flex-col ">
         <div className="flex justify-end">
           {canAdd && (
@@ -124,7 +126,7 @@ export default function ViewRoles() {
               className="bg-green-600 hover:bg-green-700 text-white"
             >
               <Plus className="mr-2 h-4 w-4" />
-              Add Role
+              {t("ADD_ROLE")}
             </Button>
           )}
         </div>

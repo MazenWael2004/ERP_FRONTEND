@@ -233,7 +233,7 @@ function NewJob() {
 
       <div className="md:col-span-2 flex justify-end">
         <Button type="submit" disabled={isLoading}>
-          Save
+          {t("SAVE")}
         </Button>
       </div>
     </form>

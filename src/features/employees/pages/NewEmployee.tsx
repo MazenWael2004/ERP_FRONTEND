@@ -31,7 +31,7 @@ function NewEmployee() {
   const [open, setOpen] = useState(false);
   const [isZonesInputDisabled, setIsZonesInputDisabled] = useState(true);
   const nav = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
 
@@ -312,7 +312,7 @@ function NewEmployee() {
                   id="date"
                   className="w-full justify-between font-normal hover:bg-transparent focus:border-primary"
                 >
-                  {field.value ? field.value.toLocaleDateString() : 'Select date'}
+                  {field.value ? field.value.toLocaleDateString() : t("SELECT_DATE")}
 
                   <Icon icon="solar:calendar-minimalistic-linear" width={18} height={18} />
                 </Button>
@@ -393,13 +393,13 @@ function NewEmployee() {
               onValueChange={(value) => field.onChange(Number(value))}
             >
               <SelectTrigger className="mt-2 w-full">
-                <SelectValue placeholder="Select a job" />
+                <SelectValue placeholder={t("SELECT_JOB")} />
               </SelectTrigger>
 
               <SelectContent>
                 {jobs.map((job) => (
                   <SelectItem key={job.id} value={String(job.id)}>
-                    {t('LANG') === 'ar' ? job.title_ar : job.title_en}
+                     {i18n.language === 'ar' ? job.title_ar : job.title_en}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -457,7 +457,7 @@ function NewEmployee() {
       </div> */}
       <div className="md:col-span-2 flex justify-end">
         <Button type="submit" disabled={isLoading}>
-          Save
+          {t("SAVE")}
         </Button>
       </div>
     </form>

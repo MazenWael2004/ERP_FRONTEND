@@ -4,7 +4,7 @@ const baseUserSchema = z.object({
   userName: z
     .string()
     .trim()
-    .min(1, "USER_NAME_REQUIRED"),
+    .min(1, "USERNAME_REQUIRED"),
 
   employeeId: z
     .number("EMPLOYEE_ID_MUST_BE_NUMBER")

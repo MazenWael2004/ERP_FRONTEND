@@ -18,28 +18,7 @@ import userIcon from '../../../assets/images/logos/working.png';
 import jobIcon from '../../../assets/images/logos/job-offer.png';
 import { useAuth } from 'src/features/auth/hooks/useAuth';
 
-const jobColumns = [
-  {
-    accessorKey: 'id',
-    header: 'ID',
-  },
-  {
-    accessorKey: 'title_en',
-    header: 'Title En',
-  },
-  {
-    accessorKey: 'title_ar',
-    header: 'Title Ar',
-  },
-  {
-    accessorKey: 'code',
-    header: 'Code',
-  },
-  {
-    accessorKey: 'is_zone_mandatory',
-    header: 'Is Zone Mandatory',
-  }
-];
+
 
 export default function ViewJobs() {
   const [jobs, setJobs] = useState([]);
@@ -50,6 +29,29 @@ export default function ViewJobs() {
   const canEdit = hasPermission('/jobs', 'WRITE');
   const canDelete = hasPermission('/jobs', 'DELETE');
   const canAdd = hasPermission('/jobs', 'CREATE');
+
+  const jobColumns = [
+  {
+    accessorKey: 'id',
+    header: 'ID',
+  },
+  {
+    accessorKey: 'title_en',
+    header: t("JOB_TITLE_EN"),
+  },
+  {
+    accessorKey: 'title_ar',
+    header: t("JOB_TITLE_AR"),
+  },
+  {
+    accessorKey: 'code',
+    header: t("JOB_CODE"),
+  },
+  {
+    accessorKey: 'is_zone_mandatory',
+    header: t("IS_ZONE_MANDATORY"),
+  }
+];
 
   const handleEditJob = (job: any) => {
     nav('/jobs/edit', {
@@ -75,14 +77,14 @@ export default function ViewJobs() {
 
   const handleDelete = async (employee: any) => {
     const result = await Swal.fire({
-      title: 'Are you sure?',
-      text: "You won't be able to undo this action!",
+      title: t("ARE_YOU_SURE"),
+      text: t("CANNOT_UNDO_ACTION"),
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#d33',
       cancelButtonColor: '#6b7280',
-      confirmButtonText: 'Yes, delete it!',
-      cancelButtonText: 'Cancel',
+      confirmButtonText: t("YES_DELETE"),
+      cancelButtonText: t("CANCEL"),
     });
 
     if (!result.isConfirmed) return;
@@ -112,7 +114,7 @@ export default function ViewJobs() {
 
   return (
     <>
-      <BreadcrumbComp title="Jobs Table" breadCrumbBg={jobIcon} />
+      <BreadcrumbComp title={t("JOBS_TABLE")} breadCrumbBg={jobIcon} />
       <div className="flex gap-6 flex-col ">
         <div className="flex justify-end">
           {canAdd && (
@@ -121,7 +123,7 @@ export default function ViewJobs() {
               className="bg-green-600 hover:bg-green-700 text-white"
             >
               <Plus className="mr-2 h-4 w-4" />
-              Add Job
+              {t("ADD_JOB")}
             </Button>
           )}
         </div>

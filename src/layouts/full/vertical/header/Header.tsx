@@ -9,9 +9,13 @@ import { useTheme } from 'src/components/provider/theme-provider';
 import { Sheet, SheetContent, SheetTitle } from 'src/components/ui/sheet';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import Search from './Search';
+import LanguageSwitcher from 'src/shared/components/LanguageSwitcher';
+import { useTranslation } from 'react-i18next';
 
 const Header = () => {
   const { theme, setTheme } = useTheme();
+  const { i18n } = useTranslation();
+  const isRTL = (i18n.resolvedLanguage ?? i18n.language) === 'ar';
   const [isSticky, setIsSticky] = useState(false);
   const [mobileMenu, setMobileMenu] = useState('');
   const [isOpen, setIsOpen] = useState(false);
@@ -88,6 +92,8 @@ const Header = () => {
 
           <div className="xl:!block !hidden md:!hidden">
             <div className="flex gap-0 items-center">
+              <LanguageSwitcher />
+
               {/* Theme Toggle */}
               {theme === 'light' ? (
                 <div
@@ -125,6 +131,8 @@ const Header = () => {
           <span className="flex xl:hidden " onClick={handleMobileMenu}>
             <div className="xl:hidden flex w-full">
               <div className="flex justify-center items-center">
+                <LanguageSwitcher />
+
                 {theme === 'light' ? (
                   <div
                     className="hover:text-primary px-1 sm:px-15 group  dark:hover:text-primary focus:ring-0 rounded-full flex justify-center items-center cursor-pointer text-foreground dark:text-muted-foreground relative"
@@ -159,7 +167,7 @@ const Header = () => {
 
       {/* Mobile Sidebar */}
       <Sheet open={isOpen} onOpenChange={setIsOpen}>
-        <SheetContent side="left" className="w-64 p-0">
+        <SheetContent side={isRTL ? 'right' : 'left'} className="w-64 p-0">
           <VisuallyHidden>
             <SheetTitle>sidebar</SheetTitle>
           </VisuallyHidden>

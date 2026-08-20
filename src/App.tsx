@@ -1,6 +1,6 @@
 import { RouterProvider } from "react-router-dom";
 import router from './routes/Router';
-import { useEffect } from "react";
+import { useLayoutEffect } from "react";
 import './css/globals.css';
 import { ThemeProvider } from './components/provider/theme-provider';
 import AuthProvider from "./features/auth/context/AuthProvider";
@@ -11,14 +11,23 @@ import { DirectionProvider, MantineProvider } from "@mantine/core";
 
 function App() {
   const { i18n } = useTranslation();
+  const language = i18n.resolvedLanguage ?? i18n.language;
+  const isRTL = language === "ar";
+  const direction = isRTL ? "rtl" : "ltr";
 
-const isRTL = i18n.language === "ar";
+  useLayoutEffect(() => {
+    const root = window.document.documentElement;
+
+    root.lang = language;
+    root.dir = direction;
+  }, [direction, language]);
+
   return (
     <>
     <AuthProvider>
       <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
         <MantineProvider>
-          <DirectionProvider initialDirection={isRTL ? "rtl" : "ltr"}>
+          <DirectionProvider key={direction} initialDirection={direction}>
           <RouterProvider router={router} />
            <Toaster
           position="top-center"

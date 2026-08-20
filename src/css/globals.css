@@ -4,6 +4,7 @@
 @import './layouts/container.css' layer(utilities);
 @import './layouts/sidebar.css' layer(utilities);
 @import './layouts/header.css' layer(utilities);
+@import './layouts/rtl.css' layer(utilities);
 @import './override/reboot.css' layer(utilities);
 @import 'tw-animate-css';
 

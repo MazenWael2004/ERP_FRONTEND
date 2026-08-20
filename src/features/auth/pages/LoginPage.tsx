@@ -12,6 +12,7 @@ import axios from 'axios';
 import Spinner from '../../../shared/components/Spinner';
 import { useAuth } from '../hooks/useAuth';
 import Swal from 'sweetalert2';
+import LanguageSwitcher from 'src/shared/components/LanguageSwitcher';
 
 function LoginPage() {
   // for toggling translation/ language...
@@ -72,6 +73,9 @@ function LoginPage() {
 
   return (
     <div className={`login-container ${isArabic ? 'rtl-header' : 'ltr-header'}`}>
+      <div className="fixed top-4 end-4 z-10">
+        <LanguageSwitcher />
+      </div>
       <div className="second-half-container">
         <div className="company-logo">
           <img src={companyLogoIcon} alt="B-Connect" style={{ width: 100, height: 100 }} />

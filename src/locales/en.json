@@ -9,6 +9,16 @@
   "WEBSITE_FEATURE_THREE": "User-Friendly Interface",
   "WELCOME_MESSAGE": "Welcome back!",
   "SIGN_IN_MESSAGE": "Sign in to continue to the ERP System",
+  "LOGOUT":"Are you sure you want to logout?",
+  "SEARCH":"Search...",
+  "DISPLAY_COLUMNS":"Display Columns",
+  "SEARCH_RELEVANT_ITEMS":"Search relevant items...",
+  "YES":"Yes",
+  "NO":"No",
+  "LOGGED_OUT_SUCCESSFULLY":"Logged out successfully",
+  "ROWS_PER_PAGE":"Rows per page",
+  "NEXT":"Next",
+  "PREVIOUS":"Previous",
 
   "USERNAME": "Username",
   "PASSWORD": "Password",
@@ -27,15 +37,18 @@
   "LOGIN_SUCCESSFUL": "Login Successful",
 
   "ADMINISTRATION": "Administration",
+  "APPLICATION": "Application",
   "USERS": "Users",
   "USERS_TITLE": "Users",
   "EMPLOYEES": "Employees",
   "EMPLOYEES_TITLE": "Employees",
   "JOBS": "Jobs",
   "ZONES": "Zones",
+  "PERMISSIONS":"Permissions",
   "ACTIONS": "Actions",
   "EDIT": "Edit",
   "DELETE": "Delete",
+  "SELECT_ACTIONS_FOR_ROLE":"Select the actions this role can perform for each page.",
   "ENABLE": "Enable",
   "DISABLE": "Disable",
   "SAVE": "Save",
@@ -44,13 +57,14 @@
 
   "NEW_USER": "New User",
   "ADD_USER": "Add User",
+  "USERS_TABLE":"Users table",
   "USER_NAME_ONLY_ENGLISH": "User name must be in english only",
-  "USER_NAME_REQUIRED": "User name is required",
   "USER_ALREADY_EXISTS": "This user already exists",
   "USERNAME_EXISTS": "Username already exists",
   "EMPLOYEE_ALREADY_ASSIGNED": "Employee is already linked to another user",
   "USER_CREATED_SUCCESSFULLY": "User created successfully",
   "USER_UPDATED_SUCCESSFULLY": "User updated successfully",
+  "USER_DELETED_SUCCESSFULLY":"User deleted successfully",
 
   "EMPLOYEE_ID": "Employee ID",
   "ENTER_EMPLOYEE_ID": "Enter Employee ID",
@@ -60,13 +74,17 @@
   "EMPLOYEE_ID_MUST_BE_POSITIVE": "Employee ID must be a positive number",
 
   "ROLE": "Role",
+  "ADD_ROLE":"Add Role",
   "ROLES_REQUIRED": "At least one role is required",
   "SELECT_ROLE": "Select Role",
-
+  "EMPLOYEES_TABLE":"Employees Table",
   "NEW_EMPLOYEE": "New Employee",
   "ADD_EMPLOYEE": "Add Employee",
   "EMPLOYEE_NAME_EN": "Employee Name En",
   "EMPLOYEE_NAME_AR": "Employee Name Ar",
+  "EMPLOYEE_NAME":"Employee Name",
+  "EMPLOYEE_NUMBER":"Employee number",
+  "SELECT_EMPLOYEE":"Select an employee",
   "ENTER_EMPLOYEE_NAME_EN": "Enter Employee Name En",
   "ENTER_EMPLOYEE_NAME_AR": "Enter Employee Name Ar",
   "EMPLOYEE_NAME_EN_REQUIRED": "Employee name En is required",
@@ -77,6 +95,7 @@
   "ENTER_EMPLOYEE_NUM": "Enter employee number",
   "EMPLOYEE_NUMBER_REQUIRED": "Employee number required",
   "EMPLOYEE_NUMBER_MUST_BE_INTEGER": "Employee number must be an integer",
+  "BIRTH_DATE_REQUIRED":"Date of birth required",
   "INVALID_EMPLOYEE_NUMBER": "Invalid employee number",
   "EMPLOYEE_ALREADY_EXISTS": "This employee already exists",
   "EMPLOYEE_NAME_EN_EXISTS": "Employee Name En already exists",
@@ -104,12 +123,14 @@
   "INVALID_EMAIL": "Invalid email address",
   "TELEPHONE_NUMBER": "Telephone Number",
   "DATE_OF_BIRTH":"Date of birth",
+  "SELECT_DATE":"Select Date",
   "ENTER_TELEPHONE_NUMBER": "Enter telephone number",
   "INVALID_PHONE_NUMBER": "Invalid phone number",
   "DATE_OF_BIRTH_REQUIRED": "Birth date is required",
 
   "JOB": "Job",
   "SELECT_JOB": "Select Job",
+  "JOBS_TABLE":"Jobs Table",
   "JOB_ID_REQUIRED": "Job ID is required",
 
   "ZONE": "Zone",
@@ -138,6 +159,7 @@
 
   "NEW_ZONE": "New Zone",
   "ADD_ZONE": "Add a Zone",
+  "ZONES_TABLE":"Zones Table",
   "ZONE_NAME_EN": "Zone Name En",
   "ZONE_NAME_AR": "Zone Name Ar",
   "ENTER_ZONE_NAME_EN": "Enter Zone name in English",
@@ -153,6 +175,7 @@
 
   "ROLE_NAME_EN": "Role name English",
   "ROLE_NAME_AR": "Role name Arabic",
+  "ROLES_TABLE":"Roles table",
   "ROLE_NAME_EN_REQUIRED": "Role Name En is required",
   "ROLE_NAME_AR_REQUIRED": "Role name arabic is required",
   "ROLE_NAME_ONLY_ENGLISH": "Role name must contain only english letters",
@@ -165,6 +188,7 @@
   "ARE_YOU_SURE": "Are you sure?",
   "CANNOT_UNDO_ACTION": "Cannot undo that action once performed",
   "YES_DELETE": "Yes, delete",
+  
 
   "VALUE_ALREADY_EXISTS": "This value already exists"
 }

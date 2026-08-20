@@ -60,7 +60,7 @@ function EditRole() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { t } = useTranslation();
+  const { t,i18n } = useTranslation();
   const [selectedPage, setSelectedPage] = useState('');
   const [pages,setPages] = useState([]);
   const {user,refreshPermissions} = useAuth();
@@ -94,7 +94,7 @@ function EditRole() {
   // ==========================================
 
   useEffect(() => {
-    if (!currentRole) return;
+    if (!currentRole) navigate("/roles");
 
     const fetchRole = async () => {
       try {
@@ -404,11 +404,11 @@ function EditRole() {
      <div className="mt-4">
      
          <Label className="text-base font-semibold">
-             Permissions
+             {t("PERMISSIONS")}
          </Label>
      
          <p className="mt-1 text-xs text-gray-500">
-             Select the actions this role can perform for each page.
+             {t("SELECT_ACTIONS_FOR_ROLE")}
          </p>
      
          {/* TWO COLUMN LAYOUT */}
@@ -435,7 +435,9 @@ function EditRole() {
                              dark:bg-gray-800
                          "
                      >
-                         {page.title_en}
+                        {i18n.language === "ar"
+  ? page.title_ar
+  : page.title_en}
                      </div>
      
      
@@ -485,7 +487,7 @@ function EditRole() {
                                  />
      
                                  <span>
-                                     {action.name_en}
+                                     { i18n.language === "ar"? action.name_ar: action.name_en}
                                  </span>
      
                              </label>
@@ -509,7 +511,7 @@ function EditRole() {
 
       <div className="flex justify-end">
         <Button type="submit" disabled={isLoading}>
-          {isLoading ? 'Saving...' : 'Save'}
+          {isLoading ? 'Saving...' : t("SAVE")}
         </Button>
       </div>
     </form>

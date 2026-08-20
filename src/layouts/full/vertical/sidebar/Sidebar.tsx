@@ -6,6 +6,7 @@ import companyLogo from '../../../../assets/images/logos/b_connect_egypt_logo-re
 import usersIcon from '../../../../assets/images/logos/users.png'
 import { useTheme } from 'src/components/provider/theme-provider';
 import { useAuth } from 'src/features/auth/hooks/useAuth';
+import { useTranslation } from 'react-i18next';
 
 import {
   AMMenu,
@@ -430,13 +431,14 @@ const SidebarLayout = ({
   const [mockApps,setMockApps] = useState([]);
   const [isLoading,setLoading] = useState(false);
   const {hasPermission} = useAuth();
+  const { i18n, t } = useTranslation();
+  const isRTL = (i18n.resolvedLanguage ?? i18n.language) === 'ar';
   const loadApps = async () => {
   try {
     setLoading(true);
 
     const response = await fetchApps();
     const apps = response.data;
-
     const filteredApps = apps.map((app) => ({
       ...app,
       modules: app.modules.map((module) => ({
@@ -508,18 +510,22 @@ const SidebarLayout = ({
   // ----------------------------------------------------------
   // Convert Modules → Sidebar Items
   // ----------------------------------------------------------
-
+console.log(currentApp);
  const sidebarItems: SidebarItemType[] =
   currentApp?.modules.map(
     (module) => ({
       id: module.id,
-      heading: module.name,
+      heading: i18n.language === "ar"
+  ? module.name_ar
+  : module.name_en,
 
       children:
         module.pages.map(
           (page) => ({
             id: page.id,
-            name: page.name,
+            name: i18n.language === "ar"
+  ? page.title_ar
+  : page.title_en,
             icon: page.icon,
             url: page.url,
           }),
@@ -539,9 +545,9 @@ const SidebarLayout = ({
       width="270px"
       showTrigger={false}
       mode={sidebarMode}
-      className="
+      className={`
         fixed
-        left-0
+        ${isRTL ? 'right-0' : 'left-0'}
         top-0
         border
         border-border
@@ -550,7 +556,7 @@ const SidebarLayout = ({
         dark:bg-sidebar
         z-10
         h-screen
-      "
+      `}
     >
 
       <SimpleBar
@@ -589,7 +595,7 @@ const SidebarLayout = ({
                 text-sidebar-foreground
               "
             >
-              Application
+              {t('APPLICATION')}
             </label>
 
 
@@ -623,7 +629,9 @@ const SidebarLayout = ({
                     key={app.id}
                     value={app.id}
                   >
-                    {app.name}
+                    {i18n.language === "ar"
+  ? app.name_ar
+  : app.name_en}
                   </option>
                 ),
               )}
@@ -680,4 +688,3 @@ const SidebarLayout = ({
 
 
 export default SidebarLayout;
-

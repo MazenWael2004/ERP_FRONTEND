@@ -229,7 +229,7 @@ if (isLoading) {
               control={control}
               render={({ field }) => (
                 <div>
-                  <Label>Employee Name</Label>
+                  <Label>{t("EMPLOYEE_NAME")}</Label>
       
                   <Select
                     value={field.value ? String(field.value) : ''}
@@ -302,7 +302,7 @@ if (isLoading) {
       </div> */}
       <div className="md:col-span-2 flex justify-end">
         <Button type="submit" disabled={isLoading}>
-          Save
+          {t("SAVE")}
         </Button>
       </div>
     </form>

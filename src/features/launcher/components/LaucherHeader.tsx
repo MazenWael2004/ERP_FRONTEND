@@ -19,20 +19,20 @@ function LauncherHeader({ name, role }: any) {
 
   const handleLogout = async () => {
     const result = await Swal.fire({
-      title: 'Are you sure you want to logout?',
+      title: t("LOGOUT"),
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#d33',
       cancelButtonColor: '#6b7280',
-      confirmButtonText: 'Yes',
-      cancelButtonText: 'No',
+      confirmButtonText: t("YES"),
+      cancelButtonText: t("NO"),
     });
 
     if (!result.isConfirmed) return;
 
     try {
       await Swal.fire({
-        title: 'Logged out successfully',
+        title: t("LOGGED_OUT_SUCCESSFULLY"),
         icon: 'success',
         timer: 1500,
         showConfirmButton: false,
