@@ -42,7 +42,7 @@ function EditJob() {
 
 
   useEffect(() => {
-    if (!currentJob) return;
+    if (!currentJob) navigate("/jobs");
 
     const fetchJob = async () => {
       try {

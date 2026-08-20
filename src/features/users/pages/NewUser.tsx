@@ -10,7 +10,7 @@ import { Icon } from '@iconify/react/dist/iconify.js';
 import { useNavigate } from 'react-router-dom';
 import { Calendar } from 'src/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from 'src/components/ui/popover';
-import { createUser,checkUserExists } from '../api/userService.ts';
+import { createUser, checkUserExists } from '../api/userService.ts';
 import Swal from 'sweetalert2';
 import { fetchRoles } from '../../roles/api/roleService.ts';
 import { fetchEmployees } from 'src/features/employees/api/employeeService.ts';
@@ -30,14 +30,14 @@ import { Button } from 'src/components/ui/button';
 function NewUser() {
   const [open, setOpen] = useState(false);
   const nav = useNavigate();
-  const { t,i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user, hasPermission } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [showPasswordFields, setPasswordFields] = useState(true);
   const [roles, setRoles] = useState([]);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const isArabic = i18n.language.startsWith("ar");
+  const isArabic = i18n.language.startsWith('ar');
 
   // console.log(user);
 
@@ -99,23 +99,23 @@ function NewUser() {
   });
 
   const [employees, setEmployees] = useState([]);
-  const username = watch("userName");
+  const username = watch('userName');
   const employee_id = watch('employeeId');
 
   const checkFieldExists = async (
-    field: "username" | "employee_id",
+    field: 'username' | 'employee_id',
     value: string | number,
-    formField: "userName" | "employeeId",
-    errorMessage: string
+    formField: 'userName' | 'employeeId',
+    errorMessage: string,
   ) => {
     try {
-      const response = await checkUserExists(field, value,null);
-  
+      const response = await checkUserExists(field, value, null);
+
       console.log(`${field} response:`, response);
-  
+
       if (response.exists) {
         setError(formField, {
-          type: "manual",
+          type: 'manual',
           message: errorMessage,
         });
       } else {
@@ -127,38 +127,28 @@ function NewUser() {
   };
 
   useEffect(() => {
-    if (!username || username.trim() === "") {
-      clearErrors("userName");
+    if (!username || username.trim() === '') {
+      clearErrors('userName');
       return;
     }
-  
+
     const timer = setTimeout(() => {
-      checkFieldExists(
-        "username",
-        username,
-        "userName",
-        "USERNAME_EXISTS"
-      );
+      checkFieldExists('username', username, 'userName', 'USERNAME_EXISTS');
     }, 500);
-  
+
     return () => clearTimeout(timer);
   }, [username]);
 
   useEffect(() => {
     if (!employee_id) {
-      clearErrors("employeeId");
+      clearErrors('employeeId');
       return;
     }
-  
+
     const timer = setTimeout(() => {
-      checkFieldExists(
-        "employee_id",
-        employee_id,
-        "employeeId",
-        "EMPLOYEE_ALREADY_ASSIGNED"
-      );
+      checkFieldExists('employee_id', employee_id, 'employeeId', 'EMPLOYEE_ALREADY_ASSIGNED');
     }, 500);
-  
+
     return () => clearTimeout(timer);
   }, [employee_id]);
 
@@ -285,114 +275,98 @@ function NewUser() {
       </div>
 
       {/* Roles */}
-     <div className="w-full">
-  {/* Label */}
-  <label
-    className={`mb-2 block text-sm font-medium ${
-      isArabic ? "text-right" : "text-left"
-    }`}
-  >
-    {t("ROLE")}
-    <span className="ml-1 text-red-500">*</span>
-  </label>
+      <div className="w-full">
+        {/* Label */}
+        <label
+          className={`mb-2 block text-sm font-medium ${isArabic ? 'text-right' : 'text-left'}`}
+        >
+          {t('ROLE')}
+          <span className="ml-1 text-red-500">*</span>
+        </label>
 
-  <Controller
-    name="roles"
-    control={control}
-    defaultValue={[]}
-    render={({ field }) => (
-      <Autocomplete
-        multiple
-        options={roles}
-        isOptionEqualToValue={(option, value) =>
-          option.id === value.id
-        }
-        getOptionLabel={(option) =>
-          isArabic ? option.name_ar : option.name_en
-        }
-        value={roles.filter((r) =>
-          (field.value ?? []).includes(r.id)
-        )}
-        onChange={(_, selectedRoles) =>
-          field.onChange(selectedRoles.map((r) => r.id))
-        }
-        sx={{
-          direction: isArabic ? "rtl" : "ltr",
+        <Controller
+          name="roles"
+          control={control}
+          defaultValue={[]}
+          render={({ field }) => (
+            <Autocomplete
+              multiple
+              options={roles}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              getOptionLabel={(option) => (isArabic ? option.name_ar : option.name_en)}
+              value={roles.filter((r) => (field.value ?? []).includes(r.id))}
+              onChange={(_, selectedRoles) => field.onChange(selectedRoles.map((r) => r.id))}
+              sx={{
+                direction: isArabic ? 'rtl' : 'ltr',
 
-          "& .MuiOutlinedInput-root": {
-            borderRadius: "10px",
-            minHeight: "48px",
-            fontFamily: "Cairo, sans-serif",
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: '10px',
+                  minHeight: '48px',
+                  fontFamily: 'Cairo, sans-serif',
 
-            "& fieldset": {
-              borderColor: "#d1d5db",
-            },
+                  '& fieldset': {
+                    borderColor: '#d1d5db',
+                  },
 
-            "&:hover fieldset": {
-              borderColor: "#9ca3af",
-            },
+                  '&:hover fieldset': {
+                    borderColor: '#9ca3af',
+                  },
 
-            "&.Mui-focused fieldset": {
-              borderColor: "#2563eb",
-              borderWidth: "2px",
-            },
-          },
+                  '&.Mui-focused fieldset': {
+                    borderColor: '#2563eb',
+                    borderWidth: '2px',
+                  },
+                },
 
-          "& .MuiInputBase-input": {
-            fontFamily: "Cairo, sans-serif",
-            textAlign: isArabic ? "right" : "left",
-          },
+                '& .MuiInputBase-input': {
+                  fontFamily: 'Cairo, sans-serif',
+                  textAlign: isArabic ? 'right' : 'left',
+                },
 
-          "& .MuiAutocomplete-tag": {
-            fontFamily: "Cairo, sans-serif",
-            borderRadius: "6px",
-          },
+                '& .MuiAutocomplete-tag': {
+                  fontFamily: 'Cairo, sans-serif',
+                  borderRadius: '6px',
+                },
 
-          "& .MuiAutocomplete-popupIndicator": {
-            transform: isArabic ? "rotate(180deg)" : "none",
-          },
-        }}
-        slotProps={{
-          paper: {
-            sx: {
-              mt: 1,
-              borderRadius: 2,
-              fontFamily: "Cairo, sans-serif",
-              boxShadow: "0 10px 30px rgba(0,0,0,0.12)",
+                '& .MuiAutocomplete-popupIndicator': {
+                  transform: isArabic ? 'rotate(180deg)' : 'none',
+                },
+              }}
+              slotProps={{
+                paper: {
+                  sx: {
+                    mt: 1,
+                    borderRadius: 2,
+                    fontFamily: 'Cairo, sans-serif',
+                    boxShadow: '0 10px 30px rgba(0,0,0,0.12)',
 
-              "& .MuiAutocomplete-option": {
-                fontFamily: "Cairo, sans-serif",
-                padding: "10px 16px",
-                justifyContent: isArabic
-                  ? "flex-end"
-                  : "flex-start",
-              },
-            },
-          },
-        }}
-        renderInput={(params) => (
-          <TextField
-            {...params}
-            placeholder={t("SELECT_ROLE")}
-            error={!!errors.roles}
-            helperText={
-              errors.roles
-                ? t(errors.roles.message!)
-                : ""
-            }
-          />
-        )}
-      />
-    )}
-  />
-</div>
+                    '& .MuiAutocomplete-option': {
+                      fontFamily: 'Cairo, sans-serif',
+                      padding: '10px 16px',
+                      justifyContent: isArabic ? 'flex-end' : 'flex-start',
+                    },
+                  },
+                },
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  placeholder={t('SELECT_ROLE')}
+                  error={!!errors.roles}
+                  helperText={errors.roles ? t(errors.roles.message!) : ''}
+                />
+              )}
+            />
+          )}
+        />
+      </div>
       <Controller
         name="employeeId"
         control={control}
         render={({ field }) => (
           <div>
             <Label>
-             {t("EMPLOYEE_NAME")}
+              {t('EMPLOYEE_NAME')}
               <span className="ml-1 text-red-500">*</span>
             </Label>
 
@@ -401,18 +375,19 @@ function NewUser() {
               onValueChange={(value) => field.onChange(Number(value))}
             >
               <SelectTrigger
-  dir={isArabic ? "rtl" : "ltr"}
-  className={`mt-2 w-full ${
-    isArabic ? "text-right" : "text-left"
-  }`}
->
-  <SelectValue placeholder={t("SELECT_EMPLOYEE")} />
-</SelectTrigger>
+                dir={isArabic ? 'rtl' : 'ltr'}
+                className={`mt-2 w-full ${isArabic ? 'text-right' : 'text-left'}`}
+              >
+                <SelectValue placeholder={t('SELECT_EMPLOYEE')} />
+              </SelectTrigger>
 
-              <SelectContent>
+              <SelectContent
+                dir= 'rtl'
+                className='text-right' 
+              >
                 {employees.map((employee) => (
                   <SelectItem key={employee.id} value={String(employee.id)}>
-                    {t('LANG') === 'ar' ? employee.name_ar : employee.name_en}
+                    {employee.name_ar}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -441,7 +416,7 @@ function NewUser() {
       </div> */}
       <div className="md:col-span-2 flex justify-end">
         <Button type="submit" disabled={isLoading}>
-          {t("SAVE")}
+          {t('SAVE')}
         </Button>
       </div>
     </form>

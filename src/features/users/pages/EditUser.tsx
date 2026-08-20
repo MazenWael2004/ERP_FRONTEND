@@ -27,7 +27,7 @@ function EditUser() {
   const location = useLocation();
   const user = location.state?.user;
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t,i18n } = useTranslation();
   const [isLoading, setIsLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [roles, setRoles] = useState([]);
@@ -239,10 +239,13 @@ if (isLoading) {
                       <SelectValue placeholder="Select an employee" />
                     </SelectTrigger>
       
-                    <SelectContent>
+                    <SelectContent
+                     dir= 'rtl'
+                className='text-right' 
+                    >
                       {employees.map((employee) => (
                         <SelectItem key={employee.id} value={String(employee.id)}>
-                          {t('LANG') === 'ar' ? employee.name_ar : employee.name_en}
+                          {employee.name_ar}
                         </SelectItem>
                       ))}
                     </SelectContent>

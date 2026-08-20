@@ -18,138 +18,6 @@ import 'tailwind-sidebar/styles.css';
 import { fetchApps } from 'src/shared/api/axios';
 
 
-
-
-
-// ============================================================
-// Mock Data
-// ============================================================
-
-
-// const mockApps = [
-//   {
-//     id: 1,
-//     name: 'Administration',
-
-
-//     modules: [
-//       {
-//         id: 1,
-//         name: 'User Management',
-
-//         pages: [
-//           {
-//             id: 1,
-//             name: 'Users',
-//             icon: 'mdi:account-group',
-//             url: '/users',
-//           },
-//           {
-//             id: 2,
-//             name: 'Roles',
-//             icon: 'mdi:shield-account',
-//             url: '/roles',
-//           },
-//           {
-//             id: 3,
-//             name: 'Employees',
-//             icon: 'mdi:users',
-//             url: '/employees',
-//           },
-//         ],
-//       },
-//       {
-//         id: 3,
-//         name: 'Settings',
-
-//         pages: [
-//           {
-//             id: 4,
-//             name: 'Zones',
-//             icon: 'mdi:history',
-//             url: '/zones',
-//           },
-//           {
-//             id:5,
-//             name:'Jobs',
-//             icon: 'mdi:briefcase',
-//             url:"/jobs",
-//           }
-//         ],
-//       },
-//     ],
-//   },
-
-//   {
-//     id: 2,
-//     name: 'Human Resources',
-
-//     modules: [
-//       {
-//         id: 4,
-//         name: 'Employee Management',
-
-//         pages: [
-//           {
-//             id: 5,
-//             name: 'Employees',
-//             icon: 'mdi:account-multiple',
-//             url: '/employees',
-//           },
-//           {
-//             id: 6,
-//             name: 'Jobs',
-//             icon: 'mdi:briefcase',
-//             url: '/jobs',
-//           },
-//         ],
-//       },
-
-//       {
-//         id: 5,
-//         name: 'Attendance',
-
-//         pages: [
-//           {
-//             id: 7,
-//             name: 'Attendance',
-//             icon: 'mdi:calendar-check',
-//             url: '/attendance',
-//           },
-//         ],
-//       },
-//     ],
-//   },
-
-//   {
-//     id: 3,
-//     name: 'Operations',
-
-//     modules: [
-//       {
-//         id: 6,
-//         name: 'Operations Management',
-
-//         pages: [
-//           {
-//             id: 8,
-//             name: 'Tasks',
-//             icon: 'mdi:clipboard-check',
-//             url: '/tasks',
-//           },
-//           {
-//             id: 9,
-//             name: 'Projects',
-//             icon: 'mdi:folder-multiple',
-//             url: '/projects',
-//           },
-//         ],
-//       },
-//     ],
-//   },
-// ];
-
-
 // ============================================================
 // Sidebar Item Types
 // ============================================================
@@ -175,6 +43,7 @@ interface SidebarItemType {
 const renderSidebarItems = (
   items: SidebarItemType[],
   currentPath: string,
+  isRTL: boolean,
   onClose?: () => void,
   isSubItem: boolean = false,
   openModules?: Record<number, boolean>,
@@ -189,80 +58,83 @@ const renderSidebarItems = (
     // --------------------------------------------------------
 
     if (item.heading) {
-  const moduleId = Number(item.id);
+      const moduleId = Number(item.id);
 
-  const isOpen =
-    openModules?.[moduleId] ?? false;
+      const isOpen =
+        openModules?.[moduleId] ?? false;
 
-  return (
-    <div
-      className="mb-2"
-      key={item.heading}
-    >
-      {/* Module Header */}
-      <button
-        type="button"
-        onClick={() =>
-          setOpenModules?.((prev) => ({
-            ...prev,
-            [moduleId]: !isOpen,
-          }))
-        }
-        className="
-          flex
-          w-full
-          items-center
-          justify-between
-          rounded-md
-          px-2
-          py-2
-          text-left
-          transition-colors
-          hover:bg-sidebar-accent
-          hover:text-sidebar-accent-foreground
-        "
-      >
-        <span
-          className="
-            text-xs
-            font-bold
-            uppercase
-            text-sidebar-foreground
-          "
+      return (
+        <div
+          className="mb-2"
+          key={item.heading}
         >
-          {item.heading}
-        </span>
+          {/* Module Header */}
+          <button
+            type="button"
+            onClick={() =>
+              setOpenModules?.((prev) => ({
+                ...prev,
+                [moduleId]: !isOpen,
+              }))
+            }
+            className="
+              flex
+              w-full
+              items-center
+              justify-between
+              rounded-md
+              px-2
+              py-2
+              text-start
+              transition-colors
+              hover:bg-sidebar-accent
+              hover:text-sidebar-accent-foreground
+            "
+          >
+            <span
+              className="
+                text-xs
+                font-bold
+                uppercase
+                text-sidebar-foreground
+              "
+            >
+              {item.heading}
+            </span>
 
-        <Icon
-          icon={
-            isOpen
-              ? 'mdi:chevron-down'
-              : 'mdi:chevron-right'
-          }
-          width={26}
-          height={26}
-          className="text-primary" // or text-muted-foreground, text-gray-500, etc.
-        />
-      </button>
+            <Icon
+              icon={
+                isOpen
+                  ? 'mdi:chevron-down'
+                  : isRTL
+                    ? 'mdi:chevron-left'
+                    : 'mdi:chevron-right'
+              }
+              width={26}
+              height={26}
+              className="text-primary" // or text-muted-foreground, text-gray-500, etc.
+            />
+          </button>
 
-      {/* Module Pages */}
-      {isOpen &&
-        item.children &&
-        item.children.length > 0 && (
-          <div className="mt-1">
-            {renderSidebarItems(
-              item.children,
-              currentPath,
-              onClose,
-              true,
-              openModules,
-              setOpenModules,
+          {/* Module Pages */}
+          {isOpen &&
+            item.children &&
+            item.children.length > 0 && (
+              <div className="mt-1">
+                {renderSidebarItems(
+                  item.children,
+                  currentPath,
+                  isRTL,
+                  onClose,
+                  true,
+                  openModules,
+                  setOpenModules,
+                )}
+              </div>
             )}
-          </div>
-        )}
-    </div>
-  );
-}
+        </div>
+      );
+    }
 
     // --------------------------------------------------------
     // Submenu
@@ -272,43 +144,29 @@ const renderSidebarItems = (
 
       const IconComp = item.icon || null;
 
-      // const iconElement = IconComp ? (
-      //   <Icon
-      //     icon={IconComp}
-      //     height={21}
-      //     width={21}
-      //   />
-      // ) : (
-      //   <Icon
-      //     icon="ri:checkbox-blank-circle-line"
-      //     height={9}
-      //     width={9}
-      //   />
-      // );
-
       const iconElement = item.iconImage ? (
-  <img
-    src={item.iconImage}
-    alt=""
-    className="h-[21px] w-[21px] object-contain"
-  />
-) : item.icon ? (
-  <Icon
-    icon={item.icon}
-    height={21}
-    width={21}
-  />
-) : (
-  <Icon
-    icon="ri:checkbox-blank-circle-line"
-    height={9}
-    width={9}
-  />
-);
+        <img
+          src={item.iconImage}
+          alt=""
+          className="h-[21px] w-[21px] object-contain"
+        />
+      ) : item.icon ? (
+        <Icon
+          icon={item.icon}
+          height={21}
+          width={21}
+        />
+      ) : (
+        <Icon
+          icon="ri:checkbox-blank-circle-line"
+          height={9}
+          width={9}
+        />
+      );
 
       return (
         <div key={item.id}>
-          {/* 
+          {/*
             You can keep this if later you want
             nested pages/submenus.
           */}
@@ -327,10 +185,11 @@ const renderSidebarItems = (
             </span>
           </AMMenuItem>
 
-          <div className="ml-4">
+          <div className="ms-4">
             {renderSidebarItems(
               item.children,
               currentPath,
+              isRTL,
               onClose,
               true,
             )}
@@ -375,7 +234,7 @@ const renderSidebarItems = (
       dark:text-sidebar-foreground
       ${
         isSubItem
-          ? 'ml-1'
+          ? 'ms-1'
           : ''
       }
       ${
@@ -427,44 +286,45 @@ const SidebarLayout = ({
 }: {
   onClose?: () => void;
 }) => {
- 
-  const [mockApps,setMockApps] = useState([]);
-  const [isLoading,setLoading] = useState(false);
-  const {hasPermission} = useAuth();
+
+  const [mockApps, setMockApps] = useState([]);
+  const [isLoading, setLoading] = useState(false);
+  const { hasPermission } = useAuth();
   const { i18n, t } = useTranslation();
   const isRTL = (i18n.resolvedLanguage ?? i18n.language) === 'ar';
+
   const loadApps = async () => {
-  try {
-    setLoading(true);
+    try {
+      setLoading(true);
 
-    const response = await fetchApps();
-    const apps = response.data;
-    const filteredApps = apps.map((app) => ({
-      ...app,
-      modules: app.modules.map((module) => ({
-        ...module,
-        pages: module.pages.filter((page) =>
-          hasPermission(page.url, "READ")
-        ),
-      })),
-    }));
+      const response = await fetchApps();
+      const apps = response.data;
+      const filteredApps = apps.map((app) => ({
+        ...app,
+        modules: app.modules.map((module) => ({
+          ...module,
+          pages: module.pages.filter((page) =>
+            hasPermission(page.url, "READ")
+          ),
+        })),
+      }));
 
-    console.log(filteredApps);
+      console.log(filteredApps);
 
-    setMockApps(filteredApps);
+      setMockApps(filteredApps);
 
-  } catch (error) {
-    console.error("Failed to fetch apps:", error);
-  } finally {
-    setLoading(false);
-  }
-};
-  
-    useEffect(() => {
-      loadApps();
-    }, []);
+    } catch (error) {
+      console.error("Failed to fetch apps:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadApps();
+  }, []);
+
   const location = useLocation();
-  
 
   const pathname =
     location.pathname;
@@ -510,28 +370,28 @@ const SidebarLayout = ({
   // ----------------------------------------------------------
   // Convert Modules → Sidebar Items
   // ----------------------------------------------------------
-console.log(currentApp);
- const sidebarItems: SidebarItemType[] =
-  currentApp?.modules.map(
-    (module) => ({
-      id: module.id,
-      heading: i18n.language === "ar"
-  ? module.name_ar
-  : module.name_en,
+  console.log(currentApp);
+  const sidebarItems: SidebarItemType[] =
+    currentApp?.modules.map(
+      (module) => ({
+        id: module.id,
+        heading: i18n.language === "ar"
+          ? module.name_ar
+          : module.name_en,
 
-      children:
-        module.pages.map(
-          (page) => ({
-            id: page.id,
-            name: i18n.language === "ar"
-  ? page.title_ar
-  : page.title_en,
-            icon: page.icon,
-            url: page.url,
-          }),
-        ),
-    }),
-  ) ?? [];
+        children:
+          module.pages.map(
+            (page) => ({
+              id: page.id,
+              name: i18n.language === "ar"
+                ? page.title_ar
+                : page.title_en,
+              icon: page.icon,
+              url: page.url,
+            }),
+          ),
+      }),
+    ) ?? [];
 
   // ==========================================================
   // JSX
@@ -545,6 +405,7 @@ console.log(currentApp);
       width="270px"
       showTrigger={false}
       mode={sidebarMode}
+      dir={isRTL ? 'rtl' : 'ltr'}
       className={`
         fixed
         ${isRTL ? 'right-0' : 'left-0'}
@@ -563,18 +424,21 @@ console.log(currentApp);
         className="h-[calc(100vh-100px)]"
       >
 
-        <div className="px-6">
+        <div
+          className="px-6"
+          dir={isRTL ? 'rtl' : 'ltr'}
+        >
           {/* ==================================================
         Company Logo
     ================================================== */}
 
-    <div className="flex justify-center py-5">
-      <img
-        src={companyLogo}
-        alt="B-Connect"
-        className="h-32 w-auto object-contain"
-      />
-    </div>
+          <div className="flex justify-center py-5">
+            <img
+              src={companyLogo}
+              alt="B-Connect"
+              className="h-32 w-auto object-contain"
+            />
+          </div>
 
 
 
@@ -593,6 +457,7 @@ console.log(currentApp);
                 font-semibold
                 uppercase
                 text-sidebar-foreground
+                text-start
               "
             >
               {t('APPLICATION')}
@@ -620,6 +485,7 @@ console.log(currentApp);
                 outline-none
                 focus:ring-2
                 focus:ring-primary
+                text-start
               "
             >
 
@@ -630,8 +496,8 @@ console.log(currentApp);
                     value={app.id}
                   >
                     {i18n.language === "ar"
-  ? app.name_ar
-  : app.name_en}
+                      ? app.name_ar
+                      : app.name_en}
                   </option>
                 ),
               )}
@@ -652,6 +518,7 @@ console.log(currentApp);
                 text-lg
                 font-semibold
                 text-sidebar-foreground
+                text-start
               "
             >
               {currentApp?.name}
@@ -667,13 +534,14 @@ console.log(currentApp);
           <div>
 
             {renderSidebarItems(
-  sidebarItems,
-  pathname,
-  onClose,
-  false,
-  openModules,
-  setOpenModules,
-)}
+              sidebarItems,
+              pathname,
+              isRTL,
+              onClose,
+              false,
+              openModules,
+              setOpenModules,
+            )}
 
           </div>
 

@@ -17,22 +17,8 @@ import {
   DropdownMenuTrigger,
 } from 'src/components/ui/dropdown-menu';
 import userIcon from '../../../assets/images/logos/working.png';
-import { t } from 'i18next';
 
-const userColumns = [
-  {
-    accessorKey: 'id',
-    header: 'ID',
-  },
-  {
-    accessorKey: 'username',
-    header: t("USERNAME"),
-  },
-  {
-    accessorKey: 'employee_name',
-    header: t("EMPLOYEE_NAME"),
-  },
-];
+
 
 export default function ViewUsers() {
   const [users, setUsers] = useState([]);
@@ -44,6 +30,27 @@ export default function ViewUsers() {
   const canEdit = hasPermission('/users', 'WRITE');
   const canDelete = hasPermission('/users', 'DELETE');
   const canAdd = hasPermission('/users', 'CREATE');
+
+  const userColumns = [
+  {
+    accessorKey: 'id',
+    header: 'ID',
+  },
+  {
+    accessorKey: 'username',
+    header: t("USERNAME"),
+  },
+  {
+    accessorKey: 'employee_name_ar',
+    header: t("EMPLOYEE_NAME"),
+  },
+  {
+    accessorKey: 'job_title_ar',
+    header: t("JOB_TITLE_AR"),
+  }
+];
+
+
   const handleEditUser = (user: any) => {
     nav('/users/edit', {
       state: { user: user },

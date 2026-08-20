@@ -43,7 +43,7 @@ function EditUser() {
 
 
   useEffect(() => {
-    if (!currentZone) return;
+    if (!currentZone) navigate("/zones");
 
     const fetchZone = async () => {
       try {

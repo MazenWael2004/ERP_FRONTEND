@@ -34,6 +34,7 @@ function NewEmployee() {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+  const isArabic = i18n.language.startsWith('ar');
 
   // console.log(user);
 
@@ -392,11 +393,15 @@ function NewEmployee() {
               value={field.value ? String(field.value) : ''}
               onValueChange={(value) => field.onChange(Number(value))}
             >
-              <SelectTrigger className="mt-2 w-full">
+              <SelectTrigger  dir={isArabic ? 'rtl' : 'ltr'}
+                className={`mt-2 w-full ${isArabic ? 'text-right' : 'text-left'}`}>
                 <SelectValue placeholder={t("SELECT_JOB")} />
               </SelectTrigger>
 
-              <SelectContent>
+              <SelectContent
+              dir={isArabic ? 'rtl' : 'ltr'}
+          className={isArabic ? 'text-right' : 'text-left'}
+              >
                 {jobs.map((job) => (
                   <SelectItem key={job.id} value={String(job.id)}>
                      {i18n.language === 'ar' ? job.title_ar : job.title_en}
@@ -421,7 +426,7 @@ function NewEmployee() {
                 multiple
                 options={zones}
                 isOptionEqualToValue={(option, value) => option.id === value.id}
-                getOptionLabel={(option) => option.name_en}
+                getOptionLabel={(option) => i18n.language === "ar"?option.name_ar:option.name_en}
                 value={zones.filter((z) => (field.value ?? []).includes(z.id))}
                 onChange={(_, selectedZones) => {
                   const ids = selectedZones.map((z) => z.id);
