@@ -15,17 +15,16 @@ export default function ViewUsers() {
   const [zones, setZones] = useState([]);
   const [loading, setLoading] = useState(false);
   const nav = useNavigate();
-  const { t } = useTranslation();
+  const { t,i18n } = useTranslation();
   const { hasPermission } = useAuth();
   const canAdd = hasPermission('/zones', 'CREATE');
   const canEdit = hasPermission('/zones', 'WRITE');
   const canDelete = hasPermission('/zones', 'DELETE');
+  const isArabic = i18n.language.startsWith('ar');
+  
 
   const zoneColumns = [
-    {
-      accessorKey: 'id',
-      header: 'ID',
-    },
+  
     {
       accessorKey: 'name_en',
       header: t('ZONE_NAME_EN'),

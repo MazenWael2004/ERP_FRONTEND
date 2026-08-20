@@ -24,32 +24,29 @@ export default function ViewUsers() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const nav = useNavigate();
-  const { t } = useTranslation();
+  const { t,i18n } = useTranslation();
   const { hasPermission } = useAuth();
   // HARDCODED FIX LATER.......
   const canEdit = hasPermission('/users', 'WRITE');
   const canDelete = hasPermission('/users', 'DELETE');
   const canAdd = hasPermission('/users', 'CREATE');
+  const isArabic = i18n.language.startsWith('ar');
 
   const userColumns = [
-  {
-    accessorKey: 'id',
-    header: 'ID',
-  },
+  
   {
     accessorKey: 'username',
     header: t("USERNAME"),
   },
   {
-    accessorKey: 'employee_name_ar',
+    accessorKey: isArabic? "employee_name_ar":"employee_name_en",
     header: t("EMPLOYEE_NAME"),
   },
   {
-    accessorKey: 'job_title_ar',
-    header: t("JOB_TITLE_AR"),
+    accessorKey: isArabic? "job_title_ar":"job_title_en",
+    header: t("JOB_TITLE"),
   }
 ];
-
 
   const handleEditUser = (user: any) => {
     nav('/users/edit', {

@@ -382,12 +382,12 @@ function NewUser() {
               </SelectTrigger>
 
               <SelectContent
-                dir= 'rtl'
-                className='text-right' 
+                 dir={isArabic ? 'rtl' : 'ltr'}
+          className={isArabic ? 'text-right' : 'text-left'}
               >
                 {employees.map((employee) => (
                   <SelectItem key={employee.id} value={String(employee.id)}>
-                    {employee.name_ar}
+                    {isArabic?employee.name_ar:employee.name_en}
                   </SelectItem>
                 ))}
               </SelectContent>

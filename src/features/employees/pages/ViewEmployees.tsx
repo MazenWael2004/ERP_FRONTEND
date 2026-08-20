@@ -22,27 +22,26 @@ export default function ViewEmployees() {
   const { hasPermission } = useAuth();
   const [loading, setLoading] = useState(false);
   const nav = useNavigate();
-  const { t } = useTranslation();
+  const { t,i18n } = useTranslation();
   const [selectedRows, setSelectedRows] = useState([]);
   const canEdit = hasPermission('/employees', 'WRITE');
   const canAdd = hasPermission('/employees', 'CREATE');
   const canDelete = hasPermission('/employees', 'DELETE');
+  const isArabic = i18n.language.startsWith('ar');
+
   const employeeColumns = [
-    {
-      accessorKey: 'id',
-    header: "ID", 
-    },
+   
   {
     accessorKey: 'employee_number',
     header: t("EMPLOYEE_NUMBER"),
   },
   {
-    accessorKey: 'name_en',
-    header: t("EMPLOYEE_NAME_EN"),
-  },
-  {
     accessorKey: 'name_ar',
     header: t("EMPLOYEE_NAME_AR"),
+  },
+   {
+    accessorKey: 'name_en',
+    header: t("EMPLOYEE_NAME_EN"),
   },
   {
     accessorKey: 'email',

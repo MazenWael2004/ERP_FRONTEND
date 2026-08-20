@@ -16,23 +16,21 @@ export default function ViewRoles() {
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(false);
   const nav = useNavigate();
-  const { t } = useTranslation();
+  const { t,i18n } = useTranslation();
   const { hasPermission } = useAuth();
   const canAdd = hasPermission('/roles', 'CREATE');
   const canEdit = hasPermission('/roles', 'WRITE');
   const canDelete = hasPermission('/roles', 'DELETE');
+   const isArabic = i18n.language.startsWith('ar');
 
   const roleColumns = [
+ 
   {
-    accessorKey: 'id',
-    header: 'ID',
-  },
-  {
-    accessorKey: 'name_en',
+    accessorKey:'name_en',
     header: t("ROLE_NAME_EN"),
   },
-  {
-    accessorKey: 'name_ar',
+   {
+    accessorKey:'name_ar',
     header: t("ROLE_NAME_AR"),
   },
 ];

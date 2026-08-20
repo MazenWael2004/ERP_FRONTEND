@@ -38,7 +38,7 @@
   "EMPLOYEES": "الموظفون",
   "JOBS": "الوظائف",
   "ZONES": "المناطق",
-  "ADMINISTRATION": "إدارة",
+  "ADMINISTRATION": "إدارة النظام",
   "APPLICATION": "التطبيق",
   "SETTINGS": "الإعدادات",
   "PERMISSIONS":"الصلاحيات",
@@ -50,6 +50,7 @@
   "DISABLE": "تعطيل",
   "SAVE": "حفظ",
   "SEARCH":"بحث...",
+  "CRM":"إدارة علاقات العملاء",
   "DISPLAY_COLUMNS":"عرض الأعمدة",
   "SEARCH_RELEVANT_ITEMS":"ابحث عن عناصر ذات صلة...",
 
@@ -61,7 +62,8 @@
   "WEBSITE_FEATURE_TWO": "تحليل المبيعات وتقارير معمقة",
   "WEBSITE_FEATURE_THREE": "واجهة سهلة الاستخدام",
   "navbar.activity": "النشاط",
-
+  
+  "ROLE_NAME":"اسم الدور",
   "ROLE": "الدور",
   "ADD_ROLE":"إضافة دور",
   "ROLES_TABLE":"جدول الأدوار",
@@ -156,6 +158,7 @@
   "NEW_JOB": "وظيفة جديدة",
   "ADD_JOB": "إضافة وظيفة",
   "JOBS_TABLE":"جدول الوظائف",
+  "JOB_TITLE":"اسم الوظيفة",
   "JOB_TITLE_EN": "اسم الوظيفة باللغة الإنجليزية",
   "JOB_TITLE_AR": "اسم الوظيفة باللغة العربية",
   "ENTER_JOB_TITLE_EN": "أدخل اسم الوظيفة باللغة الإنجليزية",
@@ -174,6 +177,7 @@
   "JOB_UPDATED_SUCCESSFULLY": "تم تحديث الوظيفة بنجاح",
   "JOB_CREATED_SUCCESSFULLY": "تم إنشاء الوظيفة بنجاح",
 
+  "ZONE_NAME":"اسم المنطقة",
   "NEW_ZONE": "منطقة جديدة",
   "ADD_ZONE": "أضف منطقة",
   "ZONES": "المناطق",

@@ -52,6 +52,7 @@
   "ENABLE": "Enable",
   "DISABLE": "Disable",
   "SAVE": "Save",
+  "CRM":"CRM",
   "CANCEL": "Cancel",
   "SUCCESS": "SUCCESS",
 
@@ -143,6 +144,7 @@
   "JOB_TITLE_AR": "Job Title Arabic",
   "ENTER_JOB_TITLE_EN": "Enter Job Title in English",
   "ENTER_JOB_TITLE_AR": "Enter Job Title in Arabic",
+  "JOB_TITLE":"Job Title",
   "JOB_TITLE_EN_REQUIRED": "Job Title En is Required",
   "JOB_TITLE_AR_REQUIRED": "Job Title Ar is Required",
   "JOB_TITLE_EN_ONLY_ENGLISH": "Job title must be in English (no numbers included)",
@@ -157,6 +159,7 @@
   "JOB_CREATED_SUCCESSFULLY": "Job Created Successfully",
   "JOB_UPDATED_SUCCESSFULLY": "Job updated successfully",
 
+  "ZONE_NAME":"Zone name",
   "NEW_ZONE": "New Zone",
   "ADD_ZONE": "Add a Zone",
   "ZONES_TABLE":"Zones Table",
@@ -173,6 +176,7 @@
   "ZONE_CREATED_SUCCESSFULLY": "Zone created successfully",
   "ZONE_UPDATED_SUCCESSFULLY": "Zone updated successfully",
 
+  "ROLE_NAME":"Role name",
   "ROLE_NAME_EN": "Role name English",
   "ROLE_NAME_AR": "Role name Arabic",
   "ROLES_TABLE":"Roles table",

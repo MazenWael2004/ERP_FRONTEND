@@ -2,7 +2,7 @@ import React from 'react'
 import usersIcon from "../../../assets/users.png";
 import LauncherAppItem from './LauncherAppItem';
 import employeesIcon from '../../../assets/images/logos/employees.png';
-import jobsIcon from '../../../assets/images/logos/jobs.png';
+import CRMIcon from '../../../assets/images/logos/CRM.png';
 import administrationIcon from '../../../assets/images/logos/administrator.png'
 import salesIcon from '../../../assets/images/logos/sales.png';
 import ticketIcon from '../../../assets/images/logos/ticket.png';
@@ -17,7 +17,7 @@ function LauncherContent() {
     <div className="launcher-content-outer-container">
         <div className="launcher-content-inner-container">
             <LauncherAppItem name={t("ADMINISTRATION")} icon={administrationIcon} iconClass='icon1' onClick={() => nav("/employees")}  />
-            <LauncherAppItem name='Jobs' icon={jobsIcon} iconClass='icon3' onClick={() => nav("/jobs")} />
+            <LauncherAppItem name={t("CRM")} icon={CRMIcon} iconClass='icon3' onClick={() => nav("/jobs")} />
             <LauncherAppItem name='Sales' icon={salesIcon} iconClass='icon4' />
             {/* <LauncherAppItem name='Ticketing System' icon={ticketIcon} iconClass='icon5' /> */}
         </div>
