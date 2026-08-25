@@ -81,7 +81,7 @@ const availableActions = [
 
 function NewRole() {
   const nav = useNavigate();
-  const { t,i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   const [isLoading, setIsLoading] = useState(false);
 
@@ -261,7 +261,7 @@ function NewRole() {
 
         console.log('Backend message:', message);
 
-        if (t(message) === 'Role name En already exists') {
+        if (t(message) === t('ROLE_NAME_EN_EXISTS')) {
           setError('roleNameEn', {
             type: 'server',
             message: 'ROLE_NAME_EN_EXISTS',
@@ -269,7 +269,7 @@ function NewRole() {
           return;
         }
 
-        if (t(message) === 'Role name Ar already exists') {
+        if (t(message) === t('ROLE_NAME_AR_EXISTS')) {
           setError('roleNameAr', {
             type: 'server',
             message: 'ROLE_NAME_AR_EXISTS',
@@ -329,11 +329,9 @@ function NewRole() {
 ===================================================== */}
 
       <div className="mt-4">
-        <Label className="text-base font-semibold">{t("PERMISSIONS")}</Label>
+        <Label className="text-base font-semibold">{t('PERMISSIONS')}</Label>
 
-        <p className="mt-1 text-xs text-gray-500">
-          {t("SELECT_ACTIONS_FOR_ROLE")}
-        </p>
+        <p className="mt-1 text-xs text-gray-500">{t('SELECT_ACTIONS_FOR_ROLE')}</p>
 
         {/* TWO COLUMN LAYOUT */}
 
@@ -353,9 +351,7 @@ function NewRole() {
                         dark:bg-gray-800
                     "
               >
-                {i18n.language === "ar"
-  ? page.title_ar
-  : page.title_en}
+                {i18n.language === 'ar' ? page.title_ar : page.title_en}
               </div>
 
               {/* ACTIONS */}
@@ -391,7 +387,7 @@ function NewRole() {
                                 "
                     />
 
-                    <span>{ i18n.language === "ar"? action.name_ar: action.name_en}</span>
+                    <span>{i18n.language === 'ar' ? action.name_ar : action.name_en}</span>
                   </label>
                 ))}
               </div>
@@ -406,7 +402,7 @@ function NewRole() {
 
       <div className="flex justify-end">
         <Button type="submit" disabled={isLoading}>
-          {isLoading ? 'Saving...' : t("SAVE")}
+          {isLoading ? 'Saving...' : t('SAVE')}
         </Button>
       </div>
     </form>

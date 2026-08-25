@@ -109,13 +109,17 @@
   "EMPLOYEE_NOT_FOUND": "Employee not found",
   "IS_TERMINATED": "Terminate Employee",
 
-  "STREET": "Street name",
+  "STREET": "Street",
   "ENTER_STREET": "Enter Street name",
   "STREET_REQUIRED": "Street name is required",
   "GOVERNORATE": "Governorate",
   "ENTER_GOVERNORATE": "Enter governorate name",
   "GOVERNORATE_REQUIRED": "Governorate name is required",
   "CITY": "City",
+  "CITY_NAME_EN":"City Name En",
+  "CITY_NAME_AR":"City Name Ar",
+  "GOVERNORATE_NAME_EN":"Governorate Name En",
+  "GOVERNORATE_NAME_AR":"Governorate Name Ar",
   "ENTER_CITY": "Enter city name",
   "CITY_REQUIRED": "City name is required",
 
@@ -132,7 +136,7 @@
   "JOB": "Job",
   "SELECT_JOB": "Select Job",
   "JOBS_TABLE":"Jobs Table",
-  "JOB_ID_REQUIRED": "Job ID is required",
+  "JOB_ID_REQUIRED": "Please select a job",
 
   "ZONE": "Zone",
   "SELECT_ZONE": "Select Zone",
@@ -194,5 +198,44 @@
   "YES_DELETE": "Yes, delete",
   
 
-  "VALUE_ALREADY_EXISTS": "This value already exists"
+  "VALUE_ALREADY_EXISTS": "This value already exists",
+
+  "CUSTOMERS_TABLE":"Customers table",
+  "CUSTOMER_NAME_EN":"Customer Name En",
+  "CUSTOMER_NAME_AR":"Customer Name Ar",
+  "CUSTOMER_CODE":"Customer Code",
+  "CUSTOMER_TAX_NUMBER":"Customer Tax Number",
+  "PROGRAM_NAME_EN":"Program Name En",
+  "PROGRAM_NAME_AR":"Program Name Ar",
+  "CUSTOMER_DELETED_SUCCESSFULLY":"Customer deleted successfully",
+  "ADD_CUSTOMER":"Add Customer",
+  "CUSTOMER_NAME_EN_REQUIRED":"Customer Name En Required",
+  "CUSTOMER_NAME_AR_REQUIRED":"Customer Name Ar Required",
+  "CUSTOMER_NAME_ONLY_ENGLISH":"Customer name must be in english only",
+  "CUSTOMER_NAME_ONLY_ARABIC":"Customer name must be in arabic only",
+  "CUSTOMER_CODE_REQUIRED":"Customer code required",
+  "CUSTOMER_TAX_NUMBER_REQUIRED":"Customer Tax Number Required",
+  "CUSTOMER_REGISTRATION_NUMBER":"Customer Registration Number",
+  "CUSTOMER_REGISTRATION_NUMBER_REQUIRED":"Customer Registration Number required",
+  "ZONE_ID_REQUIRED":"Zone is required",
+  "PROGRAM":"Program name",
+  "SELECT_PROGRAM":"Please select a program",
+  "PROGRAM_ID_REQUIRED":"Program is required",
+  "CUSTOMER_CREATED_SUCCESSFULLY":"Customer created successfully",
+  "CUSTOMER_NAME_EN_EXISTS":"Customer name En already exists",
+  "CUSTOMER_NAME_AR_EXISTS":"Customer name Ar already exists",
+  "CUSTOMER_CODE_EXISTS":"Customer code already exists",
+  "CUSTOMER_TAX_NUMBER_EXISTS":"Customer tax number already exists",
+  "CUSTOMER_REGISTRATION_NUMBER_EXISTS":"Customer registration number already exists",
+  "CUSTOMER_TELEPHONE_NUMBER_EXISTS":"Customer telephone number already exists",
+  
+  "CUSTOMER_UPDATED_SUCCESSFULLY":"Customer updated successfully",
+  "SELECT_CITY":"Select a city",
+  "SELECT_GOVERNORATE":"Select a governorate",
+  "SEARCH_ZONE":"Search for a zone",
+  "SEARCH_CITY":"Search for a city",
+  "SEARCH_GOVERNORATE":"Search for a governorate",
+  "SEARCH_PROGRAM":"Search for a program",
+
+  "PROGRAMS_TABLE":"Programs table"
 }

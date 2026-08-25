@@ -56,8 +56,12 @@ export default function ViewEmployees() {
     header: t("STREET"),
   },
   {
-    accessorKey: 'city',
+    accessorKey: isArabic?'city_name_ar':'city_name_en',
     header: t("CITY"),
+  },
+   {
+    accessorKey: isArabic?'governorate_name_ar':'governorate_name_en',
+    header: t("GOVERNORATE"),
   },
   {
     accessorKey: 'is_terminated',
@@ -91,8 +95,10 @@ export default function ViewEmployees() {
 
   useEffect(() => {
     loadEmployees();
+    
   }, []);
 
+  console.log(employees);
   const handleDelete = async (employee: any) => {
     const result = await Swal.fire({
       title: t('ARE_YOU_SURE'),

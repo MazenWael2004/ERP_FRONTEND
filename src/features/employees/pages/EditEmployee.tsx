@@ -14,9 +14,23 @@ import { Calendar } from 'src/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from 'src/components/ui/popover';
 import { createEmployee } from '../api/employeeService';
 import { fetchZones } from '../../zones/api/zoneService';
+import {
+  fetchGovernorates,
+  fetchCitiesOfGovernorate,
+} from 'src/features/customers/api/customerService';
 import { Autocomplete, TextField } from '@mui/material';
 import { Input } from 'src/components/ui/input';
 import { Label } from 'src/components/ui/label';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from 'src/components/ui/command';
+
+import { Check, ChevronsUpDown } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -36,6 +50,9 @@ function EditEmployee() {
   const [isLoading, setIsLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [isZonesInputDisabled, setIsZonesInputDisabled] = useState(true);
+  const [isGovernorateSelected, setIsGovernorateSelected] = useState(false);
+  const [governorates, setGovernorates] = useState([]);
+  const [cities, setCities] = useState([]);
   const [employee, setEmployee] = useState(null);
   const [jobs, setJobs] = useState([]);
   const isArabic = i18n.language.startsWith('ar');
@@ -58,6 +75,7 @@ function EditEmployee() {
   const name_ar = watch('employeeNameAr');
   const employee_num = watch('employeeNum');
   const telephone_num = watch('telephoneNum');
+  const governorateId = watch('governorateId');
   const email = watch('email');
 
   const checkFieldExists = async (
@@ -183,8 +201,8 @@ function EditEmployee() {
           email: employeeData.email,
           employeeNum: employeeData.employee_number,
           street: employeeData.street,
-          city: employeeData.city,
-          governorate: employeeData.governorate,
+          cityId: employeeData.city_id,
+          governorateId: employeeData.governorate_id,
           telephoneNum: employeeData.telephone_num,
           birthDate: new Date(employeeData.birth_date),
           jobId: Number(employeeData.job_id),
@@ -220,7 +238,7 @@ function EditEmployee() {
 
         console.log('Backend message:', message);
 
-        if (t(message) === 'Employee Name En already exists') {
+        if (t(message) === t('EMPLOYEE_NAME_EN_EXISTS')) {
           setError('employeeNameEn', {
             type: 'server',
             message: 'EMPLOYEE_NAME_EN_EXISTS',
@@ -228,7 +246,7 @@ function EditEmployee() {
           return;
         }
 
-        if (t(message) === 'Employee Name Ar already exists') {
+        if (t(message) === t('EMPLOYEE_NAME_AR_EXISTS')) {
           setError('employeeNameAr', {
             type: 'server',
             message: 'EMPLOYEE_NAME_AR_EXISTS',
@@ -236,7 +254,7 @@ function EditEmployee() {
           return;
         }
 
-        if (t(message) === 'Employee Email already exists') {
+        if (t(message) === t('EMPLOYEE_EMAIL_EXISTS')) {
           setError('email', {
             type: 'server',
             message: 'EMPLOYEE_EMAIL_EXISTS',
@@ -244,7 +262,7 @@ function EditEmployee() {
           return;
         }
 
-        if (t(message) === 'An Employee already owns this telephone number') {
+        if (t(message) === t('EMPLOYEE_TELEPHONE_NUMBER_EXISTS')) {
           setError('telephoneNum', {
             type: 'server',
             message: 'EMPLOYEE_TELEPHONE_NUMBER_EXISTS',
@@ -252,7 +270,7 @@ function EditEmployee() {
           return;
         }
 
-        if (t(message) === 'Employee number already exists') {
+        if (t(message) === t('EMPLOYEE_NUMBER_EXISTS')) {
           setError('employeeNum', {
             type: 'server',
             message: 'EMPLOYEE_NUMBER_EXISTS',
@@ -271,6 +289,33 @@ function EditEmployee() {
     const job = jobs.find((job) => job.id === jobId);
     setIsZonesInputDisabled(!job?.is_zone_mandatory);
   }, [jobId, jobs]);
+
+  useEffect(() => {
+    async function loadGovernorates() {
+      try {
+        const response = await fetchGovernorates(); // your API
+        setGovernorates(response.data);
+        console.log(governorates);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    loadGovernorates();
+  }, []);
+
+  useEffect(() => {
+    async function loadCitiesOfGovernorate(governorateId: any) {
+      try {
+        const response = await fetchCitiesOfGovernorate(governorateId); // your API
+        setCities(response.data);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    loadCitiesOfGovernorate(governorateId);
+  }, [governorateId]);
 
   if (isLoading) {
     return (
@@ -365,19 +410,170 @@ function EditEmployee() {
         {errors.street && <span className="error-message">{t(errors.street.message!)}</span>}
       </div>
 
-      <div>
-        <Label htmlFor="city">{t('CITY')}</Label>
-        <Input id="city" className="mt-2 w-full" {...register('city')} />
-        {errors.city && <span className="error-message">{t(errors.city.message!)}</span>}
-      </div>
+      <Controller
+        name="governorateId"
+        control={control}
+        render={({ field }) => {
+          const selectedGovernorate = governorates.find(
+            (governorate) => Number(governorate.id) === Number(field.value),
+          );
 
-      <div>
-        <Label htmlFor="governorate">{t('GOVERNORATE')}</Label>
-        <Input id="city" className="mt-2 w-full" {...register('governorate')} />
-        {errors.governorate && (
-          <span className="error-message">{t(errors.governorate.message!)}</span>
-        )}
-      </div>
+          return (
+            <div>
+              <Label>
+                {t('GOVERNORATE')}
+                <span className="text-red-500">*</span>
+              </Label>
+
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    className={`mt-2 w-full justify-between ${
+                      isArabic ? 'text-right' : 'text-left'
+                    }`}
+                    dir={isArabic ? 'rtl' : 'ltr'}
+                  >
+                    {selectedGovernorate
+                      ? isArabic
+                        ? selectedGovernorate.name_ar
+                        : selectedGovernorate.name_en
+                      : t('SELECT_GOVERNORATE')}
+
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+
+                <PopoverContent
+                  className="w-[var(--radix-popover-trigger-width)] p-0"
+                  align="start"
+                  dir={isArabic ? 'rtl' : 'ltr'}
+                >
+                  <Command>
+                    <CommandInput placeholder={t('SEARCH_GOVERNORATE')} />
+
+                    <CommandList>
+                      <CommandEmpty>{t('GOVERNORATE_NOT_FOUND')}</CommandEmpty>
+
+                      <CommandGroup>
+                        {governorates.map((governorate) => {
+                          const governorateName = isArabic
+                            ? governorate.name_ar
+                            : governorate.name_en;
+
+                          return (
+                            <CommandItem
+                              key={governorate.id}
+                              value={governorateName}
+                              onSelect={() => {
+                                field.onChange(Number(governorate.id));
+                                setIsGovernorateSelected(true);
+                              }}
+                            >
+                              {governorateName}
+
+                              {Number(field.value) === Number(governorate.id) && (
+                                <Check className="ml-auto h-4 w-4" />
+                              )}
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+
+              {errors.governorateId && (
+                <span className="error-message">{t(errors.governorateId.message!)}</span>
+              )}
+            </div>
+          );
+        }}
+      />
+      {/* hardcoded */}
+      {true && (
+        <Controller
+          name="cityId"
+          control={control}
+          render={({ field }) => {
+            const selectedCity = cities.find((city) => Number(city.id) === Number(field.value));
+
+            return (
+              <div>
+                <Label>
+                  {t('CITY')}
+                  <span className="text-red-500">*</span>
+                </Label>
+
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      className={`mt-2 w-full justify-between ${
+                        isArabic ? 'text-right' : 'text-left'
+                      }`}
+                      dir={isArabic ? 'rtl' : 'ltr'}
+                    >
+                      {selectedCity
+                        ? isArabic
+                          ? selectedCity.name_ar
+                          : selectedCity.name_en
+                        : t('SELECT_CITY')}
+
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+
+                  <PopoverContent
+                    className="w-[var(--radix-popover-trigger-width)] p-0"
+                    align="start"
+                    dir={isArabic ? 'rtl' : 'ltr'}
+                  >
+                    <Command>
+                      <CommandInput placeholder={t('SEARCH_CITY')} />
+
+                      <CommandList>
+                        <CommandEmpty>{t('CITY_NOT_FOUND')}</CommandEmpty>
+
+                        <CommandGroup>
+                          {cities.map((city) => {
+                            const cityName = isArabic ? city.name_ar : city.name_en;
+
+                            return (
+                              <CommandItem
+                                key={city.id}
+                                value={cityName}
+                                onSelect={() => {
+                                  field.onChange(Number(city.id));
+                                }}
+                              >
+                                {cityName}
+
+                                {Number(field.value) === Number(city.id) && (
+                                  <Check className="ml-auto h-4 w-4" />
+                                )}
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+
+                {errors.cityId && (
+                  <span className="error-message">{t(errors.cityId.message!)}</span>
+                )}
+              </div>
+            );
+          }}
+        />
+      )}
 
       <div>
         <Label htmlFor="telephoneNum">{t('TELEPHONE_NUMBER')}</Label>
@@ -388,39 +584,84 @@ function EditEmployee() {
       </div>
 
       <Controller
-        name="jobId"
-        control={control}
-        render={({ field }) => (
-          <div>
-            <Label>{t('JOB')}</Label>
+          name="jobId"
+          control={control}
+          render={({ field }) => {
+            const selectedJob = jobs.find((job) => Number(job.id) === Number(field.value));
 
-            <Select
-              value={field.value ? String(field.value) : ''}
-              onValueChange={(value) => field.onChange(Number(value))}
-            >
-              <SelectTrigger
-                dir={isArabic ? 'rtl' : 'ltr'}
-                className={`mt-2 w-full ${isArabic ? 'text-right' : 'text-left'}`}
-              >
-                <SelectValue placeholder={t('SELECT_JOB')} />
-              </SelectTrigger>
+            return (
+              <div>
+                <Label>
+                  {t('JOB')}
+                  <span className="text-red-500">*</span>
+                </Label>
 
-              <SelectContent
-                dir={isArabic ? 'rtl' : 'ltr'}
-                className={isArabic ? 'text-right' : 'text-left'}
-              >
-                {jobs.map((job) => (
-                  <SelectItem key={job.id} value={String(job.id)}>
-                    {i18n.language === 'ar' ? job.title_ar : job.title_en}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      className={`mt-2 w-full justify-between ${
+                        isArabic ? 'text-right' : 'text-left'
+                      }`}
+                      dir={isArabic ? 'rtl' : 'ltr'}
+                    >
+                      {selectedJob
+                        ? isArabic
+                          ? selectedJob.title_ar
+                          : selectedJob.title_en
+                        : t('SELECT_JOB')}
 
-            {errors.jobId && <span className="error-message">{t(errors.jobId.message!)}</span>}
-          </div>
-        )}
-      />
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+
+                  <PopoverContent
+                    className="w-[var(--radix-popover-trigger-width)] p-0"
+                    align="start"
+                    dir={isArabic ? 'rtl' : 'ltr'}
+                  >
+                    <Command>
+                      <CommandInput placeholder={t('SEARCH_JOB')} />
+
+                      <CommandList>
+                        <CommandEmpty>{t('JOB_NOT_FOUND')}</CommandEmpty>
+
+                        <CommandGroup>
+                          {jobs.map((job) => {
+                            const jobName = isArabic ? job.title_ar : job.title_en;
+
+                            return (
+                              <CommandItem
+                                key={job.id}
+                                value={jobName}
+                                onSelect={() => {
+                                  field.onChange(Number(job.id));
+                              
+                                }}
+                              >
+                                {jobName}
+
+                                {Number(field.value) === Number(job.id) && (
+                                  <Check className="ml-auto h-4 w-4" />
+                                )}
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+
+                {errors.jobId && (
+                  <span className="error-message">{t(errors.jobId.message!)}</span>
+                )}
+              </div>
+            );
+          }}
+        />
 
       {!isZonesInputDisabled && (
         <div className="form-group">

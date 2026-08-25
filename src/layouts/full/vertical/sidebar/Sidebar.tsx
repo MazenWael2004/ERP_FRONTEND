@@ -1,6 +1,6 @@
 import SimpleBar from 'simplebar-react';
 import { Icon } from '@iconify/react';
-import { Link, useLocation } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { useEffect, useState } from 'react';
 import companyLogo from '../../../../assets/images/logos/b_connect_egypt_logo-removebg-preview.png';
 import usersIcon from '../../../../assets/images/logos/users.png'
@@ -35,6 +35,40 @@ interface SidebarItemType {
   isPro?: boolean;
 }
 
+interface AppPage {
+  id: number | string;
+  title_ar: string;
+  title_en: string;
+  icon?: string;
+  url: string;
+}
+
+interface AppModule {
+  id: number | string;
+  name_ar: string;
+  name_en: string;
+  pages: AppPage[];
+}
+
+interface App {
+  id: number;
+  name?: string;
+  name_ar: string;
+  name_en: string;
+  modules: AppModule[];
+}
+
+const withAppContext = (url: string | undefined, appId: number | undefined) => {
+  if (!url || !appId || url.startsWith('https')) {
+    return url;
+  }
+
+  const [pathWithQuery, hash] = url.split('#');
+  const separator = pathWithQuery.includes('?') ? '&' : '?';
+
+  return `${pathWithQuery}${separator}app=${appId}${hash ? `#${hash}` : ''}`;
+};
+
 
 // ============================================================
 // Render Sidebar Items
@@ -50,6 +84,7 @@ const renderSidebarItems = (
   setOpenModules?: React.Dispatch<
     React.SetStateAction<Record<number, boolean>>
   >,
+  selectedAppId?: number,
 ) => {
   return items.map((item) => {
 
@@ -129,6 +164,7 @@ const renderSidebarItems = (
                   true,
                   openModules,
                   setOpenModules,
+                  selectedAppId,
                 )}
               </div>
             )}
@@ -192,6 +228,9 @@ const renderSidebarItems = (
               isRTL,
               onClose,
               true,
+              openModules,
+              setOpenModules,
+              selectedAppId,
             )}
           </div>
         </div>
@@ -222,8 +261,10 @@ const renderSidebarItems = (
       />
     );
 
+    const appAwareUrl = withAppContext(item.url, selectedAppId);
+
     const linkTarget =
-      item.url?.startsWith('https')
+      appAwareUrl?.startsWith('https')
         ? '_blank'
         : '_self';
 
@@ -253,7 +294,7 @@ const renderSidebarItems = (
         <AMMenuItem
           icon={iconElement}
           isSelected={isSelected}
-          link={item.url || undefined}
+          link={appAwareUrl}
           target={linkTarget}
           badge={!!item.isPro}
           badgeColor="bg-lightsecondary"
@@ -287,7 +328,7 @@ const SidebarLayout = ({
   onClose?: () => void;
 }) => {
 
-  const [mockApps, setMockApps] = useState([]);
+  const [mockApps, setMockApps] = useState<App[]>([]);
   const [isLoading, setLoading] = useState(false);
   const { hasPermission } = useAuth();
   const { i18n, t } = useTranslation();
@@ -298,7 +339,7 @@ const SidebarLayout = ({
       setLoading(true);
 
       const response = await fetchApps();
-      const apps = response.data;
+      const apps: App[] = response.data;
       const filteredApps = apps.map((app) => ({
         ...app,
         modules: app.modules.map((module) => ({
@@ -308,8 +349,6 @@ const SidebarLayout = ({
           ),
         })),
       }));
-
-      console.log(filteredApps);
 
       setMockApps(filteredApps);
 
@@ -325,21 +364,30 @@ const SidebarLayout = ({
   }, []);
 
   const location = useLocation();
+  const navigate = useNavigate();
 
   const pathname =
     location.pathname;
 
 
-  // ----------------------------------------------------------
-  // Temporary App State
-  // ----------------------------------------------------------
+  const selectedAppFromUrl = Number(
+    new URLSearchParams(location.search).get('app'),
+  );
 
-  const [
-    selectedApp,
-    setSelectedApp,
-  ] = useState(1);
+  const selectedApp =
+    mockApps.some((app) => app.id === selectedAppFromUrl)
+      ? selectedAppFromUrl
+      : mockApps.find((app) =>
+        app.modules.some((module) =>
+          module.pages.some((page) => page.url === pathname),
+        ),
+      )?.id ?? mockApps[0]?.id;
 
   const [openModules, setOpenModules] = useState<Record<number, boolean>>({});
+
+  useEffect(() => {
+    setOpenModules({});
+  }, [selectedApp]);
 
   // ----------------------------------------------------------
   // Find Selected App
@@ -466,12 +514,15 @@ const SidebarLayout = ({
 
             <select
               id="app-selector"
-              value={selectedApp}
-              onChange={(e) =>
-                setSelectedApp(
-                  Number(e.target.value),
-                )
-              }
+              value={selectedApp ?? ''}
+              onChange={(e) => {
+                const searchParams = new URLSearchParams(location.search);
+                searchParams.set('app', e.target.value);
+                navigate({
+                  pathname: location.pathname,
+                  search: `?${searchParams.toString()}`,
+                });
+              }}
               className="
                 w-full
                 rounded-md
@@ -541,6 +592,7 @@ const SidebarLayout = ({
               false,
               openModules,
               setOpenModules,
+              selectedApp,
             )}
 
           </div>

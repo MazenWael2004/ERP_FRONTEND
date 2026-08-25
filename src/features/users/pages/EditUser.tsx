@@ -163,20 +163,20 @@ const username = watch("userName");
 
         console.log("Backend message:", message);
 
-        if (t(message) === "Username already exists") {
-            setError("userName", {
-                type: "server",
-                message: "USERNAME_EXISTS",
-            });
-            return;
+        if (t(message) === t('USERNAME_EXISTS')) {
+          setError('userName', {
+            type: 'server',
+            message: 'USERNAME_EXISTS',
+          });
+          return;
         }
 
-        if (t(message) === "Employee is already linked to another user") {
-            setError("employeeId", {
-                type: "server",
-                message: "EMPLOYEE_ALREADY_ASSIGNED",
-            });
-            return;
+        if (t(message) === t('EMPLOYEE_ALREADY_ASSIGNED')) {
+          setError('employeeId', {
+            type: 'server',
+            message: 'EMPLOYEE_ALREADY_ASSIGNED',
+          });
+          return;
         }
     }
 

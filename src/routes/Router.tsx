@@ -17,6 +17,10 @@ import EditJob from 'src/features/jobs/pages/EditJob';
 import Unauthorized from 'src/shared/pages/Unauthorized';
 import ViewJobs from '../features/jobs/pages/ViewJobs';
 import ViewEmployees from '../features/employees/pages/ViewEmployees';
+import ViewCustomers from '../features/customers/pages/ViewCustomers';
+import NewCustomer from 'src/features/customers/pages/AddCustomer';
+import EditCustomer from 'src/features/customers/pages/EditCustomer';
+import ViewPrograms from 'src/features/programs/pages/ViewPrograms';
 /* ***Layouts**** */
 const FullLayout = Loadable(lazy(() => import('../layouts/full/FullLayout')));
 const BlankLayout = Loadable(lazy(() => import('../layouts/blank/BlankLayout')));
@@ -39,7 +43,7 @@ const NewEmployee = Loadable(lazy(() => import('../features/employees/pages/NewE
 const EditEmployee = Loadable(lazy(() => import('../features/employees/pages/EditEmployee')));
 const LauncherPage = Loadable(lazy(() => import('../features/launcher/pages/LauncherPage')));
 const NewUser = Loadable(lazy(() => import('../features/users/pages/NewUser')));
-const NewJob =  Loadable(lazy(() => import('../features/jobs/pages/NewJob')));
+const NewJob = Loadable(lazy(() => import('../features/jobs/pages/NewJob')));
 // Apps
 const Notes = Loadable(lazy(() => import('../views/apps/notes/Notes')));
 const Form = Loadable(lazy(() => import('../views/utilities/form/Form')));
@@ -54,7 +58,6 @@ const SolarIcon = Loadable(lazy(() => import('../views/icons/SolarIcon')));
 
 // Error
 const Error = Loadable(lazy(() => import('../views/authentication/Error')));
-
 
 // pageId is HARDCODED ,, fix later.....
 const Router = [
@@ -77,36 +80,50 @@ const Router = [
       { path: 'apps/blog/detail/:id', element: <BlogDetail /> },
       { path: 'user-profile', element: <UserProfile /> },
       { path: 'icons/iconify', element: <SolarIcon /> },
-       {
+      {
         path: 'employees',
         element: (
-          <ProtectedRoute route = '/employees' action_code = 'READ'>
+          <ProtectedRoute route="/employees" action_code="READ">
             <ViewEmployees />
           </ProtectedRoute>
         ),
       },
-      { path: 'employees/new-employee', element: <NewEmployee /> },
-       {
+      {
+        path: 'employees/new-employee',
+        element: (
+          <ProtectedRoute route="/employees" action_code="CREATE">
+            <NewEmployee />
+          </ProtectedRoute>
+        ),
+      },
+      {
         path: 'employees/edit',
         element: (
-          <ProtectedRoute route = '/employees' action_code = 'WRITE'>
+          <ProtectedRoute route="/employees" action_code="WRITE">
             <EditEmployee />
           </ProtectedRoute>
         ),
       },
-       {
+      {
         path: 'users',
         element: (
-          <ProtectedRoute route = '/users' action_code = 'READ'>
+          <ProtectedRoute route="/users" action_code="READ">
             <ViewUsers />
           </ProtectedRoute>
         ),
       },
-      { path: 'users/new-user', element: <NewUser /> },
+      {
+        path: 'users/new-user',
+        element: (
+          <ProtectedRoute route="/users" action_code="CREATE">
+            <NewUser />
+          </ProtectedRoute>
+        ),
+      },
       {
         path: 'users/edit',
         element: (
-          <ProtectedRoute route = '/users' action_code = 'WRITE'>
+          <ProtectedRoute route="/users" action_code="WRITE">
             <EditUser />
           </ProtectedRoute>
         ),
@@ -114,33 +131,48 @@ const Router = [
       {
         path: 'jobs',
         element: (
-          <ProtectedRoute  route = '/jobs' action_code = 'READ'>
+          <ProtectedRoute route="/jobs" action_code="READ">
             <ViewJobs />
           </ProtectedRoute>
         ),
       },
-      {path: 'jobs/new-job', element: <NewJob /> },
+      {
+        path: 'jobs/new-job',
+        element: (
+          <ProtectedRoute route="/jobs" action_code="CREATE">
+            <NewJob />
+          </ProtectedRoute>
+        ),
+      },
       {
         path: 'zones',
         element: (
-          <ProtectedRoute  route = '/zones' action_code = 'READ'>
+          <ProtectedRoute route="/zones" action_code="READ">
             <ViewZones />
           </ProtectedRoute>
         ),
       },
-      {path:"zones/new-zone", element: <NewZone />},
+      {
+        path: 'zones/new-zone',
+
+        element: (
+          <ProtectedRoute route="/zones" action_code="CREATE">
+            <NewZone />
+          </ProtectedRoute>
+        ),
+      },
       {
         path: 'zones/edit',
         element: (
-          <ProtectedRoute route = '/zones' action_code = 'WRITE'>
+          <ProtectedRoute route="/zones" action_code="WRITE">
             <EditZone />
           </ProtectedRoute>
         ),
       },
-       {
+      {
         path: 'roles/edit',
         element: (
-          <ProtectedRoute route = '/roles' action_code = 'WRITE'>
+          <ProtectedRoute route="/roles" action_code="WRITE">
             <EditRole />
           </ProtectedRoute>
         ),
@@ -148,7 +180,7 @@ const Router = [
       {
         path: 'jobs/edit',
         element: (
-          <ProtectedRoute route = '/jobs' action_code = 'WRITE'>
+          <ProtectedRoute route="/jobs" action_code="WRITE">
             <EditJob />
           </ProtectedRoute>
         ),
@@ -156,14 +188,53 @@ const Router = [
       {
         path: 'roles',
         element: (
-          <ProtectedRoute  route = '/roles' action_code = 'READ'>
+          <ProtectedRoute route="/roles" action_code="READ">
             <ViewRoles />
           </ProtectedRoute>
         ),
       },
-      {path:"roles/new-role", element: <NewRole />},
-      {path:"/unauthorized",element: <Unauthorized />},
+      {
+        path: 'roles/new-role',
+        element: (
+          <ProtectedRoute route="/roles" action_code="CREATE">
+            <NewRole />
+          </ProtectedRoute>
+        ),
+      },
+      { path: '/unauthorized', element: <Unauthorized /> },
       { path: '*', element: <Navigate to="/auth/404" replace /> },
+      {
+        path: 'customers',
+        element: (
+          <ProtectedRoute route="/customers" action_code="READ">
+            <ViewCustomers />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: 'customers/new-customer',
+        element: (
+          <ProtectedRoute route="/customers" action_code="CREATE">
+            <NewCustomer />
+          </ProtectedRoute>
+        ),
+      },
+       {
+        path: 'customers/edit',
+        element: (
+          <ProtectedRoute route="/customers" action_code="WRITE">
+            <EditCustomer />
+          </ProtectedRoute>
+        ),
+      },
+      {
+         path: 'programs',
+        element: (
+          <ProtectedRoute route="/programs" action_code="READ">
+            <ViewPrograms />
+          </ProtectedRoute>
+        ),
+      }
     ],
   },
   {

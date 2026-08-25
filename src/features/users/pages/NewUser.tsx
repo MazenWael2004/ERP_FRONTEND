@@ -63,7 +63,7 @@ function NewUser() {
 
         console.log('Backend message:', message);
 
-        if (t(message) === 'Username already exists') {
+        if (t(message) === t('USERNAME_EXISTS')) {
           setError('userName', {
             type: 'server',
             message: 'USERNAME_EXISTS',
@@ -71,7 +71,7 @@ function NewUser() {
           return;
         }
 
-        if (t(message) === 'Employee is already linked to another user') {
+        if (t(message) === t('EMPLOYEE_ALREADY_ASSIGNED')) {
           setError('employeeId', {
             type: 'server',
             message: 'EMPLOYEE_ALREADY_ASSIGNED',

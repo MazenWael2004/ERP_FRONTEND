@@ -21,9 +21,10 @@ export const createEmployeeSchema = z.object({
 
   street: z.string().min(1, 'STREET_REQUIRED'),
 
-  city: z.string().min(1, 'CITY_REQUIRED'),
+  cityId: z.number('CITY_ID_REQUIRED').int().positive(),
 
-  governorate: z.string().min(1, 'GOVERNORATE_REQUIRED'),
+
+  governorateId: z.number('GOVERNORATE_ID_REQUIRED').int().positive(),
   telephoneNum: z.string().regex(/^(01[0125]\d{8}|0[2-9]\d{7,8})$/, 'INVALID_PHONE_NUMBER'),
   birthDate: z.date({
     message: 'BIRTH_DATE_REQUIRED',
