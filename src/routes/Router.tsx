@@ -21,6 +21,8 @@ import ViewCustomers from '../features/customers/pages/ViewCustomers';
 import NewCustomer from 'src/features/customers/pages/AddCustomer';
 import EditCustomer from 'src/features/customers/pages/EditCustomer';
 import ViewPrograms from 'src/features/programs/pages/ViewPrograms';
+import NewProgram from 'src/features/programs/pages/NewProgram';
+import EditProgram from 'src/features/programs/pages/EditProgram';
 /* ***Layouts**** */
 const FullLayout = Loadable(lazy(() => import('../layouts/full/FullLayout')));
 const BlankLayout = Loadable(lazy(() => import('../layouts/blank/BlankLayout')));
@@ -232,6 +234,22 @@ const Router = [
         element: (
           <ProtectedRoute route="/programs" action_code="READ">
             <ViewPrograms />
+          </ProtectedRoute>
+        ),
+      },
+      {
+         path: 'programs/new-program',
+        element: (
+          <ProtectedRoute route="/programs" action_code="CREATE">
+            <NewProgram />
+          </ProtectedRoute>
+        ),
+      },
+       {
+         path: 'programs/edit',
+        element: (
+          <ProtectedRoute route="/programs" action_code="WRITE">
+            <EditProgram />
           </ProtectedRoute>
         ),
       }

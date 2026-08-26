@@ -6,6 +6,7 @@ import BreadcrumbComp from 'src/layouts/full/shared/breadcrumb/BreadcrumbComp';
 import { DataTable } from 'src/components/utilities/table/DataTable';
 import { Button } from 'src/components/ui/button';
 import { Plus } from 'lucide-react';
+import axios from 'axios';
 
 import Swal from 'sweetalert2';
 import {
@@ -89,8 +90,8 @@ export default function ViewJobs() {
       await deleteJob(employee.id);
 
       await Swal.fire({
-        title: 'Deleted!',
-        text: 'The job has been deleted successfully.',
+        title: t("DELETED"),
+        text: t("JOB_DELETED_SUCCESSFULLY"),
         icon: 'success',
         timer: 1500,
         showConfirmButton: false,
@@ -98,12 +99,31 @@ export default function ViewJobs() {
 
       await loadJobs();
     } catch (error) {
-      console.error('Failed to delete job:', error);
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        const message = error.response?.data?.error?.message;
 
-      Swal.fire({
-        title: 'Error!',
-        text: 'Failed to delete the job.',
+        if (status === 409) {
+          await Swal.fire({
+            icon: 'error',
+            title: t('ERROR'),
+            text: t(message),
+            confirmButtonText: t('OK'),
+          });
+
+          return;
+        }
+
+        console.error('Delete job error:', error.response?.data);
+      } else {
+        console.error('Unexpected error:', error);
+      }
+
+      await Swal.fire({
+        title: t('ERROR'),
+        text: t('JOB_DELETE_FAILED'),
         icon: 'error',
+        confirmButtonText: t('OK'),
       });
     }
   };

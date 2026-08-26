@@ -9,22 +9,21 @@ import { Plus } from 'lucide-react';
 import Swal from 'sweetalert2';
 import userIcon from '../../../assets/images/logos/working.png';
 import zoneIcon from '../../../assets/images/logos/zones.png';
+import axios from 'axios';
 import { useAuth } from 'src/features/auth/hooks/useAuth';
 
 export default function ViewUsers() {
   const [zones, setZones] = useState([]);
   const [loading, setLoading] = useState(false);
   const nav = useNavigate();
-  const { t,i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { hasPermission } = useAuth();
   const canAdd = hasPermission('/zones', 'CREATE');
   const canEdit = hasPermission('/zones', 'WRITE');
   const canDelete = hasPermission('/zones', 'DELETE');
   const isArabic = i18n.language.startsWith('ar');
-  
 
   const zoneColumns = [
-  
     {
       accessorKey: 'name_en',
       header: t('ZONE_NAME_EN'),
@@ -84,12 +83,31 @@ export default function ViewUsers() {
 
       await loadZones();
     } catch (error) {
-      console.error('Failed to delete zone:', error);
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        const message = error.response?.data?.error?.message;
 
-      Swal.fire({
-        title: 'Error!',
-        text: 'Failed to delete the zone.',
+        if (status === 409) {
+          await Swal.fire({
+            icon: 'error',
+            title: t('ERROR'),
+            text: t(message),
+            confirmButtonText: t('OK'),
+          });
+
+          return;
+        }
+
+        console.error('Delete zone error:', error.response?.data);
+      } else {
+        console.error('Unexpected error:', error);
+      }
+
+      await Swal.fire({
+        title: t('ERROR'),
+        text: t('ZONE_DELETE_FAILED'),
         icon: 'error',
+        confirmButtonText: t('OK'),
       });
     }
   };

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { fetchEmployees, deleteEmployee } from '../api/employeeService';
 import BreadcrumbComp from 'src/layouts/full/shared/breadcrumb/BreadcrumbComp';
 import { DataTable } from 'src/components/utilities/table/DataTable';
+import axios from 'axios';
 import { Button } from 'src/components/ui/button';
 import { Plus } from 'lucide-react';
 import Swal from 'sweetalert2';
@@ -126,12 +127,31 @@ export default function ViewEmployees() {
 
       await loadEmployees();
     } catch (error) {
-      console.error('Failed to delete employee:', error);
+      if (axios.isAxiosError(error)) {
+        const status = error.response?.status;
+        const message = error.response?.data?.error?.message;
 
-      Swal.fire({
-        title: 'Error!',
-        text: 'Failed to delete the employee.',
+        if (status === 409) {
+          await Swal.fire({
+            icon: 'error',
+            title: t('ERROR'),
+            text: t(message),
+            confirmButtonText: t('OK'),
+          });
+
+          return;
+        }
+
+        console.error('Delete employee error:', error.response?.data);
+      } else {
+        console.error('Unexpected error:', error);
+      }
+
+      await Swal.fire({
+        title: t('ERROR'),
+        text: t('EMPLOYEE_DELETE_FAILED'),
         icon: 'error',
+        confirmButtonText: t('OK'),
       });
     }
   };

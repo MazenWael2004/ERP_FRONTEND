@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { fetchPrograms } from '../api/programService';
+import { fetchPrograms,deleteProgram } from '../api/programService';
 import BreadcrumbComp from 'src/layouts/full/shared/breadcrumb/BreadcrumbComp';
 import { DataTable } from 'src/components/utilities/table/DataTable';
 import axios from 'axios';
@@ -57,7 +57,7 @@ export default function ViewPrograms() {
     loadPrograms();
   }, []);
 
-  const handleDelete = async (role: any) => {
+  const handleDelete = async (program: any) => {
     const result = await Swal.fire({
       title: t('ARE_YOU_SURE'),
       text: t('CANNOT_UNDO_ACTION'),
@@ -72,7 +72,7 @@ export default function ViewPrograms() {
     if (!result.isConfirmed) return;
 
     try {
-    //   await deleteRole(role.id);
+      await deleteProgram(program.id);
 
       await Swal.fire({
         title: t('DELETED'),
@@ -119,7 +119,7 @@ export default function ViewPrograms() {
         <div className="flex justify-end">
           {canAdd && (
             <Button
-              onClick={() => nav('/roles/new-role')}
+              onClick={() => nav('/programs/new-program')}
               className="bg-green-600 hover:bg-green-700 text-white"
             >
               <Plus className="mr-2 h-4 w-4" />

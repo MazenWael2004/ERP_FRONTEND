@@ -1,4 +1,4 @@
-
+import { useTranslation } from 'react-i18next';
 import React from 'react';
 import { Icon } from '@iconify/react';
 import { useNavigate } from 'react-router';
@@ -6,6 +6,7 @@ import ForbiddenLogo from '../../assets/images/logos/403-error-forbidden.png';
 
 function Unauthorized() {
   const navigate = useNavigate();
+  const {t} = useTranslation();
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-6">
@@ -27,14 +28,12 @@ function Unauthorized() {
 
         {/* Title */}
         <h1 className="mb-3 text-2xl font-bold text-foreground sm:text-3xl">
-          Access Denied
+          {t("ACCESS_DENIED")}
         </h1>
 
         {/* Description */}
         <p className="mb-8 max-w-md text-sm leading-6 text-muted-foreground sm:text-base">
-          You don't have permission to access this page.
-          Please contact your administrator if you believe
-          you should have access.
+          {t("ACCESS_DENIED_MESSAGE")}
         </p>
 
         {/* Actions */}

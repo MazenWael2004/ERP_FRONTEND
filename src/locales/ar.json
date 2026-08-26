@@ -17,7 +17,8 @@
   "ROWS_PER_PAGE":"عدد الصفوف في الصفحة:",
   "NEXT":"التالي",
   "PREVIOUS":"السابق",
-  
+  "ACCESS_DENIED":"تم الرفض",
+  "ACCESS_DENIED_MESSAGE":"ليس لديك صلاحية الوصول إلى هذه الصفحة. يرجى التواصل مع المسؤول إذا كنت تعتقد أنه يجب أن تتوفر لديك صلاحية الوصول.",  
 
   "USERNAME": "اسم المستخدم",
   "PASSWORD": "كلمة المرور",
@@ -127,6 +128,7 @@
   "EMPLOYEE_NAME_ALREADY_EXISTS": "اسم هذا الموظف موجود بالفعل",
   "EMPLOYEE_ALREADY_EXISTS": "هذا الموظف موجود بالفعل",
   "EMPLOYEE_CREATED_SUCCESSFULLY": "تم إنشاء الموظف بنجاح",
+  "EMPLOYEE_LINKED_TO_USER":"الموظف مرتبط بمستخدم",
   "EMPLOYEE_UPDATED_SUCCESSFULLY": "تم تحديث بيانات الموظف بنجاح",
   "EMPLOYEE_DELETED_SUCCESSFULLY":"تم حذف الموظف بنجاح",
   "DATE_OF_BIRTH":"تاريخ الميلاد",
@@ -180,6 +182,8 @@
   "JOB_ALREADY_EXISTS": "هذه الوظيفة موجودة بالفعل",
   "JOB_UPDATED_SUCCESSFULLY": "تم تحديث الوظيفة بنجاح",
   "JOB_CREATED_SUCCESSFULLY": "تم إنشاء الوظيفة بنجاح",
+  "JOB_DELETED_SUCCESSFULLY":"تم حذف الوظيفة بنجاح",
+  "JOB_LINKED_TO_EMPLOYEE":"الوظيفة مرتبطة بموظف واحد على الأقل",
 
   "ZONE_NAME":"اسم المنطقة",
   "NEW_ZONE": "منطقة جديدة",
@@ -202,7 +206,8 @@
   "ZONE_UPDATED_SUCCESSFULLY": "تم تحديث المنطقة بنجاح",
   "ZONE_DELETED_SUCCESSFULLY":"تم حذف المنطقة بنجاح",
   "IS_ZONE_MANDATORY": "هل المنطقة إلزامية؟",
-
+  "ZONE_LINKED_TO_CUSTOMER":"المنطقة مرتبطة بعميل واحد على الأقل",
+  "ZONE_LINKED_TO_EMPLOYEE":"المنطقة مرتبطة بموظف واحد على الأقل",
   "VALUE_ALREADY_EXISTS": "هذه القيمة موجودة بالفعل",
 
   "CUSTOMERS_TABLE":"جدول العملاء",
@@ -241,5 +246,19 @@
   "SEARCH_GOVERNORATE":"ابحث عن محافظة",
   "SEARCH_PROGRAM":"ابحث عن برنامج",
 
-  "PROGRAMS_TABLE":"جدول البرامج"
+  "PROGRAMS_TABLE":"جدول البرامج",
+  "PROGRAM_CODE":"كود البرنامج",
+  "ADD_PROGRAM":"أضف برنامج",
+  "PROGRAM_NAME_EN_REQUIRED":"اسم البرنامج (باللغة الإنجليزية) مطلوب",
+  "PROGRAM_NAME_AR_REQUIRED":"اسم البرنامج (بالعربية) مطلوب",
+  "PROGRAM_NAME_ONLY_ENGLISH":"يجب أن يحتوي اسم البرنامج على أحرف إنجليزية فقط",
+  "PROGRAM_NAME_ONLY_ARABIC":"يجب أن يحتوي اسم البرنامج على أحرف عربية فقط",
+  "PROGRAM_CODE_REQUIRED":"رمز البرنامج مطلوب",
+  "PROGRAM_NAME_EN_EXISTS":"اسم البرنامج (باللغة الإنجليزية) موجود بالفعل",
+  "PROGRAM_NAME_AR_EXISTS":"اسم البرنامج (باللغة العربية) موجود بالفعل",
+  "PROGRAM_CODE_EXISTS":"رمز البرنامج موجود بالفعل",
+  "PROGRAM_CREATED_SUCCESSFULLY":"تم إنشاء البرنامج بنجاح",
+  "PROGRAM_UPDATED_SUCCESSFULLY":"تم تحديث معلومات البرنامج بنجاح",
+  "PROGRAM_DELETED_SUCCESSFULLY":"تم حذف البرنامج بنجاح"
+
 }

@@ -19,6 +19,8 @@
   "ROWS_PER_PAGE":"Rows per page",
   "NEXT":"Next",
   "PREVIOUS":"Previous",
+  "ACCESS_DENIED":"Access Denied",
+  "ACCESS_DENIED_MESSAGE":"You don't have permission to access this page. Please contact your administrator if you believe you should have access",
 
   "USERNAME": "Username",
   "PASSWORD": "Password",
@@ -108,6 +110,7 @@
   "EMPLOYEE_CREATED_SUCCESSFULLY": "Employee created successfully",
   "EMPLOYEE_NOT_FOUND": "Employee not found",
   "IS_TERMINATED": "Terminate Employee",
+  "EMPLOYEE_LINKED_TO_USER":"Employee is linked to a user",
 
   "STREET": "Street",
   "ENTER_STREET": "Enter Street name",
@@ -162,6 +165,8 @@
   "JOB_ALREADY_EXISTS": "This job already exists",
   "JOB_CREATED_SUCCESSFULLY": "Job Created Successfully",
   "JOB_UPDATED_SUCCESSFULLY": "Job updated successfully",
+  "JOB_DELETED_SUCCESSFULLY":"Job Deleted Successfully",
+  "JOB_LINKED_TO_EMPLOYEE":"Job is linked to at least one employee",
 
   "ZONE_NAME":"Zone name",
   "NEW_ZONE": "New Zone",
@@ -179,6 +184,9 @@
   "ZONE_AR_ALREADY_EXISTS": "Zone name Ar already exists",
   "ZONE_CREATED_SUCCESSFULLY": "Zone created successfully",
   "ZONE_UPDATED_SUCCESSFULLY": "Zone updated successfully",
+  "ZONE_DELETED_SUCCESSFULLY":"Zone deleted successfully",
+   "ZONE_LINKED_TO_CUSTOMER":"Zone is linked to at least one customer",
+  "ZONE_LINKED_TO_EMPLOYEE":"Zone is linked to at least one employee",
 
   "ROLE_NAME":"Role name",
   "ROLE_NAME_EN": "Role name English",
@@ -237,5 +245,18 @@
   "SEARCH_GOVERNORATE":"Search for a governorate",
   "SEARCH_PROGRAM":"Search for a program",
 
-  "PROGRAMS_TABLE":"Programs table"
+  "PROGRAMS_TABLE":"Programs table",
+  "PROGRAM_CODE":"Program code",
+  "ADD_PROGRAM":"Add program",
+  "PROGRAM_NAME_EN_REQUIRED":"Program Name En is required",
+  "PROGRAM_NAME_AR_REQUIRED":"Program Name Ar is required",
+  "PROGRAM_NAME_ONLY_ENGLISH":"Program Name must only contain english letters",
+  "PROGRAM_NAME_EN_EXISTS":"Program Name En already exists",
+  "PROGRAM_NAME_AR_EXISTS":"Program Name Ar already exists",
+  "PROGRAM_CODE_EXISTS":"Program code already exists",
+  "PROGRAM_NAME_ONLY_ARABIC":"Program Name must only contain arabic letters",
+  "PROGRAM_CODE_REQUIRED":"Program code is required",
+  "PROGRAM_CREATED_SUCCESSFULLY":"Program created successfully",
+  "PROGRAM_UPDATED_SUCCESSFULLY":"Program updated successfully",
+  "PROGRAM_DELETED_SUCCESSFULLY":"Program deleted successfully"
 }

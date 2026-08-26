@@ -16,13 +16,9 @@ import { Button } from 'src/components/ui/button';
 import Spinner from 'src/shared/components/Spinner.tsx';
 
 function NewJob() {
-  const [open, setOpen] = useState(false);
   const nav = useNavigate();
   const { t } = useTranslation();
-  const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
-  const [showPasswordFields, setPasswordFields] = useState(true);
-  const [roles, setRoles] = useState([]);
 
   // console.log(user);
 
@@ -32,7 +28,7 @@ function NewJob() {
     try {
       const result = await createJob(data);
 
-      console.log(result);
+      // console.log(result);
 
       await Swal.fire({
         icon: 'success',
