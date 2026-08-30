@@ -147,6 +147,7 @@
 
   "NEW_JOB": "New Job",
   "ADD_JOB": "Add a Job",
+  "SEARCH_JOB":"Search for a job",
   "JOB_TITLE_EN": "Job Title English",
   "JOB_TITLE_AR": "Job Title Arabic",
   "ENTER_JOB_TITLE_EN": "Enter Job Title in English",
@@ -242,8 +243,11 @@
   "SELECT_GOVERNORATE":"Select a governorate",
   "SEARCH_ZONE":"Search for a zone",
   "SEARCH_CITY":"Search for a city",
+  "CITY_ID_REQUIRED":"City required",
   "SEARCH_GOVERNORATE":"Search for a governorate",
+  "GOVERNORATE_ID_REQUIRED":"Governorate required",
   "SEARCH_PROGRAM":"Search for a program",
+  "DOCUMENTS":"Documents/photos",
 
   "PROGRAMS_TABLE":"Programs table",
   "PROGRAM_CODE":"Program code",

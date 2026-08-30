@@ -11,11 +11,29 @@ export const deleteCustomer = async (id:any)=>{
   return api.delete(`/customers/${id}`)
 };
 
-export const createCustomer = async (customerData:any)=>{
-        const response = await api.post("/customers",customerData);
-        return response.data;
-};
+export const createCustomer = async (customerData: any) => {
+  const formData = new FormData();
 
+  // Normal fields
+  Object.entries(customerData).forEach(([key, value]) => {
+    if (key !== 'documents') {
+      formData.append(key, String(value ?? ''));
+    }
+  });
+
+  // Files
+  const files = customerData.documents;
+
+  if (files) {
+    Array.from(files as FileList).forEach((file) => {
+      formData.append('documents', file as File);
+    });
+  }
+
+  const response = await api.post('/customers', formData);
+
+  return response.data;
+};
 export const checkCustomerExists = async (field:any,value:any,excludeId:any) => {
   const response = await api.get("/customers/check", {
     params: {

@@ -22,7 +22,7 @@ import {
   CommandItem,
   CommandList,
 } from 'src/components/ui/command';
-import { Check, ChevronsUpDown } from 'lucide-react';
+import { Check, ChevronsUpDown, X } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -50,6 +50,8 @@ function EditCustomer() {
   const [governorates, setGovernorates] = useState([]);
   const currentCustomer = location.state?.customer;
   const isArabic = i18n.language.startsWith('ar');
+  const [documents, setDocuments] = useState([]);
+  const [newDocuments, setNewDocuments] = useState<File[]>([]);
 
   const {
     register,
@@ -87,6 +89,7 @@ function EditCustomer() {
 
         // Set form data
         const customer = customerResponse.data;
+        setDocuments(customer.documents || []);
 
         reset({
           nameEn: customer.name_en,
@@ -117,18 +120,18 @@ function EditCustomer() {
   }, [id, currentCustomer, navigate, reset]);
 
   useEffect(() => {
-      async function loadGovernorates() {
-        try {
-          const response = await fetchGovernorates(); // your API
-          setGovernorates(response.data);
-          console.log(governorates);
-        } catch (err) {
-          console.error(err);
-        }
+    async function loadGovernorates() {
+      try {
+        const response = await fetchGovernorates(); // your API
+        setGovernorates(response.data);
+        console.log(governorates);
+      } catch (err) {
+        console.error(err);
       }
-  
-      loadGovernorates();
-    }, []);
+    }
+
+    loadGovernorates();
+  }, []);
 
   const name_en = watch('nameEn');
   const name_ar = watch('nameAr');
@@ -388,7 +391,7 @@ function EditCustomer() {
       console.error('Unexpected error:', error);
     }
   };
-  
+
   const governorateId = watch('governorateId');
   useEffect(() => {
     async function loadCitiesOfGovernorate(governorateId: any) {
@@ -554,85 +557,85 @@ function EditCustomer() {
       />
       {/*  hardcoded */}
       {true && (
-              <Controller
-                name="cityId"
-                control={control}
-                render={({ field }) => {
-                  const selectedCity = cities.find((city) => Number(city.id) === Number(field.value));
-      
-                  return (
-                    <div>
-                      <Label>
-                        {t('CITY')}
-                        <span className="text-red-500">*</span>
-                      </Label>
-      
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            role="combobox"
-                            className={`mt-2 w-full justify-between ${
-                              isArabic ? 'text-right' : 'text-left'
-                            }`}
-                            dir={isArabic ? 'rtl' : 'ltr'}
-                          >
-                            {selectedCity
-                              ? isArabic
-                                ? selectedCity.name_ar
-                                : selectedCity.name_en
-                              : t('SELECT_CITY')}
-      
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </PopoverTrigger>
-      
-                        <PopoverContent
-                          className="w-[var(--radix-popover-trigger-width)] p-0"
-                          align="start"
-                          dir={isArabic ? 'rtl' : 'ltr'}
-                        >
-                          <Command>
-                            <CommandInput placeholder={t('SEARCH_CITY')} />
-      
-                            <CommandList>
-                              <CommandEmpty>{t('CITY_NOT_FOUND')}</CommandEmpty>
-      
-                              <CommandGroup>
-                                {cities.map((city) => {
-                                  const cityName = isArabic ? city.name_ar : city.name_en;
-      
-                                  return (
-                                    <CommandItem
-                                      key={city.id}
-                                      value={cityName}
-                                      onSelect={() => {
-                                        field.onChange(Number(city.id));
-                                      }}
-                                    >
-                                      {cityName}
-      
-                                      {Number(field.value) === Number(city.id) && (
-                                        <Check className="ml-auto h-4 w-4" />
-                                      )}
-                                    </CommandItem>
-                                  );
-                                })}
-                              </CommandGroup>
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
-      
-                      {errors.cityId && (
-                        <span className="error-message">{t(errors.cityId.message!)}</span>
-                      )}
-                    </div>
-                  );
-                }}
-              />
-            )}
+        <Controller
+          name="cityId"
+          control={control}
+          render={({ field }) => {
+            const selectedCity = cities.find((city) => Number(city.id) === Number(field.value));
+
+            return (
+              <div>
+                <Label>
+                  {t('CITY')}
+                  <span className="text-red-500">*</span>
+                </Label>
+
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      className={`mt-2 w-full justify-between ${
+                        isArabic ? 'text-right' : 'text-left'
+                      }`}
+                      dir={isArabic ? 'rtl' : 'ltr'}
+                    >
+                      {selectedCity
+                        ? isArabic
+                          ? selectedCity.name_ar
+                          : selectedCity.name_en
+                        : t('SELECT_CITY')}
+
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+
+                  <PopoverContent
+                    className="w-[var(--radix-popover-trigger-width)] p-0"
+                    align="start"
+                    dir={isArabic ? 'rtl' : 'ltr'}
+                  >
+                    <Command>
+                      <CommandInput placeholder={t('SEARCH_CITY')} />
+
+                      <CommandList>
+                        <CommandEmpty>{t('CITY_NOT_FOUND')}</CommandEmpty>
+
+                        <CommandGroup>
+                          {cities.map((city) => {
+                            const cityName = isArabic ? city.name_ar : city.name_en;
+
+                            return (
+                              <CommandItem
+                                key={city.id}
+                                value={cityName}
+                                onSelect={() => {
+                                  field.onChange(Number(city.id));
+                                }}
+                              >
+                                {cityName}
+
+                                {Number(field.value) === Number(city.id) && (
+                                  <Check className="ml-auto h-4 w-4" />
+                                )}
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+
+                {errors.cityId && (
+                  <span className="error-message">{t(errors.cityId.message!)}</span>
+                )}
+              </div>
+            );
+          }}
+        />
+      )}
 
       <div>
         <Label htmlFor="telephoneNumber">
@@ -645,165 +648,221 @@ function EditCustomer() {
       </div>
 
       <Controller
-          name="zoneId"
-          control={control}
-          render={({ field }) => {
-            const selectedZone = zones.find((zone) => Number(zone.id) === Number(field.value));
+        name="zoneId"
+        control={control}
+        render={({ field }) => {
+          const selectedZone = zones.find((zone) => Number(zone.id) === Number(field.value));
 
-            return (
-              <div>
-                <Label>
-                  {t('ZONE')}
-                  <span className="text-red-500">*</span>
-                </Label>
+          return (
+            <div>
+              <Label>
+                {t('ZONE')}
+                <span className="text-red-500">*</span>
+              </Label>
 
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      role="combobox"
-                      className={`mt-2 w-full justify-between ${
-                        isArabic ? 'text-right' : 'text-left'
-                      }`}
-                      dir={isArabic ? 'rtl' : 'ltr'}
-                    >
-                      {selectedZone
-                        ? isArabic
-                          ? selectedZone.name_ar
-                          : selectedZone.name_en
-                        : t('SELECT_ZONE')}
-
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-
-                  <PopoverContent
-                    className="w-[var(--radix-popover-trigger-width)] p-0"
-                    align="start"
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    className={`mt-2 w-full justify-between ${
+                      isArabic ? 'text-right' : 'text-left'
+                    }`}
                     dir={isArabic ? 'rtl' : 'ltr'}
                   >
-                    <Command>
-                      <CommandInput placeholder={t('SEARCH_ZONE')} />
+                    {selectedZone
+                      ? isArabic
+                        ? selectedZone.name_ar
+                        : selectedZone.name_en
+                      : t('SELECT_ZONE')}
 
-                      <CommandList>
-                        <CommandEmpty>{t('ZONE_NOT_FOUND')}</CommandEmpty>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
 
-                        <CommandGroup>
-                          {zones.map((zone) => {
-                            const zoneName = isArabic ? zone.name_ar : zone.name_en;
+                <PopoverContent
+                  className="w-[var(--radix-popover-trigger-width)] p-0"
+                  align="start"
+                  dir={isArabic ? 'rtl' : 'ltr'}
+                >
+                  <Command>
+                    <CommandInput placeholder={t('SEARCH_ZONE')} />
 
-                            return (
-                              <CommandItem
-                                key={zone.id}
-                                value={zoneName}
-                                onSelect={() => {
-                                  field.onChange(Number(zone.id));
-                                  setIsGovernorateSelected(true);
-                                }}
-                              >
-                                {zoneName}
+                    <CommandList>
+                      <CommandEmpty>{t('ZONE_NOT_FOUND')}</CommandEmpty>
 
-                                {Number(field.value) === Number(zone.id) && (
-                                  <Check className="ml-auto h-4 w-4" />
-                                )}
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
+                      <CommandGroup>
+                        {zones.map((zone) => {
+                          const zoneName = isArabic ? zone.name_ar : zone.name_en;
 
-                {errors.zoneId && (
-                  <span className="error-message">{t(errors.zoneId.message!)}</span>
-                )}
-              </div>
-            );
-          }}
-        />
+                          return (
+                            <CommandItem
+                              key={zone.id}
+                              value={zoneName}
+                              onSelect={() => {
+                                field.onChange(Number(zone.id));
+                                setIsGovernorateSelected(true);
+                              }}
+                            >
+                              {zoneName}
 
-     <Controller
-          name="programId"
-          control={control}
-          render={({ field }) => {
-            const selectedProgram = programs.find((program) => Number(program.id) === Number(field.value));
+                              {Number(field.value) === Number(zone.id) && (
+                                <Check className="ml-auto h-4 w-4" />
+                              )}
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
 
-            return (
-              <div>
-                <Label>
-                  {t('PROGRAM')}
-                  <span className="text-red-500">*</span>
-                </Label>
+              {errors.zoneId && <span className="error-message">{t(errors.zoneId.message!)}</span>}
+            </div>
+          );
+        }}
+      />
 
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      role="combobox"
-                      className={`mt-2 w-full justify-between ${
-                        isArabic ? 'text-right' : 'text-left'
-                      }`}
-                      dir={isArabic ? 'rtl' : 'ltr'}
-                    >
-                      {selectedProgram
-                        ? isArabic
-                          ? selectedProgram.name_ar
-                          : selectedProgram.name_en
-                        : t('SELECT_PROGRAM')}
+      <Controller
+        name="programId"
+        control={control}
+        render={({ field }) => {
+          const selectedProgram = programs.find(
+            (program) => Number(program.id) === Number(field.value),
+          );
 
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
+          return (
+            <div>
+              <Label>
+                {t('PROGRAM')}
+                <span className="text-red-500">*</span>
+              </Label>
 
-                  <PopoverContent
-                    className="w-[var(--radix-popover-trigger-width)] p-0"
-                    align="start"
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    className={`mt-2 w-full justify-between ${
+                      isArabic ? 'text-right' : 'text-left'
+                    }`}
                     dir={isArabic ? 'rtl' : 'ltr'}
                   >
-                    <Command>
-                      <CommandInput placeholder={t('SEARCH_PROGRAM')} />
+                    {selectedProgram
+                      ? isArabic
+                        ? selectedProgram.name_ar
+                        : selectedProgram.name_en
+                      : t('SELECT_PROGRAM')}
 
-                      <CommandList>
-                        <CommandEmpty>{t('PROGRAM_NOT_FOUND')}</CommandEmpty>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
 
-                        <CommandGroup>
-                          {programs.map((program) => {
-                            const programName = isArabic ? program.name_ar : program.name_en;
+                <PopoverContent
+                  className="w-[var(--radix-popover-trigger-width)] p-0"
+                  align="start"
+                  dir={isArabic ? 'rtl' : 'ltr'}
+                >
+                  <Command>
+                    <CommandInput placeholder={t('SEARCH_PROGRAM')} />
 
-                            return (
-                              <CommandItem
-                                key={program.id}
-                                value={programName}
-                                onSelect={() => {
-                                  field.onChange(Number(program.id));
-                                  setIsGovernorateSelected(true);
-                                }}
-                              >
-                                {programName}
+                    <CommandList>
+                      <CommandEmpty>{t('PROGRAM_NOT_FOUND')}</CommandEmpty>
 
-                                {Number(field.value) === Number(program.id) && (
-                                  <Check className="ml-auto h-4 w-4" />
-                                )}
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
+                      <CommandGroup>
+                        {programs.map((program) => {
+                          const programName = isArabic ? program.name_ar : program.name_en;
 
-                {errors.programId && (
-                  <span className="error-message">{t(errors.programId.message!)}</span>
-                )}
-              </div>
-            );
-          }}
-        />
+                          return (
+                            <CommandItem
+                              key={program.id}
+                              value={programName}
+                              onSelect={() => {
+                                field.onChange(Number(program.id));
+                                setIsGovernorateSelected(true);
+                              }}
+                            >
+                              {programName}
 
+                              {Number(field.value) === Number(program.id) && (
+                                <Check className="ml-auto h-4 w-4" />
+                              )}
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+
+              {errors.programId && (
+                <span className="error-message">{t(errors.programId.message!)}</span>
+              )}
+            </div>
+          );
+        }}
+      />
+
+      <div className="md:col-span-2">
+        <Label>{t('DOCUMENTS')}</Label>
+
+        <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-4">
+          {documents.length > 0 ? (
+            documents.map((document) => {
+              const documentUrl = `http://localhost:3000/${document.file_path}`;
+
+              return (
+                <div key={document.id} className="relative rounded-lg border p-2">
+                  {/* Remove button */}
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="icon"
+                    className="absolute right-2 top-2 z-10 h-7 w-7 rounded-full"
+                    onClick={() => {
+                      setDocuments((prev) => prev.filter((doc) => doc.id !== document.id));
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+
+                  {document.mime_type.startsWith('image/') ? (
+                    <img
+                      src={documentUrl}
+                      alt="Customer document"
+                      className="h-40 w-full rounded-md object-cover"
+                    />
+                  ) : document.mime_type === 'application/pdf' ? (
+                    <div className="flex h-40 flex-col items-center justify-center gap-3">
+                      <span className="text-4xl">📄</span>
+
+                      <span className="text-sm text-gray-500">PDF Document</span>
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => window.open(documentUrl, '_blank')}
+                      >
+                        {t('PREVIEW')}
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex h-40 items-center justify-center">
+                      <span className="text-sm text-gray-500">{document.file_path}</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          ) : (
+            <p className="text-sm text-gray-500">{t('NO_DOCUMENTS')}</p>
+          )}
+        </div>
+      </div>
       <div className="md:col-span-2 flex justify-end">
         <Button type="submit" disabled={isLoading}>
           {t('SAVE')}

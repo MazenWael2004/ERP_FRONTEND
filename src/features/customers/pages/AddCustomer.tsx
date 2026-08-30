@@ -51,6 +51,7 @@ function NewCustomer() {
   const [programs, setPrograms] = useState([]);
   const [governorates, setGovernorates] = useState([]);
   const isArabic = i18n.language.startsWith('ar');
+  
 
   useEffect(() => {
     async function loadZones() {
@@ -96,6 +97,7 @@ function NewCustomer() {
 
   const handleSave = async (data: any) => {
     setIsLoading(true);
+    console.log(data);
     console.log('FORM');
     try {
       const result = await createCustomer(data);
@@ -192,6 +194,11 @@ function NewCustomer() {
   const registration_number = watch('registrationNumber');
   const telephone_number = watch('telephoneNumber');
   const governorateId = watch('governorateId');
+  const docs = watch("documents");
+
+  useEffect(()=>{
+    console.log(docs);
+  },[docs]);
 
   useEffect(() => {
     async function loadCitiesOfGovernorate(governorateId: any) {
@@ -388,84 +395,88 @@ function NewCustomer() {
       </div>
 
       <Controller
-          name="governorateId"
-          control={control}
-          render={({ field }) => {
-            const selectedGovernorate = governorates.find((governorate) => Number(governorate.id) === Number(field.value));
+        name="governorateId"
+        control={control}
+        render={({ field }) => {
+          const selectedGovernorate = governorates.find(
+            (governorate) => Number(governorate.id) === Number(field.value),
+          );
 
-            return (
-              <div>
-                <Label>
-                  {t('GOVERNORATE')}
-                  <span className="text-red-500">*</span>
-                </Label>
+          return (
+            <div>
+              <Label>
+                {t('GOVERNORATE')}
+                <span className="text-red-500">*</span>
+              </Label>
 
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      role="combobox"
-                      className={`mt-2 w-full justify-between ${
-                        isArabic ? 'text-right' : 'text-left'
-                      }`}
-                      dir={isArabic ? 'rtl' : 'ltr'}
-                    >
-                      {selectedGovernorate
-                        ? isArabic
-                          ? selectedGovernorate.name_ar
-                          : selectedGovernorate.name_en
-                        : t('SELECT_GOVERNORATE')}
-
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-
-                  <PopoverContent
-                    className="w-[var(--radix-popover-trigger-width)] p-0"
-                    align="start"
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    className={`mt-2 w-full justify-between ${
+                      isArabic ? 'text-right' : 'text-left'
+                    }`}
                     dir={isArabic ? 'rtl' : 'ltr'}
                   >
-                    <Command>
-                      <CommandInput placeholder={t('SEARCH_GOVERNORATE')} />
+                    {selectedGovernorate
+                      ? isArabic
+                        ? selectedGovernorate.name_ar
+                        : selectedGovernorate.name_en
+                      : t('SELECT_GOVERNORATE')}
 
-                      <CommandList>
-                        <CommandEmpty>{t('GOVERNORATE_NOT_FOUND')}</CommandEmpty>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
 
-                        <CommandGroup>
-                          {governorates.map((governorate) => {
-                            const governorateName = isArabic ? governorate.name_ar : governorate.name_en;
+                <PopoverContent
+                  className="w-[var(--radix-popover-trigger-width)] p-0"
+                  align="start"
+                  dir={isArabic ? 'rtl' : 'ltr'}
+                >
+                  <Command>
+                    <CommandInput placeholder={t('SEARCH_GOVERNORATE')} />
 
-                            return (
-                              <CommandItem
-                                key={governorate.id}
-                                value={governorateName}
-                                onSelect={() => {
-                                  field.onChange(Number(governorate.id));
-                                  setIsGovernorateSelected(true);
-                                }}
-                              >
-                                {governorateName}
+                    <CommandList>
+                      <CommandEmpty>{t('GOVERNORATE_NOT_FOUND')}</CommandEmpty>
 
-                                {Number(field.value) === Number(governorate.id) && (
-                                  <Check className="ml-auto h-4 w-4" />
-                                )}
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
+                      <CommandGroup>
+                        {governorates.map((governorate) => {
+                          const governorateName = isArabic
+                            ? governorate.name_ar
+                            : governorate.name_en;
 
-                {errors.governorateId && (
-                  <span className="error-message">{t(errors.governorateId.message!)}</span>
-                )}
-              </div>
-            );
-          }}
-        />
+                          return (
+                            <CommandItem
+                              key={governorate.id}
+                              value={governorateName}
+                              onSelect={() => {
+                                field.onChange(Number(governorate.id));
+                                setIsGovernorateSelected(true);
+                              }}
+                            >
+                              {governorateName}
+
+                              {Number(field.value) === Number(governorate.id) && (
+                                <Check className="ml-auto h-4 w-4" />
+                              )}
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+
+              {errors.governorateId && (
+                <span className="error-message">{t(errors.governorateId.message!)}</span>
+              )}
+            </div>
+          );
+        }}
+      />
 
       {isGovernorateSelected && (
         <Controller
@@ -559,164 +570,177 @@ function NewCustomer() {
       </div>
 
       <Controller
-          name="zoneId"
-          control={control}
-          render={({ field }) => {
-            const selectedZone = zones.find((zone) => Number(zone.id) === Number(field.value));
+        name="zoneId"
+        control={control}
+        render={({ field }) => {
+          const selectedZone = zones.find((zone) => Number(zone.id) === Number(field.value));
 
-            return (
-              <div>
-                <Label>
-                  {t('ZONE')}
-                  <span className="text-red-500">*</span>
-                </Label>
+          return (
+            <div>
+              <Label>
+                {t('ZONE')}
+                <span className="text-red-500">*</span>
+              </Label>
 
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      role="combobox"
-                      className={`mt-2 w-full justify-between ${
-                        isArabic ? 'text-right' : 'text-left'
-                      }`}
-                      dir={isArabic ? 'rtl' : 'ltr'}
-                    >
-                      {selectedZone
-                        ? isArabic
-                          ? selectedZone.name_ar
-                          : selectedZone.name_en
-                        : t('SELECT_ZONE')}
-
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-
-                  <PopoverContent
-                    className="w-[var(--radix-popover-trigger-width)] p-0"
-                    align="start"
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    className={`mt-2 w-full justify-between ${
+                      isArabic ? 'text-right' : 'text-left'
+                    }`}
                     dir={isArabic ? 'rtl' : 'ltr'}
                   >
-                    <Command>
-                      <CommandInput placeholder={t('SEARCH_ZONE')} />
+                    {selectedZone
+                      ? isArabic
+                        ? selectedZone.name_ar
+                        : selectedZone.name_en
+                      : t('SELECT_ZONE')}
 
-                      <CommandList>
-                        <CommandEmpty>{t('ZONE_NOT_FOUND')}</CommandEmpty>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
 
-                        <CommandGroup>
-                          {zones.map((zone) => {
-                            const zoneName = isArabic ? zone.name_ar : zone.name_en;
+                <PopoverContent
+                  className="w-[var(--radix-popover-trigger-width)] p-0"
+                  align="start"
+                  dir={isArabic ? 'rtl' : 'ltr'}
+                >
+                  <Command>
+                    <CommandInput placeholder={t('SEARCH_ZONE')} />
 
-                            return (
-                              <CommandItem
-                                key={zone.id}
-                                value={zoneName}
-                                onSelect={() => {
-                                  field.onChange(Number(zone.id));
-                                  setIsGovernorateSelected(true);
-                                }}
-                              >
-                                {zoneName}
+                    <CommandList>
+                      <CommandEmpty>{t('ZONE_NOT_FOUND')}</CommandEmpty>
 
-                                {Number(field.value) === Number(zone.id) && (
-                                  <Check className="ml-auto h-4 w-4" />
-                                )}
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
+                      <CommandGroup>
+                        {zones.map((zone) => {
+                          const zoneName = isArabic ? zone.name_ar : zone.name_en;
 
-                {errors.zoneId && (
-                  <span className="error-message">{t(errors.zoneId.message!)}</span>
-                )}
-              </div>
-            );
-          }}
-        />
+                          return (
+                            <CommandItem
+                              key={zone.id}
+                              value={zoneName}
+                              onSelect={() => {
+                                field.onChange(Number(zone.id));
+                                setIsGovernorateSelected(true);
+                              }}
+                            >
+                              {zoneName}
 
-       <Controller
-          name="programId"
-          control={control}
-          render={({ field }) => {
-            const selectedProgram = programs.find((program) => Number(program.id) === Number(field.value));
+                              {Number(field.value) === Number(zone.id) && (
+                                <Check className="ml-auto h-4 w-4" />
+                              )}
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
 
-            return (
-              <div>
-                <Label>
-                  {t('PROGRAM')}
-                  <span className="text-red-500">*</span>
-                </Label>
+              {errors.zoneId && <span className="error-message">{t(errors.zoneId.message!)}</span>}
+            </div>
+          );
+        }}
+      />
 
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      role="combobox"
-                      className={`mt-2 w-full justify-between ${
-                        isArabic ? 'text-right' : 'text-left'
-                      }`}
-                      dir={isArabic ? 'rtl' : 'ltr'}
-                    >
-                      {selectedProgram
-                        ? isArabic
-                          ? selectedProgram.name_ar
-                          : selectedProgram.name_en
-                        : t('SELECT_PROGRAM')}
+      <Controller
+        name="programId"
+        control={control}
+        render={({ field }) => {
+          const selectedProgram = programs.find(
+            (program) => Number(program.id) === Number(field.value),
+          );
 
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
+          return (
+            <div>
+              <Label>
+                {t('PROGRAM')}
+                <span className="text-red-500">*</span>
+              </Label>
 
-                  <PopoverContent
-                    className="w-[var(--radix-popover-trigger-width)] p-0"
-                    align="start"
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    className={`mt-2 w-full justify-between ${
+                      isArabic ? 'text-right' : 'text-left'
+                    }`}
                     dir={isArabic ? 'rtl' : 'ltr'}
                   >
-                    <Command>
-                      <CommandInput placeholder={t('SEARCH_PROGRAM')} />
+                    {selectedProgram
+                      ? isArabic
+                        ? selectedProgram.name_ar
+                        : selectedProgram.name_en
+                      : t('SELECT_PROGRAM')}
 
-                      <CommandList>
-                        <CommandEmpty>{t('PROGRAM_NOT_FOUND')}</CommandEmpty>
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
 
-                        <CommandGroup>
-                          {programs.map((program) => {
-                            const programName = isArabic ? program.name_ar : program.name_en;
+                <PopoverContent
+                  className="w-[var(--radix-popover-trigger-width)] p-0"
+                  align="start"
+                  dir={isArabic ? 'rtl' : 'ltr'}
+                >
+                  <Command>
+                    <CommandInput placeholder={t('SEARCH_PROGRAM')} />
 
-                            return (
-                              <CommandItem
-                                key={program.id}
-                                value={programName}
-                                onSelect={() => {
-                                  field.onChange(Number(program.id));
-                                  setIsGovernorateSelected(true);
-                                }}
-                              >
-                                {programName}
+                    <CommandList>
+                      <CommandEmpty>{t('PROGRAM_NOT_FOUND')}</CommandEmpty>
 
-                                {Number(field.value) === Number(program.id) && (
-                                  <Check className="ml-auto h-4 w-4" />
-                                )}
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
+                      <CommandGroup>
+                        {programs.map((program) => {
+                          const programName = isArabic ? program.name_ar : program.name_en;
 
-                {errors.programId && (
-                  <span className="error-message">{t(errors.programId.message!)}</span>
-                )}
-              </div>
-            );
-          }}
+                          return (
+                            <CommandItem
+                              key={program.id}
+                              value={programName}
+                              onSelect={() => {
+                                field.onChange(Number(program.id));
+                              }}
+                            >
+                              {programName}
+
+                              {Number(field.value) === Number(program.id) && (
+                                <Check className="ml-auto h-4 w-4" />
+                              )}
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+
+              {errors.programId && (
+                <span className="error-message">{t(errors.programId.message!)}</span>
+              )}
+            </div>
+          );
+        }}
+      />
+
+      <div>
+        <Label htmlFor="Documents">
+          {t('DOCUMENTS')} <span className="text-red-500">*</span>
+        </Label>
+        <Input
+          id="documents"
+          type="file"
+          multiple
+          accept="image/*,.pdf,.doc,.docx"
+          {...register('documents')}
         />
+        {errors.documents && <span className="error-message">{t(errors.documents.message!)}</span>}
+      </div>
 
       <div className="md:col-span-2 flex justify-end">
         <Button type="submit" disabled={isLoading}>

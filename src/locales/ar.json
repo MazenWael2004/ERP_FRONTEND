@@ -163,6 +163,7 @@
 
   "NEW_JOB": "وظيفة جديدة",
   "ADD_JOB": "إضافة وظيفة",
+  "SEARCH_JOB":"ابحث عن وظيفة",
   "JOBS_TABLE":"جدول الوظائف",
   "JOB_TITLE":"اسم الوظيفة",
   "JOB_TITLE_EN": "اسم الوظيفة باللغة الإنجليزية",
@@ -243,8 +244,11 @@
   "SELECT_GOVERNORATE":"اختار محافظة",
   "SEARCH_ZONE":"ابحث عن منطقة",
   "SEARCH_CITY":"ابحث عن مدينة",
+  "CITY_ID_REQUIRED":"المدينة مطلوبة",
   "SEARCH_GOVERNORATE":"ابحث عن محافظة",
+  "GOVERNORATE_ID_REQUIRED":"المحافظة مطلوبة",
   "SEARCH_PROGRAM":"ابحث عن برنامج",
+  "DOCUMENTS":"صور أو تقارير",
 
   "PROGRAMS_TABLE":"جدول البرامج",
   "PROGRAM_CODE":"كود البرنامج",

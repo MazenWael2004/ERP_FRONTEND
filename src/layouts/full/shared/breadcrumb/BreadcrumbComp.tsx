@@ -22,7 +22,7 @@ const BreadcrumbComp = ({ title, items = [],breadCrumbBg }: BreadCrumbType) => {
     >
       <div className="grid grid-cols-12 gap-6 items-center">
         <div className="col-span-10">
-          <h4 className="font-semibold text-xl mb-3">
+          <h4 className="font-bold text-xl mb-3">
             {title}
           </h4>
 
