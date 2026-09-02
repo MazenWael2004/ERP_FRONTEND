@@ -288,5 +288,16 @@
   "PROGRAM_CODE_REQUIRED":"Program code is required",
   "PROGRAM_CREATED_SUCCESSFULLY":"Program created successfully",
   "PROGRAM_UPDATED_SUCCESSFULLY":"Program updated successfully",
-  "PROGRAM_DELETED_SUCCESSFULLY":"Program deleted successfully"
+  "PROGRAM_DELETED_SUCCESSFULLY":"Program deleted successfully",
+
+  "PRICINGS_TABLE":"Pricings table",
+  "ADD_PRICING":"Add pricing",
+  "PRICING_NAME":"Pricing Name",
+  "PRICING_NAME_EN":"Pricing Name En",
+  "PRICING_NAME_AR":"Pricing Name Ar",
+  "DOWN_PAYMENT":"Down Payment",
+  "NUMBER_OF_MONTHS_PAID_ADVANCE":"Number of prepaid months",
+  "FROM_MONTH":"From month",
+  "TO_MONTH":"To Month",
+  "SUBSCRIPTION_PRICE":"Subscription Price"
 }

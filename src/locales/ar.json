@@ -287,6 +287,19 @@
   "PROGRAM_CODE_EXISTS":"رمز البرنامج موجود بالفعل",
   "PROGRAM_CREATED_SUCCESSFULLY":"تم إنشاء البرنامج بنجاح",
   "PROGRAM_UPDATED_SUCCESSFULLY":"تم تحديث معلومات البرنامج بنجاح",
-  "PROGRAM_DELETED_SUCCESSFULLY":"تم حذف البرنامج بنجاح"
+  "PROGRAM_DELETED_SUCCESSFULLY":"تم حذف البرنامج بنجاح",
+
+
+  "PRICINGS_TABLE":"جدول التسعيرات",
+  "ADD_PRICING":"إضافة تسعير",
+  "PRICING_NAME":"اسم التسعير",
+  "PRICING_NAME_EN":"اسم التسعير (باللغة الإنجليزية)",
+  "PRICING_NAME_AR":"اسم التسعير (بالعربية)",
+  "DOWN_PAYMENT":"دفعة مبدئية",
+  "NUMBER_OF_MONTHS_PAID_ADVANCE":"عدد الأشهر المدفوعة مقدماً",
+  "FROM_MONTH":"من الشهر",
+  "TO_MONTH":"إلى الشهر",
+  "SUBSCRIPTION_PRICE":"سعر الاشتراك الشهري"
+  
 
 }

@@ -6,19 +6,10 @@ import { fetchCustomers, deleteCustomer } from '../api/customerService';
 import { fetchGovernorates, fetchCities, fetchCitiesOfGovernorate } from '../api/customerService';
 import { fetchZones } from 'src/features/zones/api/zoneService';
 import BreadcrumbComp from 'src/layouts/full/shared/breadcrumb/BreadcrumbComp';
-import { Input } from 'src/components/ui/input';
 import { fetchPrograms } from 'src/features/programs/api/programService.ts';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { Label } from 'src/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from 'src/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectTrigger,
-  SelectValue,
-  SelectItem,
-} from 'src/components/ui/select';
-
 import {
   Command,
   CommandEmpty,
@@ -31,7 +22,6 @@ import { Popover, PopoverContent, PopoverTrigger } from 'src/components/ui/popov
 import { DataTable } from 'src/components/utilities/table/DataTable';
 import { Button } from 'src/components/ui/button';
 import { Plus, Download, Filter, X } from 'lucide-react';
-
 import Swal from 'sweetalert2';
 import jobIcon from '../../../assets/images/logos/job-offer.png';
 import { useAuth } from 'src/features/auth/hooks/useAuth';
