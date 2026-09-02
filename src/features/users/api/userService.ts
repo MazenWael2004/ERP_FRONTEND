@@ -1,10 +1,19 @@
 import { api } from "../../../shared/api/axios";
 
 
-export const fetchUsers = async ()=>{
-    const response = await api.get("/users");
-    return response.data;
+// export const fetchUsers = async ()=>{
+//     const response = await api.get("/users");
+//     return response.data;
+// };
+
+export const fetchUsers = async (filters = {}) => {
+  const response =  await api.get('/users/filter', {
+    params: filters,
+  });
+
+  return response.data;
 };
+
 
 
 

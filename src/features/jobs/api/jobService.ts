@@ -3,10 +3,21 @@ import { api } from "../../../shared/api/axios"
 
 
 
-export const fetchJobs = async ()=>{
-      const response = await api.get("/jobs");
-      return response.data;
+// export const fetchJobs = async ()=>{
+//       const response = await api.get("/jobs");
+//       return response.data;
+// };
+
+
+export const fetchJobs = async (filters = {}) => {
+  const response =  await api.get('/jobs/filter', {
+    params: filters,
+  });
+
+  return response.data;
 };
+
+
 
 // ANY TYPE: FIX LATERR..
 export const createJob = async (job:any)=>{

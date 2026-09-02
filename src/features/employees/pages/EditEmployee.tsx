@@ -30,7 +30,7 @@ import {
   CommandList,
 } from 'src/components/ui/command';
 
-import { Check, ChevronsUpDown } from 'lucide-react';
+import { Check, ChevronsUpDown, Plus, X } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -54,8 +54,13 @@ function EditEmployee() {
   const [governorates, setGovernorates] = useState([]);
   const [cities, setCities] = useState([]);
   const [employee, setEmployee] = useState(null);
+  const [documents, setDocuments] = useState([]);
+  const [newDocuments, setNewDocuments] = useState<File[]>([]);
+  const [deletedDocumentIds, setDeletedDocumentIds] = useState<number[]>([]);
+  const [previewImageIndex, setPreviewImageIndex] = useState(-1);
   const [jobs, setJobs] = useState([]);
   const isArabic = i18n.language.startsWith('ar');
+  const imageDocuments = documents.filter((doc) => doc.mime_type.startsWith('image/'));
 
   const {
     register,
@@ -193,6 +198,7 @@ function EditEmployee() {
         // Set all option data first
         setJobs(jobsResponse.data);
         setZones(zonesResponse.data);
+        setDocuments(employeeData.documents || []);
 
         // Then populate the form
         reset({
@@ -227,8 +233,27 @@ function EditEmployee() {
   const handleSave = async (data: any) => {
     if (!currentEmployee) return;
     console.log(data);
+    const formData = new FormData();
+    Object.entries(data).forEach(([key, value]) => {
+      if (value === undefined || value === null) return;
+
+      if (Array.isArray(value)) {
+        formData.append(key, JSON.stringify(value)); // e.g. zones
+      } else if (value instanceof Date) {
+        formData.append(key, value.toISOString());
+      } else {
+        formData.append(key, String(value));
+      }
+    });
+
+    newDocuments.forEach((file) => {
+     formData.append('documents', file); // must match multer field name on the backend route
+    });
+
+    formData.append('deletedDocumentIds', JSON.stringify(deletedDocumentIds));
     try {
-      await updateEmployee(Number(currentEmployee.id), data);
+       await updateEmployee(Number(currentEmployee.id), formData);
+
 
       toast.success(t('EMPLOYEE_UPDATED_SUCCESSFULLY'));
       navigate('/employees');
@@ -721,6 +746,205 @@ function EditEmployee() {
 
         <Label htmlFor="isTerminated">{t('IS_TERMINATED')}</Label>
       </div>
+
+      <div className="md:col-span-2">
+              <Label>{t('DOCUMENTS')}</Label>
+      
+              <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-4">
+                {documents.map((document) => {
+                  const documentUrl = `http://localhost:3000/${document.file_path}`;
+      
+                  return (
+                    <div
+                      key={document.id}
+                      className="relative rounded-lg border p-2 cursor-pointer
+                   transition-all duration-300 ease-in-out
+                   hover:-translate-y-1 hover:shadow-lg hover:border-primary"
+                      onClick={() => {
+                        const index = imageDocuments.findIndex((img) => img.id === document.id);
+      
+                        setPreviewImageIndex(index);
+                      }}
+                    >
+                      {/* Remove button */}
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="icon"
+                        className="absolute right-2 top-2 z-10 h-7 w-7 rounded-full"
+                        onClick={() => {
+                          setDocuments((prev) => prev.filter((doc) => doc.id !== document.id));
+      
+                          setDeletedDocumentIds((prev) => [...prev, document.id]);
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+      
+                      {document.mime_type.startsWith('image/') ? (
+                        <div
+                          className="relative flex h-40 flex-col"
+                          onClick={(e) => {
+                            e.stopPropagation();
+      
+                            const index = imageDocuments.findIndex((img) => img.id === document.id);
+      
+                            setPreviewImageIndex(index);
+                          }}
+                        >
+                          <img
+                            src={documentUrl}
+                            alt={document.original_name || 'Customer document'}
+                            className="h-40 w-full rounded-md object-cover"
+                          />
+                        </div>
+                      ) : document.mime_type === 'application/pdf' ? (
+                        <div className="flex h-40 flex-col items-center justify-center gap-3">
+                          <span className="text-4xl">📄</span>
+      
+                          <span className="max-w-[90%] truncate text-sm text-gray-500">
+                            {document.original_name || 'PDF Document'}
+                          </span>
+      
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => window.open(documentUrl, '_blank')}
+                          >
+                            {t('PREVIEW')}
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex h-40 flex-col items-center justify-center gap-2">
+                          <span className="text-4xl">📎</span>
+      
+                          <span className="max-w-[90%] truncate text-sm text-gray-500">
+                            {document.original_name || document.file_path}
+                          </span>
+      
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => window.open(documentUrl, '_blank')}
+                          >
+                            {t('PREVIEW')}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+      
+                {/* Add Document */}
+                <label
+                  htmlFor="document-upload"
+                  className="relative flex h-[168px] cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-lg border-2 border-dashed border-gray-300 transition hover:border-primary hover:bg-gray-50"
+                >
+                  {newDocuments.length === 0 ? (
+                    <>
+                      <Plus className="h-8 w-8 text-gray-400" />
+      
+                      <span className="text-sm font-medium text-gray-500">{t('ADD_DOCUMENT')}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="h-8 w-8 text-primary" />
+      
+                      <span className="text-sm font-medium">
+                        {newDocuments.length} {t('DOCUMENTS_SELECTED')}
+                      </span>
+      
+                      <span className="max-w-[90%] truncate text-xs text-gray-500">
+                        {newDocuments.map((file) => file.name).join(', ')}
+                      </span>
+                    </>
+                  )}
+      
+                  <input
+                    id="document-upload"
+                    type="file"
+                    multiple
+                    accept="image/*,.pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+      
+                      setNewDocuments((prev) => [...prev, ...files]);
+      
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+              </div>
+            </div>
+      
+            {previewImageIndex >= 0 && imageDocuments.length > 0 && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6"
+                onClick={() => setPreviewImageIndex(-1)}
+              >
+                {/* Previous */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="absolute left-6 top-1/2 z-50 -translate-y-1/2 rounded-full bg-white/90"
+                  onClick={(e) => {
+                    e.stopPropagation();
+      
+                    setPreviewImageIndex((prev) => (prev === 0 ? imageDocuments.length - 1 : prev - 1));
+                  }}
+                >
+                  ←
+                </Button>
+      
+                {/* Image */}
+                <div className="relative max-h-[90vh] max-w-[90vw]" onClick={(e) => e.stopPropagation()}>
+                  <img
+                    src={`http://localhost:3000/${imageDocuments[previewImageIndex].file_path}`}
+                    alt={imageDocuments[previewImageIndex].original_name || 'Customer document'}
+                    className="max-h-[85vh] max-w-[85vw] rounded-lg object-contain shadow-2xl"
+                  />
+      
+                  {/* Image name */}
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-md bg-black/60 px-4 py-2 text-sm text-white">
+                    {imageDocuments[previewImageIndex].original_name}
+                  </div>
+      
+                  {/* Counter */}
+                  <div className="absolute right-3 top-3 rounded-md bg-black/60 px-3 py-1 text-sm text-white">
+                    {previewImageIndex + 1} / {imageDocuments.length}
+                  </div>
+                </div>
+      
+                {/* Next */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="absolute right-6 top-1/2 z-50 -translate-y-1/2 rounded-full bg-white/90"
+                  onClick={(e) => {
+                    e.stopPropagation();
+      
+                    setPreviewImageIndex((prev) => (prev === imageDocuments.length - 1 ? 0 : prev + 1));
+                  }}
+                >
+                  →
+                </Button>
+      
+                {/* Close */}
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="icon"
+                  className="absolute right-6 top-6 rounded-full"
+                  onClick={() => setPreviewImageIndex(-1)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+      
 
       <div className="md:col-span-2 flex justify-end">
         <Button type="submit" disabled={isLoading}>

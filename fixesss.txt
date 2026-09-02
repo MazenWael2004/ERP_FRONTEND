@@ -3,4 +3,6 @@ Cannot delete an employee that is linked with a certain user.... DONE
 Cannot delete a job that is linked with a certain employee.... DONE
 Cannot delete a zone that is linked to a customer or an employee DONE
 CHECK PROGRAM EXISTS in front and back dDONE
-CHECK customer EXISIS in front 
+CHECK customer EXISIS in front ?? DONE
+FILTER Customers based on governorate and city. DONE
+RESER FILTER CUSTOMERS STill DONE

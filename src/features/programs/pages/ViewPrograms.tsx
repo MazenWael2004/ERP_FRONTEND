@@ -20,6 +20,7 @@ export default function ViewPrograms() {
   const { hasPermission } = useAuth();
   const canAdd = hasPermission('/programs', 'CREATE');
   const canEdit = hasPermission('/programs', 'WRITE');
+  
   const canDelete = hasPermission('/programs', 'DELETE');
    const isArabic = i18n.language.startsWith('ar');
 

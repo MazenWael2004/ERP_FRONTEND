@@ -1,9 +1,17 @@
 import { api } from "../../../shared/api/axios";
 
 
-export const fetchCustomers = async ()=>{
-    const response = await api.get("/customers");
-    return response.data;
+// export const fetchCustomers = async ()=>{
+//     const response = await api.get("/customers");
+//     return response.data;
+// };
+
+export const fetchCustomers = async (filters = {}) => {
+  const response =  await api.get('/customers/filter', {
+    params: filters,
+  });
+
+  return response.data;
 };
 
 
@@ -66,7 +74,9 @@ export const fetchCitiesOfGovernorate = async (governorateId:any)=>{
   return response.data;
 }
 
-
-
+export const fetchCities = async ()=>{
+  const response = await api.get(`/cities/`);
+  return response.data;
+};
 
 

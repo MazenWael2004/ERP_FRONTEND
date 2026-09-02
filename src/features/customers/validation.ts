@@ -39,11 +39,10 @@ export const createCustomerSchema = z.object({
 
  documents: z
   .instanceof(FileList)
-  .refine((files) => files.length > 0, {
-    message: 'DOCUMENT_REQUIRED',
-  })
+  .optional()
   .refine(
     (files) =>
+      !files ||
       Array.from(files).every((file) =>
         [
           'application/pdf',
@@ -52,18 +51,20 @@ export const createCustomerSchema = z.object({
           'image/webp',
           'application/msword',
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        ].includes(file.type),
+        ].includes(file.type)
       ),
     {
       message: 'INVALID_DOCUMENT_TYPE',
-    },
+    }
   )
   .refine(
     (files) =>
-      Array.from(files).every((file) => file.size <= 5 * 1024 * 1024),
+      !files ||
+      Array.from(files).every(
+        (file) => file.size <= 5 * 1024 * 1024
+      ),
     {
       message: 'DOCUMENT_TOO_LARGE',
-    },
+    }
   ),
-  
 });

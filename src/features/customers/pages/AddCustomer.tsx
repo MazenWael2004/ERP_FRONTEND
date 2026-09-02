@@ -32,7 +32,7 @@ import {
   CommandList,
 } from 'src/components/ui/command';
 
-import { Check, ChevronsUpDown } from 'lucide-react';
+import { Check, ChevronsUpDown,Plus } from 'lucide-react';
 import { Button } from 'src/components/ui/button';
 
 import Spinner from 'src/shared/components/Spinner.tsx';
@@ -624,7 +624,7 @@ function NewCustomer() {
                               value={zoneName}
                               onSelect={() => {
                                 field.onChange(Number(zone.id));
-                                setIsGovernorateSelected(true);
+                                
                               }}
                             >
                               {zoneName}
@@ -728,19 +728,62 @@ function NewCustomer() {
         }}
       />
 
-      <div>
-        <Label htmlFor="Documents">
-          {t('DOCUMENTS')} <span className="text-red-500">*</span>
-        </Label>
-        <Input
-          id="documents"
-          type="file"
-          multiple
-          accept="image/*,.pdf,.doc,.docx"
-          {...register('documents')}
-        />
-        {errors.documents && <span className="error-message">{t(errors.documents.message!)}</span>}
-      </div>
+     <div>
+  <Label
+    htmlFor="documents"
+    className="relative flex h-[168px] cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-lg border-2 border-dashed border-gray-300 transition hover:border-primary hover:bg-gray-50"
+  >
+    <Plus className="h-8 w-8 text-gray-400" />
+
+    <span className="text-sm font-medium text-gray-500">
+      {t('ADD_DOCUMENT')}
+    </span>
+
+    {docs?.length > 0 && (
+      <span className="text-xs text-gray-500">
+        {docs.length} {t('DOCUMENTS_SELECTED')}
+      </span>
+    )}
+  </Label>
+
+  <Input
+    id="documents"
+    type="file"
+    multiple
+    accept="image/*,.pdf,.doc,.docx"
+    className="hidden"
+    {...register('documents')}
+  />
+
+  {docs?.length > 0 && (
+    <div className="mt-3 space-y-2">
+      {Array.from(docs).map((file, index) => (
+        <div
+          key={`${file.name}-${index}`}
+          className="flex items-center gap-2 rounded-md border bg-gray-50 px-3 py-2"
+        >
+          <span className="text-lg">
+            {file.type === 'application/pdf' ? '📄' : '📎'}
+          </span>
+
+          <span className="truncate text-sm text-gray-700">
+            {file.name}
+          </span>
+
+          <span className="ml-auto text-xs text-gray-400">
+            {(file.size / 1024 / 1024).toFixed(2)} MB
+          </span>
+        </div>
+      ))}
+    </div>
+  )}
+
+  {errors.documents && (
+    <span className="error-message">
+      {t(errors.documents.message!)}
+    </span>
+  )}
+</div>
 
       <div className="md:col-span-2 flex justify-end">
         <Button type="submit" disabled={isLoading}>

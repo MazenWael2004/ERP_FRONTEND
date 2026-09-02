@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router';
 import { useEffect, useState } from 'react';
 import companyLogo from '../../../../assets/images/logos/b_connect_egypt_logo-removebg-preview.png';
 import usersIcon from '../../../../assets/images/logos/users.png'
+import { ArrowLeft } from 'lucide-react';
 import { useTheme } from 'src/components/provider/theme-provider';
 import { useAuth } from 'src/features/auth/hooks/useAuth';
 import { useTranslation } from 'react-i18next';
@@ -601,6 +602,46 @@ const SidebarLayout = ({
         </div>
 
       </SimpleBar>
+
+      {/* ==================================================
+    Back to Desk
+================================================== */}
+
+<button
+  type="button"
+  onClick={() => navigate('/desk')}
+  className="
+    mb-5
+    flex
+    w-full
+    items-center
+    justify-center
+    gap-2
+    rounded-md
+    border
+    border-border
+    bg-background
+    px-4
+    py-2.5
+    text-sm
+    font-medium
+    text-foreground
+    transition-colors
+    hover:bg-accent
+    hover:text-accent-foreground
+    focus:outline-none
+    focus:ring-2
+    focus:ring-primary
+  "
+>
+  <ArrowLeft
+    className={`h-4 w-4 ${isRTL ? 'rotate-180' : ''}`}
+  />
+
+  <span>
+    {t('BACK_TO_DESK')}
+  </span>
+</button>
 
     </AMSidebar>
   );

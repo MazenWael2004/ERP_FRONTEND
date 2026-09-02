@@ -76,6 +76,8 @@ export default function AuthProvider({ children }: Props) {
     );
 };
 
+console.log("CURRENT PERMISSIONS:", permissions);
+
   return (
     <AuthContext.Provider
       value={{
@@ -85,6 +87,7 @@ export default function AuthProvider({ children }: Props) {
         logout,
         hasPermission,
         refreshPermissions,
+        permissions,
       }}
     >
       {children}

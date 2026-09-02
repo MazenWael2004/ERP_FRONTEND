@@ -12,6 +12,7 @@ export interface AuthContextType {
     logout: () => void;
     hasPermission: (route: string, action_code: string) => boolean;
     refreshPermissions: () => Promise<void>;
+    permissions: any,
 };
 
 export const AuthContext = createContext<AuthContextType | null>(null);

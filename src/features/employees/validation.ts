@@ -32,6 +32,36 @@ export const createEmployeeSchema = z.object({
   jobId: z.number('JOB_ID_REQUIRED').int().positive(),
 
   zones: z.array(z.number().int()).optional(),
+  documents: z
+    .instanceof(FileList)
+    .optional()
+    .refine(
+      (files) =>
+        !files ||
+        Array.from(files).every((file) =>
+          [
+            'application/pdf',
+            'image/jpeg',
+            'image/png',
+            'image/webp',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          ].includes(file.type)
+        ),
+      {
+        message: 'INVALID_DOCUMENT_TYPE',
+      }
+    )
+    .refine(
+      (files) =>
+        !files ||
+        Array.from(files).every(
+          (file) => file.size <= 5 * 1024 * 1024
+        ),
+      {
+        message: 'DOCUMENT_TOO_LARGE',
+      }
+    ),
 });
 
 // Used only when editing an employee
