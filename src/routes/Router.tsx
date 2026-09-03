@@ -24,6 +24,7 @@ import ViewPrograms from 'src/features/programs/pages/ViewPrograms';
 import NewProgram from 'src/features/programs/pages/NewProgram';
 import EditProgram from 'src/features/programs/pages/EditProgram';
 import ViewPricings from 'src/features/pricings/pages/ViewPricings';
+import NewPricing from 'src/features/pricings/pages/NewPricing';
 /* ***Layouts**** */
 const FullLayout = Loadable(lazy(() => import('../layouts/full/FullLayout')));
 const BlankLayout = Loadable(lazy(() => import('../layouts/blank/BlankLayout')));
@@ -259,6 +260,14 @@ const Router = [
         element: (
           <ProtectedRoute route="/pricings" action_code="READ">
             <ViewPricings />
+          </ProtectedRoute>
+        ),
+      },
+      {
+         path: 'pricings/new-pricing',
+        element: (
+          <ProtectedRoute route="/pricings" action_code="CREATE">
+            <NewPricing />
           </ProtectedRoute>
         ),
       },

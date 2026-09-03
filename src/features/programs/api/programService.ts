@@ -6,6 +6,13 @@ export const fetchPrograms = async ()=>{
         return response.data;
 };
 
+// export const fetchProgramsWithoutAuth = async ()=>{
+//         const response = await api.get("/programs/noauth");
+//         return response.data;
+// };
+
+
+
 
 export const createProgram = async(programData:any)=>{
     const response = await api.post("/programs",programData);

@@ -39,31 +39,28 @@ function ViewPricings() {
 
   const pricingColumns = [
     {
-      accessorKey: 'from_month',
-      header: t('FROM_MONTH'),
+      accessorKey: 'name_en',
+      header: t('PRICING_NAME_EN'),   
+
+    },
+     {
+      accessorKey: 'name_ar',
+      header: t('PRICING_NAME_AR'),   
+
     },
     {
-      accessorKey: 'to_month',
-      header: t('TO_MONTH'),
-    },
-      {
-      accessorKey: 'price',
-      header: t('SUBSCRIPTION_PRICE'),   
+       accessorKey: 'code',
+      header: t('PRICING_CODE'), 
     },
     {
-      accessorKey: isArabic ? 'name_ar' : 'name_en',
-      header: t('PRICING_NAME'),
+        accessorKey:isArabic? 'program_name_ar':'program_name_en',
+        header:t('PROGRAM')
     },
     {
       accessorKey: 'down_payment',
       header: t('DOWN_PAYMENT'),
     },
-    {
-      accessorKey: 'number_of_months_paid_advance',
-      header: t('NUMBER_OF_MONTHS_PAID_ADVANCE'),
-    },
-    
-  
+
   ];
 
   const loadPricings = async () => {
@@ -92,7 +89,7 @@ function ViewPricings() {
           <div className="flex justify-end gap-2">
             {canAdd && (
               <Button
-                onClick={() => nav('/customers/new-customer')}
+                onClick={() => nav('/pricings/new-pricing')}
                 className="bg-green-600 hover:bg-green-700 text-white"
               >
                 <Plus className="mr-2 h-4 w-4" />

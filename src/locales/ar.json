@@ -299,7 +299,25 @@
   "NUMBER_OF_MONTHS_PAID_ADVANCE":"عدد الأشهر المدفوعة مقدماً",
   "FROM_MONTH":"من الشهر",
   "TO_MONTH":"إلى الشهر",
-  "SUBSCRIPTION_PRICE":"سعر الاشتراك الشهري"
+  "SUBSCRIPTION_PRICE":"سعر الاشتراك الشهري",
+  "PRICING_PERIODS":"فترات التسعير",
+  "PRICING_PERIODS_DESCRIPTION": "حدد قيمة الدفع لكل نطاق من الأشهر.",
+  "ADD_PERIOD":"إضافة فترة جديدة",
+  "PRICING_NAME_EN_REQUIRED":"اسم التسعير (باللغة الإنجليزية) مطلوب",
+  "PRICING_NAME_AR_REQUIRED":"اسم التسعير (بالعربية) مطلوب",
+  "DOWN_PAYMENT_REQUIRED":"يُطلب دفع مبلغ مقدم",
+  "NUMBER_OF_MONTHS_PAID_ADVANCE_REQUIRED":"يُطلب تحديد عدد الأشهر المدفوعة مقدماً",
+  "PERIOD":"الفترة رقم",
+  "FROM_MONTH_REQUIRED":"هذا الحقل مطلوب",
+  "TO_MONTH_REQUIRED":"هذا الحقل مطلوب",
+  "PRICE_REQUIRED":"السعر مطلوب",
+  "PRICING_CREATED_SUCCESSFULLY":"تم إنشاء التسعير بنجاح",
+  "PRICING_CODE":"كود التسعير",
+  "PRICING_CODE_REQUIRED":"رمز التسعير مطلوب",
+  "DOWN_PAYMENT_INVALID":"هذه القيمة غير مقبولة",
+  "NUMBER_OF_MONTHS_PAID_ADVANCE_MUST_BE_INTEGER":"يجب أن يكون عدد الأشهر عدداً صحيحاً",
+  "NUMBER_OF_MONTHS_PAID_ADVANCE_INVALID":"هذه القيمة غير مقبولة",
+  "PRICING_CODE_EXISTS":"كود التسعير موجود بالفعل"
   
 
 }
