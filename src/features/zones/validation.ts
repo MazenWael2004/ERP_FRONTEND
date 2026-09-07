@@ -10,4 +10,11 @@ export const createZoneSchema = z.object({
     .string()
     .min(1, "ZONE_NAME_AR_REQUIRED")
     .regex(/^[\u0600-\u06FF\s]+$/, "ZONE_NAME_AR_ONLY_ARABIC"),
+
+   code: z
+    .string()
+    .min(1, "ZONE_CODE_REQUIRED"),
+
+     cityId: z.number('CITY_ID_REQUIRED').int().positive(),
+     governorateId: z.number('GOVERNORATE_ID_REQUIRED').int().positive(),
 });

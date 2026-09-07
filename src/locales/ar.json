@@ -13,6 +13,8 @@
   "LOGOUT":"هل أنت متأكد من أنك تريد تسجيل الخروج؟",
   "YES":"نعم",
   "NO":"لا",
+  "ANNOUNCEMENTS":"الإعلانات و الاجتماعات",
+  "STAY_UPDATED":"ابقَ على اطلاع بأحدث أخبار الشركة والمذكرات والإشعارات.",
   "FROM":"من",
   "TO":"إلى",
    "ALL": "الكل",
@@ -67,7 +69,7 @@
 
   "USER_NAME": "مازن وائل حسين",
   "USER_ROLE": "مدير النظام",
-  "WEBSITE_NAME": "نظام لإدارة الأعمال داخل بيكونكت",
+  "WEBSITE_NAME": "نظام لإدارة الأعمال داخل بي-كونكت",
   "WEBSITE_DESCRIPTION": "منصة مركزية تُستخدم لأتمتة عمليات الشركة",
   "WEBSITE_FEATURE_ONE": "إدارة المستخدمين والموظفين",
   "WEBSITE_FEATURE_TWO": "تحليل المبيعات وتقارير معمقة",
@@ -221,6 +223,10 @@
   "ZONE_NAME_AR_ONLY_ARABIC": "يجب أن يكون اسم المنطقة باللغة العربية",
   "ZONE_EN_ALREADY_EXISTS": "اسم المنطقة باللغة الإنجليزية موجود بالفعل",
   "ZONE_AR_ALREADY_EXISTS": "اسم المنطقة باللغة العربية موجود بالفعل",
+  "ZONE_CODE": "كود المنطقة",
+  "ENTER_ZONE_CODE": "أدخل كود المنطقة",
+  "ZONE_CODE_REQUIRED": "كود المنطقة مطلوب",
+  "ZONE_CODE_ALREADY_EXISTS": "كود المنطقة موجود بالفعل",
   "ZONE_CREATED_SUCCESSFULLY": "تم إنشاء المنطقة بنجاح",
   "ZONE_UPDATED_SUCCESSFULLY": "تم تحديث المنطقة بنجاح",
   "ZONE_DELETED_SUCCESSFULLY":"تم حذف المنطقة بنجاح",
@@ -317,7 +323,9 @@
   "DOWN_PAYMENT_INVALID":"هذه القيمة غير مقبولة",
   "NUMBER_OF_MONTHS_PAID_ADVANCE_MUST_BE_INTEGER":"يجب أن يكون عدد الأشهر عدداً صحيحاً",
   "NUMBER_OF_MONTHS_PAID_ADVANCE_INVALID":"هذه القيمة غير مقبولة",
-  "PRICING_CODE_EXISTS":"كود التسعير موجود بالفعل"
+  "PRICING_CODE_EXISTS":"كود التسعير موجود بالفعل",
+  "PRICING_NAME_ONLY_ENGLISH":"Pricing name must be in english",
+  "PRICING_NAME_ONLY_ARABIC":"يجب أن يكون اسم التسعير باللغة العربية"
   
 
 }

@@ -10,6 +10,8 @@
   "WELCOME_MESSAGE": "Welcome back!",
   "SIGN_IN_MESSAGE": "Sign in to continue to the ERP System",
   "LOGOUT":"Are you sure you want to logout?",
+  "ANNOUNCEMENTS":"Announcements",
+  "STAY_UPDATED":"Stay updated with the latest company news, memos and notices.",
   "SEARCH":"Search...",
   "DISPLAY_COLUMNS":"Display Columns",
   "SEARCH_RELEVANT_ITEMS":"Search relevant items...",
@@ -201,6 +203,10 @@
   "ZONE_NAME_AR_ONLY_ARABIC": "Zone name must be in arabic",
   "ZONE_EN_ALREADY_EXISTS": "Zone name En already exists",
   "ZONE_AR_ALREADY_EXISTS": "Zone name Ar already exists",
+  "ZONE_CODE": "Zone code",
+  "ENTER_ZONE_CODE": "Enter zone code",
+  "ZONE_CODE_REQUIRED": "Zone code is required",
+  "ZONE_CODE_ALREADY_EXISTS": "Zone code already exists",
   "ZONE_CREATED_SUCCESSFULLY": "Zone created successfully",
   "ZONE_UPDATED_SUCCESSFULLY": "Zone updated successfully",
   "ZONE_DELETED_SUCCESSFULLY":"Zone deleted successfully",
@@ -317,5 +323,7 @@
   "DOWN_PAYMENT_INVALID":"This value is invalid",
   "NUMBER_OF_MONTHS_PAID_ADVANCE_MUST_BE_INTEGER":"Number of months must be an integer",
   "NUMBER_OF_MONTHS_PAID_ADVANCE_INVALID":"This value is invalid",
-  "PRICING_CODE_EXISTS":"Pricing code already exists"
+  "PRICING_CODE_EXISTS":"Pricing code already exists",
+  "PRICING_NAME_ONLY_ENGLISH":"Pricing name must be in english",
+  "PRICING_NAME_ONLY_ARABIC":"Pricing name must be in arabic"
 }

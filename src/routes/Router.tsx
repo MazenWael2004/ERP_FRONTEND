@@ -25,6 +25,7 @@ import NewProgram from 'src/features/programs/pages/NewProgram';
 import EditProgram from 'src/features/programs/pages/EditProgram';
 import ViewPricings from 'src/features/pricings/pages/ViewPricings';
 import NewPricing from 'src/features/pricings/pages/NewPricing';
+import Announcements from 'src/shared/pages/Announcements';
 /* ***Layouts**** */
 const FullLayout = Loadable(lazy(() => import('../layouts/full/FullLayout')));
 const BlankLayout = Loadable(lazy(() => import('../layouts/blank/BlankLayout')));
@@ -206,6 +207,7 @@ const Router = [
         ),
       },
       { path: '/unauthorized', element: <Unauthorized /> },
+      { path: '/annoucements', element: <Announcements /> },
       { path: '*', element: <Navigate to="/auth/404" replace /> },
       {
         path: 'customers',

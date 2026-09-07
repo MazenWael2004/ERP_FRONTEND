@@ -11,3 +11,41 @@ CREATE EMPLOYEE DOESNT WORKK
 ===============
 
 tasks
+pricing check exists front and back
+edit pricing front and back
+add pricing program_id
+getting to read different entities without authorization when adding or editing.....
+
+
+address details 
+street 
+neighbourhood 
+street levels
+location
+home phone number dynamic
+sub zones
+
+zone is linked to governroate and city
+
+validate with google maps
+
+upload document in customers
+
+program categories
+
+MASTERfile customers employees
+
+customers
+pharmacy name
+branch
+single or chain big or small
+if chain put all other pharmacies
+address -> 
+
+
+dropdowns
+
+telephone number squares
+
+ZONE code and city_id columnsssss done in add only 
+  
