@@ -1,7 +1,7 @@
 import { IconEye, IconEyeOff } from '@tabler/icons-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import companyLogoIcon from '../../../assets/images/logos/b_connect_egypt_logo-removebg-preview.png';
+import companyLogoIcon from '../../../assets/images/logos/B-ConnectSAPLogo3.png';
 import { zodResolver } from '@hookform/resolvers/zod';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -78,7 +78,7 @@ function LoginPage() {
       </div>
       <div className="second-half-container">
         <div className="company-logo">
-          <img src={companyLogoIcon} alt="B-Connect" style={{ width: 100, height: 100 }} />
+          <img src={companyLogoIcon} alt="B-Connect" style={{ width: 560, height: 80 }} />
         </div>
         <h2>{t('WELCOME_MESSAGE')}</h2>
         <form className="login-form-container" onSubmit={handleSubmit(onSubmit)}>

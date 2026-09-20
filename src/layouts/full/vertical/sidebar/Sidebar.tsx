@@ -489,6 +489,39 @@ const SidebarLayout = ({
             />
           </div>
 
+          {/* ==================================================
+    Global Navigation
+================================================== */}
+
+<div className="pb-4">
+  <AMMenuItem
+    icon={
+      <Icon
+        icon="mdi:bullhorn-outline"
+        height={21}
+        width={21}
+      />
+    }
+    isSelected={pathname === '/announcements'}
+    link="/announcements"
+    component={Link}
+    className={`
+      mt-0.5
+      text-sidebar-foreground
+      dark:text-sidebar-foreground
+      ${
+        pathname === '/announcements'
+          ? '!bg-transparent !text-primary'
+          : ''
+      }
+    `}
+  >
+    <span className="truncate flex-1">
+      {t('ANNOUNCEMENTS')}
+    </span>
+  </AMMenuItem>
+</div>
+
 
 
           {/* ==================================================

@@ -1,25 +1,24 @@
-import { useState } from 'react';
-import CardBox from '../../shared/CardBox';
-import Chart from 'react-apexcharts';
+import { useState } from 'react'
+import CardBox from '../../shared/CardBox'
+import Chart from 'react-apexcharts'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from 'src/components/ui/select';
-import { ApexOptions } from 'apexcharts';
+} from 'src/components/ui/select'
+import { ApexOptions } from 'apexcharts'
 
 const RevenueUpdate = () => {
-  const [selectedMonth, setSelectedMonth] = useState('Year 2025');
+  const [selectedYear, setSelectedYear] = useState('Year 2025')
 
-  // Strongly typed chart data
   interface MonthlyChartData {
-    series: ApexAxisChartSeries;
-    xaxis: ApexOptions['xaxis'];
+    series: ApexAxisChartSeries
+    xaxis: ApexOptions['xaxis']
   }
 
-  const chartDataByMonth: Record<string, MonthlyChartData> = {
+  const chartDataByYear: Record<string, MonthlyChartData> = {
     'Year 2025': {
       series: [
         {
@@ -28,7 +27,7 @@ const RevenueUpdate = () => {
         },
         {
           name: 'Expense',
-          data: [-1800, -1100, -2500, -1500, -600, -1800, -1200, -2300, -1900, -2300, -1200, -2500],
+          data: [1800, 1100, 2500, 1500, 600, 1800, 1200, 2300, 1900, 2300, 1200, 2500],
         },
       ],
       xaxis: {
@@ -48,6 +47,7 @@ const RevenueUpdate = () => {
         ],
       },
     },
+
     'Year 2024': {
       series: [
         {
@@ -56,7 +56,7 @@ const RevenueUpdate = () => {
         },
         {
           name: 'Expense',
-          data: [-1200, -1500, -2000, -1000, -800, -1300, -1500, -600, -1800, -1200, -2300, -1900],
+          data: [1200, 1500, 2000, 1000, 800, 1300, 1500, 600, 1800, 1200, 2300, 1900],
         },
       ],
       xaxis: {
@@ -76,6 +76,7 @@ const RevenueUpdate = () => {
         ],
       },
     },
+
     'Year 2023': {
       series: [
         {
@@ -84,7 +85,7 @@ const RevenueUpdate = () => {
         },
         {
           name: 'Expense',
-          data: [-1500, -1300, -2200, -1200, -700, -1600, -1200, -1500, -2000, -1000, -800, -1300],
+          data: [1500, 1300, 2200, 1200, 700, 1600, 1200, 1500, 2000, 1000, 800, 1300],
         },
       ],
       xaxis: {
@@ -104,100 +105,136 @@ const RevenueUpdate = () => {
         ],
       },
     },
-  };
+  }
 
   const baseChartOptions: ApexOptions = {
     chart: {
-      toolbar: { show: false },
-      type: 'bar' as const,
+      toolbar: {
+        show: false,
+      },
+      type: 'line',
       fontFamily: 'inherit',
       foreColor: '#7C8FAC',
       height: 310,
-      stacked: true,
       width: '100%',
-      offsetX: -20,
+      offsetX: -10,
     },
-    colors: ['var(--color-primary)', 'var(--color-secondary)'],
-    plotOptions: {
-      bar: {
-        horizontal: false,
-        barHeight: '60%',
-        columnWidth: '20%',
-        borderRadius: 6,
-        borderRadiusApplication: 'end',
-        borderRadiusWhenStacked: 'all',
+
+    colors: [
+      'var(--color-primary)',
+      'var(--color-secondary)',
+    ],
+
+    stroke: {
+      curve: 'smooth',
+      width: 3,
+    },
+
+    markers: {
+      size: 4,
+      strokeWidth: 0,
+      hover: {
+        size: 6,
       },
     },
-    dataLabels: { enabled: false },
-    legend: { show: false },
+
+    dataLabels: {
+      enabled: false,
+    },
+
+    legend: {
+      show: true,
+      position: 'top',
+      horizontalAlign: 'left',
+      fontSize: '13px',
+      markers: {
+        size: 8,
+      },
+    },
+
     grid: {
       borderColor: 'rgba(0,0,0,0.1)',
       strokeDashArray: 3,
     },
+
     yaxis: {
-      min: -3000,
-      max: 3000,
-      tickAmount: 6,
       labels: {
         formatter: (val: number) => {
-          return `${val / 1000}k`;
+          return `${val / 1000}k`
         },
       },
     },
+
     tooltip: {
       theme: 'dark',
       y: {
         formatter: (val: number) => {
-          return `${val}k`;
+          return `${val}k`
         },
       },
     },
-  };
 
-  const ChartData: ApexOptions = {
+    xaxis: {
+      axisBorder: {
+        show: false,
+      },
+      axisTicks: {
+        show: false,
+      },
+    },
+  }
+
+  const chartOptions: ApexOptions = {
     ...baseChartOptions,
     xaxis: {
-      ...chartDataByMonth[selectedMonth].xaxis,
-      axisBorder: { show: false },
-      axisTicks: { show: false },
+      ...chartDataByYear[selectedYear].xaxis,
+      axisBorder: {
+        show: false,
+      },
+      axisTicks: {
+        show: false,
+      },
     },
-  };
+  }
 
   return (
-    <>
-      <CardBox className="pb-0 h-full w-full">
-        <div className="sm:flex items-center justify-between mb-6">
-          <div>
-            <h5 className="card-title">Revenue updates</h5>
-            <p className="text-sm text-muted-foreground font-normal">
-              Overview of Profit
-            </p>
-          </div>
-          <div className="sm:mt-0 mt-4">
-            <Select
-              value={selectedMonth}
-              onValueChange={(val) => setSelectedMonth(val as keyof typeof chartDataByMonth)}
-            >
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Select Year" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Year 2025">Year 2025</SelectItem>
-                <SelectItem value="Year 2024">Year 2024</SelectItem>
-                <SelectItem value="Year 2023">Year 2023</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+    <CardBox className="pb-0 h-full w-full">
+      <div className="sm:flex items-center justify-between mb-6">
+        <div>
+          <h5 className="card-title">Revenue Updates</h5>
+
+          <p className="text-sm text-muted-foreground font-normal">
+            Overview of Earnings and Expenses
+          </p>
         </div>
-        <Chart
-          options={ChartData}
-          series={chartDataByMonth[selectedMonth].series}
-          type="bar"
-          height="316px"
-          width={'100%'}
-        />
-      </CardBox>
-    </>
-  );
-};
-export { RevenueUpdate };
+
+        <div className="sm:mt-0 mt-4">
+          <Select
+            value={selectedYear}
+            onValueChange={setSelectedYear}
+          >
+            <SelectTrigger className="w-[140px]">
+              <SelectValue placeholder="Select Year" />
+            </SelectTrigger>
+
+            <SelectContent>
+              <SelectItem value="Year 2025">Year 2025</SelectItem>
+              <SelectItem value="Year 2024">Year 2024</SelectItem>
+              <SelectItem value="Year 2023">Year 2023</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <Chart
+        options={chartOptions}
+        series={chartDataByYear[selectedYear].series}
+        type="line"
+        height="316px"
+        width="100%"
+      />
+    </CardBox>
+  )
+}
+
+export { RevenueUpdate }

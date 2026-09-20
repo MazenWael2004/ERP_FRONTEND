@@ -5,7 +5,7 @@ import { createRoleSchema } from '../validation.ts';
 import axios from 'axios';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createRole, fetchPages, checkRoleExists } from '../../roles/api/roleService.ts';
+import { createRole, fetchPages, checkRoleExists,fetchActions } from '../../roles/api/roleService.ts';
 import Swal from 'sweetalert2';
 import { useState } from 'react';
 
@@ -48,32 +48,35 @@ interface RoleFormData {
 // AVAILABLE ACTIONS
 // ============================================================
 
-const availableActions = [
-  {
-    id: 1,
-    code: 'READ',
-    name_en: 'Read',
-    name_ar: 'قراءة',
-  },
-  {
-    id: 2,
-    code: 'WRITE',
-    name_en: 'Write',
-    name_ar: 'تعديل',
-  },
-  {
-    id: 3,
-    code: 'CREATE',
-    name_en: 'Create',
-    name_ar: 'إنشاء',
-  },
-  {
-    id: 4,
-    code: 'DELETE',
-    name_en: 'Delete',
-    name_ar: 'حذف',
-  },
-];
+
+    
+
+// const availableActions = [
+//   {
+//     id: 1,
+//     code: 'READ',
+//     name_en: 'Read',
+//     name_ar: 'قراءة',
+//   },
+//   {
+//     id: 2,
+//     code: 'WRITE',
+//     name_en: 'Write',
+//     name_ar: 'تعديل',
+//   },
+//   {
+//     id: 3,
+//     code: 'CREATE',
+//     name_en: 'Create',
+//     name_ar: 'إنشاء',
+//   },
+//   {
+//     id: 4,
+//     code: 'DELETE',
+//     name_en: 'Delete',
+//     name_ar: 'حذف',
+//   },
+// ];
 
 // ============================================================
 // COMPONENT
@@ -82,11 +85,23 @@ const availableActions = [
 function NewRole() {
   const nav = useNavigate();
   const { t, i18n } = useTranslation();
-
   const [isLoading, setIsLoading] = useState(false);
-
+  const [availableActions, setAvailableActions] = useState([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [pages, setPages] = useState([]);
+
+  useEffect(() => {
+    const loadActions = async () => {
+      try {
+        const response = await fetchActions();
+        setAvailableActions(response.data);
+      } catch (error) {
+        console.error('Failed to fetch actions:', error);
+      }
+    };
+
+    loadActions();
+  }, []);
 
   // ==========================================================
   // FORM

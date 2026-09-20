@@ -12,6 +12,12 @@ export const fetchRolesWithoutAuth = async ()=>{
 };
 
 
+export const fetchActions = async ()=>{
+        const response = await api.get("/actions");
+        return response.data;
+};
+
+
 
 export const createRole = async (roleData:any)=>{
         const response = await api.post("/roles",roleData);

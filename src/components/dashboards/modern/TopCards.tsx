@@ -1,138 +1,228 @@
+import CardBox from '../../shared/CardBox';
+import iconConnect from 'src/assets/images/svgs/icon-connect.svg';
+import iconSpeechBubble from 'src/assets/images/svgs/icon-speech-bubble.svg';
+import iconFavorites from 'src/assets/images/svgs/icon-favorites.svg';
+import iconMailbox from 'src/assets/images/svgs/icon-mailbox.svg';
+import iconBriefcase from 'src/assets/images/svgs/icon-briefcase.svg';
+import iconUser from 'src/assets/images/svgs/icon-user-male.svg';
 
-
-import CardBox from "../../shared/CardBox"
-import iconConnect from "src/assets/images/svgs/icon-connect.svg"
-import iconSpeechBubble from "src/assets/images/svgs/icon-speech-bubble.svg"
-import iconFavorites from "src/assets/images/svgs/icon-favorites.svg"
-import iconMailbox from "src/assets/images/svgs/icon-mailbox.svg"
-import iconBriefcase from "src/assets/images/svgs/icon-briefcase.svg"
-import iconUser from "src/assets/images/svgs/icon-user-male.svg"
 import { Swiper, SwiperSlide } from 'swiper/react';
-import { Autoplay } from "swiper/modules";
+import { Autoplay } from 'swiper/modules';
+import { Link } from 'react-router';
 
 import 'swiper/css';
-import { Link } from "react-router"
 
 const TopCards = () => {
+  // ============================================================
+  // MOCK DASHBOARD DATA
+  // Replace these values later with API data
+  // ============================================================
 
   const TopCardInfo = [
     {
-      key: "card1",
-      title: "Notes",
-      desc: "4+",
-      img: iconConnect,
-      bgcolor: "bg-info/10 dark:bg-info/10",
-      textclr: "text-info dark:text-info",
-      url: "/apps/notes"
-    },
-    {
-      key: "card2",
-      title: "Icons",
-      desc: "+1K",
-      img: iconSpeechBubble,
-      bgcolor: "bg-success/10 dark:bg-success/10",
-      textclr: "text-success dark:text-success",
-      url: "/icons/iconify"
-    },
-    {
-      key: "card3",
-      title: "Blogs",
-      desc: "10+",
-      img: iconFavorites,
-      bgcolor: "bg-error/10 dark:bg-error/10",
-      textclr: "text-error dark:text-error",
-      url: "/apps/blog/post"
-    },
-    {
-      key: "card4",
-      title: "Tickets",
-      desc: "8+",
-      img: iconMailbox,
-      bgcolor: "bg-secondary/10 dark:bg-secondary/10",
-      textclr: "text-primary dark:text-primary",
-      url: "/apps/tickets"
-    },
-    {
-      key: "card5",
-      title: "Products",
-      desc: "$96k",
-      img: iconBriefcase,
-      bgcolor: "bg-warning/10 dark:bg-warning/10",
-      textclr: "text-warning dark:text-warning",
-      url: "#product"
-
-    },
-    {
-      key: "card7",
-      title: "Employees",
-      desc: "96",
+      key: 'customers',
+      title: 'Active Customers',
+      desc: '2,450',
+      subtitle: 'Customers',
       img: iconUser,
-      bgcolor: "bg-primary/10 dark:bg-lightprimary",
-      textclr: "text-primary dark:text-primary",
-      url: "/utilities/table"
+      bgcolor: 'bg-primary/10 dark:bg-primary/10',
+      textclr: 'text-primary',
+      url: '/customers',
+      badge: '+12 this month',
+      badgeStyle: 'text-success bg-success/10',
     },
     {
-      key: "card8",
-      title: "Blogs",
-      desc: "696",
-      img: iconFavorites,
-      bgcolor: "bg-lighterror dark:bg-lighterror",
-      textclr: "text-error dark:text-error",
-      url: "/apps/blog/post"
+      key: 'target',
+      title: 'Monthly Target',
+      desc: '1.25M',
+      subtitle: 'EGP · September 2026',
+      img: iconBriefcase,
+      bgcolor: 'bg-warning/10 dark:bg-warning/10',
+      textclr: 'text-warning',
+      url: '/targets',
+      badge: 'Target',
+      badgeStyle: 'text-warning bg-warning/10',
     },
-  ]
 
+    {
+      key: 'collections',
+      title: 'Collections',
+      desc: '920K',
+      subtitle: 'EGP collected this month',
+      img: iconMailbox,
+      bgcolor: 'bg-success/10 dark:bg-success/10',
+      textclr: 'text-success',
+      url: '/collections',
+      badge: '+8.5% vs last month',
+      badgeStyle: 'text-success bg-success/10',
+    },
+
+    {
+      key: 'installations',
+      title: 'Pending Installations',
+      desc: '12',
+      subtitle: 'Branches waiting for installation',
+      img: iconConnect,
+      bgcolor: 'bg-cyan-500/10 dark:bg-cyan-500/10',
+      textclr: 'text-cyan-500',
+      url: '/installations',
+      badge: '5 unassigned',
+      badgeStyle: 'text-error bg-error/10',
+    },
+  ];
 
   return (
-    <>
-      <div>
-        <Swiper
-          slidesPerView={6}
-          spaceBetween={24}
-          loop={true}
-          freeMode={true}
-          grabCursor={true}
-          speed={5000}
-          autoplay={{
-            delay: 0,
-            disableOnInteraction: false,
-          }}
-          modules={[Autoplay]}
-          breakpoints={{
-            0: { slidesPerView: 1, spaceBetween: 10 },
-            640: { slidesPerView: 2, spaceBetween: 14 },
-            768: { slidesPerView: 3, spaceBetween: 18 },
-            1030: { slidesPerView: 4, spaceBetween: 18 },
-            1200: { slidesPerView: 6, spaceBetween: 24 },
-          }}
-          className="mySwiper"
-        >
-          {
-            TopCardInfo.map((item) => {
-              return (
-                <SwiperSlide key={item.key} >
-                  <Link to={item.url} >
-                    <CardBox className={`shadow-none ${item.bgcolor} w-full border-none`}>
-                      <div className="text-center hover:scale-105 transition-all ease-in-out">
-                        <div className="flex justify-center">
-                          <img src={item.img}
-                            width="50" height="50" className="mb-3" alt="profile-image" />
-                        </div>
-                        <p className={`font-semibold ${item.textclr} mb-1`}>
-                          {item.title}
-                        </p>
-                        <h5 className={`text-lg font-semibold ${item.textclr} mb-0`}>{item.desc}</h5>
-                      </div>
-                    </CardBox>
-                  </Link>
-                </SwiperSlide>
-              )
-            })
-          }
+    <div className="w-full">
+      <Swiper
+        slidesPerView={6}
+        spaceBetween={20}
+        loop={true}
+        freeMode={true}
+        grabCursor={true}
+        speed={5000}
+        autoplay={{
+          delay: 0,
+          disableOnInteraction: false,
+          pauseOnMouseEnter: true,
+        }}
+        modules={[Autoplay]}
+        breakpoints={{
+          0: {
+            slidesPerView: 1,
+            spaceBetween: 12,
+          },
+          480: {
+            slidesPerView: 1.4,
+            spaceBetween: 12,
+          },
+          640: {
+            slidesPerView: 2,
+            spaceBetween: 14,
+          },
+          768: {
+            slidesPerView: 3,
+            spaceBetween: 16,
+          },
+          1030: {
+            slidesPerView: 4,
+            spaceBetween: 18,
+          },
+          1200: {
+            slidesPerView: 5,
+            spaceBetween: 20,
+          },
+          1400: {
+            slidesPerView: 6,
+            spaceBetween: 20,
+          },
+        }}
+        className="mySwiper !pb-1"
+      >
+        {TopCardInfo.map((item) => (
+          <SwiperSlide key={item.key}>
+            <Link to={item.url} className="block h-full group">
+              <CardBox
+                className={`
+                  w-full
+                  h-full
+                  min-h-[170px]
+                  border
+                  border-transparent
+                  ${item.bgcolor}
+                  shadow-none
+                  transition-all
+                  duration-300
+                  ease-in-out
+                  group-hover:-translate-y-1
+                  group-hover:shadow-md
+                `}
+              >
+                <div className="flex flex-col h-full justify-between">
+                  {/* ============================
+                      TOP SECTION
+                  ============================ */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div
+                      className={`
+                        flex
+                        items-center
+                        justify-center
+                        w-12
+                        h-12
+                        rounded-xl
+                        bg-white/70
+                        dark:bg-white/5
+                        shrink-0
+                        transition-transform
+                        duration-300
+                        group-hover:scale-110
+                      `}
+                    >
+                      <img
+                        src={item.img}
+                        width="28"
+                        height="28"
+                        alt={item.title}
+                        className="object-contain"
+                      />
+                    </div>
 
-        </Swiper>
-      </div>
-    </>
-  )
-}
-export { TopCards }
+                    <span
+                      className={`
+                        text-[11px]
+                        font-semibold
+                        px-2
+                        py-1
+                        rounded-full
+                        whitespace-nowrap
+                        ${item.badgeStyle}
+                      `}
+                    >
+                      {item.badge}
+                    </span>
+                  </div>
+
+                  {/* ============================
+                      KPI CONTENT
+                  ============================ */}
+                  <div className="mt-5">
+                    <p
+                      className={`
+                        text-sm
+                        font-medium
+                        ${item.textclr}
+                        opacity-90
+                        mb-1
+                      `}
+                    >
+                      {item.title}
+                    </p>
+
+                    <h5
+                      className={`
+                        text-2xl
+                        font-bold
+                        tracking-tight
+                        ${item.textclr}
+                        mb-1
+                        
+                      `}
+                    >
+                      {item.desc}
+                    </h5>
+
+                    <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                      {item.subtitle}
+                    </p>
+                  </div>
+                </div>
+              </CardBox>
+            </Link>
+          </SwiperSlide>
+        ))}
+      </Swiper>
+    </div>
+  );
+};
+
+export { TopCards };

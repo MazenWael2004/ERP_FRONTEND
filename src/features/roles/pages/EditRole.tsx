@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import toast from 'react-hot-toast';
 import axios from 'axios';
-import { editRole, getRoleById, fetchPages, checkRoleExists } from '../api/roleService';
+import { editRole, getRoleById, fetchPages, checkRoleExists,fetchActions } from '../api/roleService';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Input } from 'src/components/ui/input';
@@ -13,48 +13,48 @@ import { createRoleSchema } from '../validation';
 import { useAuth } from 'src/features/auth/hooks/useAuth';
 import { useLocation } from 'react-router-dom';
 
-const availablePages = [
-  {
-    id: 4,
-    title_en: 'Users',
-    title_ar: 'المستخدمون',
-    route: '/users',
-  },
+// const availablePages = [
+//   {
+//     id: 4,
+//     title_en: 'Users',
+//     title_ar: 'المستخدمون',
+//     route: '/users',
+//   },
 
-  {
-    id: 5,
-    title_en: 'Roles',
-    title_ar: 'الأدوار',
-    route: '/roles',
-  },
-];
+//   {
+//     id: 5,
+//     title_en: 'Roles',
+//     title_ar: 'الأدوار',
+//     route: '/roles',
+//   },
+// ];
 
-const availableActions = [
-  {
-    id: 1,
-    code: 'READ',
-    name_en: 'Read',
-    name_ar: 'قراءة',
-  },
-  {
-    id: 2,
-    code: 'WRITE',
-    name_en: 'Write',
-    name_ar: 'تعديل',
-  },
-  {
-    id: 3,
-    code: 'CREATE',
-    name_en: 'Create',
-    name_ar: 'إنشاء',
-  },
-  {
-    id: 4,
-    code: 'DELETE',
-    name_en: 'Delete',
-    name_ar: 'حذف',
-  },
-];
+// const availableActions = [
+//   {
+//     id: 1,
+//     code: 'READ',
+//     name_en: 'Read',
+//     name_ar: 'قراءة',
+//   },
+//   {
+//     id: 2,
+//     code: 'WRITE',
+//     name_en: 'Write',
+//     name_ar: 'تعديل',
+//   },
+//   {
+//     id: 3,
+//     code: 'CREATE',
+//     name_en: 'Create',
+//     name_ar: 'إنشاء',
+//   },
+//   {
+//     id: 4,
+//     code: 'DELETE',
+//     name_en: 'Delete',
+//     name_ar: 'حذف',
+//   },
+// ];
 
 function EditRole() {
   const { id } = useParams();
@@ -62,9 +62,23 @@ function EditRole() {
   const location = useLocation();
   const { t, i18n } = useTranslation();
   const [selectedPage, setSelectedPage] = useState('');
+  const [availableActions, setAvailableActions] = useState([]);
   const [pages, setPages] = useState([]);
   const { user, refreshPermissions } = useAuth();
   const currentRole = location.state?.role;
+
+  useEffect(() => {
+    const loadActions = async () => {
+      try {
+        const response = await fetchActions();
+        setAvailableActions(response.data);
+      } catch (error) {
+        console.error('Failed to fetch actions:', error);
+      }
+    };
+
+    loadActions();
+  }, []);
 
   const [isLoading, setIsLoading] = useState(false);
 

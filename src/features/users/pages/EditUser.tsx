@@ -25,6 +25,7 @@ import { useLocation } from 'react-router-dom';
 function EditUser() {
   const { id } = useParams();
   const location = useLocation();
+  const {refreshPermissions } = useAuth();
   const user = location.state?.user;
   const navigate = useNavigate();
   const { t,i18n } = useTranslation();
@@ -154,6 +155,7 @@ const username = watch("userName");
     console.log(data);
     try {
       await updateUser(user.id,data);
+      await refreshPermissions();
 
       toast.success(t("USER_UPDATED_SUCCESSFULLY"));
       navigate("/users");

@@ -1,69 +1,96 @@
-
 import CardBox from "src/components/shared/CardBox"
 import { Badge } from "src/components/ui/badge"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "src/components/ui/table"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "src/components/ui/table"
 
-export const ProductPerformance = () => {
-  const PerformersData = [
+export const RepresentativePerformance = () => {
+  // ============================================================
+  // MOCK DATA
+  // Replace later with API data
+  // ============================================================
+
+  const PerformanceData = [
     {
-      key: "performerData1",
-      username: "Sunil Joshi",
-      designation: "Web Designer",
-      project: "Elite Admin",
-      priority: "Low",
-      color: "primary",
-      bgcolor: "bg-primary text-white",
-      budget: "3.9k"
+      key: "rep-1",
+      username: "Ahmed Mohamed",
+      designation: "Technical Support Representative",
+      target: "50,000",
+      achieved: "47,000",
+      achievement: 94,
+      outstanding: "3,000",
+      status: "Excellent",
+      statusClass: "bg-success text-white",
     },
     {
-      key: "performerData2",
-      username: "Andrew McDownland",
-      designation: "Project Manager",
-      project: "Real Homes WP Theme",
-      priority: "Medium",
-      color: "secondary",
-      bgcolor: "bg-secondary text-white",
-      budget: "24.5k"
+      key: "rep-2",
+      username: "Mohamed Ali",
+      designation: "Technical Support Representative",
+      target: "60,000",
+      achieved: "42,000",
+      achievement: 70,
+      outstanding: "18,000",
+      status: "On Track",
+      statusClass: "bg-primary text-white",
     },
     {
-      key: "performerData3",
-      username: "Christopher Jamil",
-      designation: "Project Manager",
-      project: "MedicalPro WP Theme",
-      priority: "High",
-      color: "error",
-      bgcolor: "bg-error text-white",
-      budget: "12.8k"
+      key: "rep-3",
+      username: "Ali Hassan",
+      designation: "Technical Support Representative",
+      target: "55,000",
+      achieved: "31,000",
+      achievement: 56,
+      outstanding: "24,000",
+      status: "Needs Attention",
+      statusClass: "bg-warning text-white",
     },
     {
-      key: "performerData4",
-      username: "Nirav Joshi",
-      designation: "Frontend Engineer",
-      project: "Hosting Press HTML",
-      priority: "Critical",
-      color: "success",
-      bgcolor: "bg-success text-white",
-      budget: "4.8k"
+      key: "rep-4",
+      username: "Omar Mahmoud",
+      designation: "Technical Support Representative",
+      target: "45,000",
+      achieved: "22,000",
+      achievement: 49,
+      outstanding: "23,000",
+      status: "Behind",
+      statusClass: "bg-error text-white",
     },
     {
-      key: "performerData5",
-      username: "Micheal Doe",
-      designation: "Content Writer",
-      project: "Helping Hands WP Theme",
-      priority: "Low",
-      color: "primary",
-      bgcolor: "bg-primary text-white",
-      budget: "9.3k"
+      key: "rep-5",
+      username: "Khaled Samir",
+      designation: "Technical Support Representative",
+      target: "40,000",
+      achieved: "35,500",
+      achievement: 89,
+      outstanding: "4,500",
+      status: "Excellent",
+      statusClass: "bg-success text-white",
     },
   ]
+
   return (
     <CardBox>
-      <div id="product" className="mb-6">
+      {/* ============================================================
+          HEADER
+      ============================================================ */}
+      <div className="mb-6">
         <div>
-          <h5 className="card-title">Product Performance</h5>
-          <p className="text-sm text-muted-foreground font-normal">Overview of product performance</p>
+          <h5 className="card-title">Representative Performance</h5>
+
+          <p className="text-sm text-muted-foreground font-normal">
+            Monthly collection performance for September 2026
+          </p>
         </div>
       </div>
+
+      {/* ============================================================
+          TABLE
+      ============================================================ */}
       <div className="flex flex-col">
         <div className="-m-1.5 overflow-x-auto">
           <div className="p-1.5 min-w-full inline-block align-middle">
@@ -71,46 +98,119 @@ export const ProductPerformance = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-sm font-semibold">Id</TableHead>
-                    <TableHead className="text-sm font-semibold">Assigned</TableHead>
-                    <TableHead className="text-sm font-semibold">Name</TableHead>
-                    <TableHead className="text-sm font-semibold">Priority</TableHead>
-                    <TableHead className="text-sm font-semibold">Budget</TableHead>
+                    <TableHead className="text-sm font-semibold">
+                      #
+                    </TableHead>
+
+                    <TableHead className="text-sm font-semibold">
+                      Representative
+                    </TableHead>
+
+                    <TableHead className="text-sm font-semibold">
+                      Target
+                    </TableHead>
+
+                    <TableHead className="text-sm font-semibold">
+                      Achieved
+                    </TableHead>
+
+                    <TableHead className="text-sm font-semibold">
+                      Achievement
+                    </TableHead>
+
+                    <TableHead className="text-sm font-semibold">
+                      Outstanding
+                    </TableHead>
+
+                    <TableHead className="text-sm font-semibold">
+                      Status
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
 
                 <TableBody>
-                  {PerformersData.map((item, index) => (
-                    <TableRow key={item.key} className="border-b border-border">
+                  {PerformanceData.map((item, index) => (
+                    <TableRow
+                      key={item.key}
+                      className="border-b border-border"
+                    >
+                      {/* Index */}
                       <TableCell>
-                        <p className="text-muted-foreground font-medium text-sm">{index + 1}</p>
+                        <p className="text-muted-foreground font-medium text-sm">
+                          {index + 1}
+                        </p>
                       </TableCell>
 
-                      <TableCell className="ps-0 min-w-[200px]">
+                      {/* Representative */}
+                      <TableCell className="ps-0 min-w-[220px]">
                         <div>
-                          <h6 className="text-sm font-semibold mb-1">{item.username}</h6>
-                          <p className="text-xs font-medium text-muted-foreground">{item.designation}</p>
+                          <h6 className="text-sm font-semibold mb-1">
+                            {item.username}
+                          </h6>
+
+                          <p className="text-xs font-medium text-muted-foreground">
+                            {item.designation}
+                          </p>
                         </div>
                       </TableCell>
 
+                      {/* Target */}
                       <TableCell>
-                        <p className="font-medium text-sm text-muted-foreground">
-                          {item.project}
+                        <p className="text-sm font-medium text-muted-foreground whitespace-nowrap">
+                          {item.target} EGP
                         </p>
                       </TableCell>
 
+                      {/* Achieved */}
+                      <TableCell>
+                        <p className="text-sm font-semibold text-success whitespace-nowrap">
+                          {item.achieved} EGP
+                        </p>
+                      </TableCell>
+
+                      {/* Achievement */}
+                      <TableCell className="min-w-[150px]">
+                        <div className="flex items-center gap-3">
+                          <div className="w-full max-w-[90px] h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-primary rounded-full"
+                              style={{
+                                width: `${Math.min(
+                                  item.achievement,
+                                  100
+                                )}%`,
+                              }}
+                            />
+                          </div>
+
+                          <span className="text-sm font-semibold whitespace-nowrap">
+                            {item.achievement}%
+                          </span>
+                        </div>
+                      </TableCell>
+
+                      {/* Outstanding */}
+                      <TableCell>
+                        <p className="text-sm font-medium text-error whitespace-nowrap">
+                          {item.outstanding} EGP
+                        </p>
+                      </TableCell>
+
+                      {/* Status */}
                       <TableCell>
                         <Badge
-                          className={`text-[13px] px-3 rounded-full justify-center py-0.5 ${item.bgcolor}`}
+                          className={`
+                            text-[12px]
+                            px-3
+                            rounded-full
+                            justify-center
+                            py-0.5
+                            whitespace-nowrap
+                            ${item.statusClass}
+                          `}
                         >
-                          {item.priority}
+                          {item.status}
                         </Badge>
-                      </TableCell>
-
-                      <TableCell>
-                        <p className="text-[15px] font-medium text-muted-foreground">
-                          {item.budget}
-                        </p>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -121,6 +221,5 @@ export const ProductPerformance = () => {
         </div>
       </div>
     </CardBox>
-
   )
 }

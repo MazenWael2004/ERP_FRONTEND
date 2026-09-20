@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState,useEffect} from 'react';
+import { Checkbox } from 'src/components/ui/checkbox';
 import {
   useReactTable,
   getCoreRowModel,
@@ -84,6 +85,7 @@ export const DataTable = <T extends Record<string, unknown>>({
   const [globalFilter, setGlobalFilter] = useState('');
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnVisibility, setColumnVisibility] = useState({});
+  const [rowSelection, setRowSelection] = useState({});
   const {t} = useTranslation();
   
   
@@ -100,8 +102,31 @@ export const DataTable = <T extends Record<string, unknown>>({
   }, [data.length]);
 
   const finalColumns = useMemo<ColumnDef<T>[]>(() => {
+  const selectColumn: ColumnDef<T> = {
+    id: 'select',
+    enableHiding: false,
+    enableSorting: false,
+    header: ({ table }) => (
+      <Checkbox
+        checked={
+          table.getIsAllPageRowsSelected() ||
+          (table.getIsSomePageRowsSelected() && 'indeterminate')
+        }
+        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+        aria-label="Select all"
+      />
+    ),
+    cell: ({ row }) => (
+      <Checkbox
+        checked={row.getIsSelected()}
+        onCheckedChange={(value) => row.toggleSelected(!!value)}
+        aria-label="Select row"
+      />
+    ),
+  };
+
   if (!onEdit && !onDelete) {
-    return columns;
+    return [selectColumn, ...columns];
   }
 
   const actionColumn: ColumnDef<T> = {
@@ -121,7 +146,6 @@ export const DataTable = <T extends Record<string, unknown>>({
             <Pencil className="size-5" />
           </Button>
         )}
-
         {onDelete && (
           <Button
             size="sm"
@@ -136,7 +160,7 @@ export const DataTable = <T extends Record<string, unknown>>({
     ),
   };
 
-  return [...columns, actionColumn];
+  return [selectColumn, ...columns, actionColumn];
 }, [columns, onEdit, onDelete]);
 
   // const columns = useMemo<ColumnDef<T, unknown>[]>(() => {
@@ -378,7 +402,10 @@ export const DataTable = <T extends Record<string, unknown>>({
     globalFilter,
     sorting,
     columnVisibility,
+    rowSelection, // add
   },
+  enableRowSelection: true, // add
+  onRowSelectionChange: setRowSelection, // add
   onGlobalFilterChange: setGlobalFilter,
   onSortingChange: setSorting,
   onColumnVisibilityChange: setColumnVisibility,
@@ -389,6 +416,10 @@ export const DataTable = <T extends Record<string, unknown>>({
   getPaginationRowModel: getPaginationRowModel(),
 });
 
+useEffect(() => {
+  const selectedRows = table.getSelectedRowModel().rows.map((row) => row.original);
+  console.log('Selected rows:', selectedRows);
+}, [rowSelection]);
   // CSV Download
   const handleDownload = () => {
     if (!data.length) return;

@@ -4,8 +4,11 @@ import { lazy } from 'react';
 import { Navigate, createBrowserRouter } from 'react-router-dom';
 import Loadable from '../layouts/full/shared/loadable/Loadable';
 import ProtectedRoute from '../shared/components/ProtectedRoute'; // Adjust the path if needed
+import AddNewContract from 'src/shared/pages/AddContract';
 import { element } from 'prop-types';
 import ViewUsers from '../features/users/pages/ViewUsers';
+import AddNewCollection from 'src/shared/pages/AddCollection';
+import NewContact from '../features/contacts/pages/AddContact';
 import EditUser from 'src/features/users/pages/EditUser';
 import ViewZones from '../features/zones/pages/ViewZones';
 import NewZone from 'src/features/zones/pages/NewZone';
@@ -16,9 +19,10 @@ import NewRole from 'src/features/roles/pages/NewRole';
 import EditJob from 'src/features/jobs/pages/EditJob';
 import Unauthorized from 'src/shared/pages/Unauthorized';
 import ViewJobs from '../features/jobs/pages/ViewJobs';
+import AddNewRequest from 'src/shared/pages/AddRequest';
 import ViewEmployees from '../features/employees/pages/ViewEmployees';
 import ViewCustomers from '../features/customers/pages/ViewCustomers';
-import NewCustomer from 'src/features/customers/pages/AddCustomer';
+import NewCustomer from 'src/shared/pages/NewCustomer';
 import EditCustomer from 'src/features/customers/pages/EditCustomer';
 import ViewPrograms from 'src/features/programs/pages/ViewPrograms';
 import NewProgram from 'src/features/programs/pages/NewProgram';
@@ -26,6 +30,7 @@ import EditProgram from 'src/features/programs/pages/EditProgram';
 import ViewPricings from 'src/features/pricings/pages/ViewPricings';
 import NewPricing from 'src/features/pricings/pages/NewPricing';
 import Announcements from 'src/shared/pages/Announcements';
+import ViewUncollectedTargets from 'src/shared/pages/ViewUncollectedTargets';
 /* ***Layouts**** */
 const FullLayout = Loadable(lazy(() => import('../layouts/full/FullLayout')));
 const BlankLayout = Loadable(lazy(() => import('../layouts/blank/BlankLayout')));
@@ -134,6 +139,14 @@ const Router = [
         ),
       },
       {
+        path: 'contacts/new-contact',
+        element: (
+          <ProtectedRoute route="/contacts" action_code="CREATE">
+            <NewContact />
+          </ProtectedRoute>
+        ),
+      },
+      {
         path: 'jobs',
         element: (
           <ProtectedRoute route="/jobs" action_code="READ">
@@ -207,7 +220,7 @@ const Router = [
         ),
       },
       { path: '/unauthorized', element: <Unauthorized /> },
-      { path: '/annoucements', element: <Announcements /> },
+      { path: '/announcements', element: <Announcements /> },
       { path: '*', element: <Navigate to="/auth/404" replace /> },
       {
         path: 'customers',
@@ -218,7 +231,7 @@ const Router = [
         ),
       },
       {
-        path: 'customers/new-customer',
+        path: 'add-new-customer',
         element: (
           <ProtectedRoute route="/customers" action_code="CREATE">
             <NewCustomer />
@@ -273,6 +286,38 @@ const Router = [
           </ProtectedRoute>
         ),
       },
+      {
+        path: 'uncollected-targets',
+        element: (
+          // <ProtectedRoute route="/uncollected-targets" action_code="READ">
+            <ViewUncollectedTargets />
+          // </ProtectedRoute>
+        ),
+      },
+      {
+        path:'add-new-collection',
+        element: (
+          // <ProtectedRoute route="/collections" action_code="CREATE">
+            <AddNewCollection />
+          // </ProtectedRoute>
+        ),
+      },
+      {
+        path: '/add-new-contract',
+        element: (
+          // <ProtectedRoute route="/contracts" action_code="CREATE">
+            <AddNewContract />
+          // </ProtectedRoute>
+        ),
+      },
+      {
+        path: '/add-new-request',
+        element: (
+          // <ProtectedRoute route="/requests" action_code="CREATE">
+            <AddNewRequest />
+          // </ProtectedRoute>
+        ),
+      }
     ],
   },
   {
@@ -294,6 +339,7 @@ const Router = [
           </ProtectedRoute>
         ),
       },
+
     ],
   },
 ];

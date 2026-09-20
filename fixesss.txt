@@ -5,6 +5,7 @@ Cannot delete a zone that is linked to a customer or an employee DONE
 CHECK PROGRAM EXISTS in front and back dDONE
 CHECK customer EXISIS in front ?? DONE
 FILTER Customers based on governorate and city. DONE
+Permissions check...
 RESER FILTER CUSTOMERS STill DONE
 CREATE EMPLOYEE DOESNT WORKK
 
@@ -15,7 +16,7 @@ pricing check exists front and back
 edit pricing front and back
 add pricing program_id
 getting to read different entities without authorization when adding or editing.....
-
+reading employees in users edit is not working cuz no authorization
 
 address details 
 street 
@@ -47,5 +48,10 @@ dropdowns
 
 telephone number squares
 
-ZONE code and city_id columnsssss done in add only 
-  
+ZONE code and city_id columnnns in edit front and back done..
+
+kamal
+123 technical support manager
+
+maha.mohamed 
+123
