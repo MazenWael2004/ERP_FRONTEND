@@ -31,6 +31,11 @@ import ViewPricings from 'src/features/pricings/pages/ViewPricings';
 import NewPricing from 'src/features/pricings/pages/NewPricing';
 import Announcements from 'src/shared/pages/Announcements';
 import ViewUncollectedTargets from 'src/shared/pages/ViewUncollectedTargets';
+import OutstandingReport from 'src/shared/pages/OutstandingRecivablesReport';
+import AddTargetPlan from 'src/shared/pages/AddTargetPlan';
+import ToDoList from 'src/shared/pages/ToDoList';
+import TaskDetails from 'src/shared/pages/TaskDetails';
+import InstallationAssignment from 'src/shared/pages/AssignInstallation';
 /* ***Layouts**** */
 const FullLayout = Loadable(lazy(() => import('../layouts/full/FullLayout')));
 const BlankLayout = Loadable(lazy(() => import('../layouts/blank/BlankLayout')));
@@ -317,6 +322,36 @@ const Router = [
             <AddNewRequest />
           // </ProtectedRoute>
         ),
+      },
+      {
+        path: '/outstanding-recivables-reports',
+        element:(
+          <OutstandingReport />
+        )
+      },
+      {
+        path:'/add-new-target-plan',
+        element:(
+          <AddTargetPlan />
+        )
+      },
+      {
+         path:'/to-do-list',
+         element:(
+          <ToDoList />
+        )
+      },
+      {
+         path:'/task-details',
+         element:(
+          <TaskDetails />
+        )
+      },
+      {
+        path:'assign-installation',
+        element:(
+          <InstallationAssignment />
+        )
       }
     ],
   },
