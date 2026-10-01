@@ -1,10 +1,6 @@
 import { useRef, useState } from 'react';
 
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from 'src/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from 'src/components/ui/popover';
 
 import {
   Command,
@@ -14,6 +10,8 @@ import {
   CommandItem,
   CommandList,
 } from 'src/components/ui/command';
+
+import { cn } from 'src/lib/utils';
 
 import {
   ArrowLeft,
@@ -37,12 +35,7 @@ import {
 
 import { useFieldArray, useForm } from 'react-hook-form';
 
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from 'src/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from 'src/components/ui/card';
 
 import { Button } from 'src/components/ui/button';
 import { Input } from 'src/components/ui/input';
@@ -57,6 +50,7 @@ export default function AddCustomerContract() {
 
   const [activeStep, setActiveStep] = useState(1);
   const [participantOpen, setParticipantOpen] = useState(false);
+  const [openBranch, setOpenBranch] = useState(false);
 
   /* =========================================================
      USERS
@@ -113,9 +107,22 @@ export default function AddCustomerContract() {
     },
   ];
 
-  const salesRepresentatives = users.filter(
-    (user) => user.role === 'SALES_REPRESENTATIVE'
-  );
+  /* =========================================================
+     PROGRAMS
+  ========================================================= */
+
+  const programs: any[] = [
+    {
+      id: 1,
+      name_en: 'E-Plus',
+    },
+    {
+      id: 2,
+      name_en: 'E-Chain',
+    },
+  ];
+
+  const salesRepresentatives = users.filter((user) => user.role === 'SALES_REPRESENTATIVE');
 
   /* =========================================================
      FORM
@@ -148,15 +155,16 @@ export default function AddCustomerContract() {
       registrationNumber: '',
 
       contractDate: new Date().toISOString().split('T')[0],
-      branchId: '',
+      branchId: null,
       contractNumber: '',
-      programName: '',
-      plan: '',
+      programId: null,
+      planId: null,
+      contractType: '',
 
       hasParticipant: false,
       participantId: '',
 
-      responsibleRep: '',
+      representativeId: '',
 
       nextDueDate: '',
       installationDate: '',
@@ -166,6 +174,7 @@ export default function AddCustomerContract() {
       paymentMethod: '',
 
       discountAmount: 0,
+      discountAmountInput: 0,
 
       selectedMonths: [],
 
@@ -189,6 +198,7 @@ export default function AddCustomerContract() {
 
       branches: [
         {
+          id:null,
           governorate: '',
           city: '',
           street: '',
@@ -243,34 +253,29 @@ export default function AddCustomerContract() {
   const customerType = watch('customerType');
   const structure = watch('structure');
 
-  const plan = watch('plan');
+  const planId = watch('planId');
+  const contractType = watch('contractType');
 
   const participantId = watch('participantId');
   const hasParticipant = watch('hasParticipant');
 
   const branchId = watch('branchId');
-  const responsibleRep = watch('responsibleRep');
+  const representativeId = watch('representativeId');
 
   const paymentMethod = watch('paymentMethod');
 
   const selectedMonths = watch('selectedMonths') || [];
 
-  const paymentAmount = Number(
-    watch('paymentAmount') || 0
-  );
+  const paymentAmount = Number(watch('paymentAmount') || 0);
 
-  const discountAmountInput = Number(
-    watch('discountAmount') || 0
-  );
+  const discountAmountInput = Number(watch('discountAmount') || 0);
 
   const branches = watch('branches') || [];
 
-  const selectedParticipant = users.find(
-    (user) => String(user.id) === String(participantId)
-  );
+  const selectedParticipant = users.find((user) => String(user.id) === String(participantId));
 
   const selectedResponsibleRep = salesRepresentatives.find(
-    (user) => String(user.id) === String(responsibleRep)
+    (user) => String(user.id) === String(representativeId),
   );
 
   /* =========================================================
@@ -328,14 +333,37 @@ export default function AddCustomerContract() {
     'أغسطس 2027',
   ];
 
-  const planPrices = {
-    SILVER: 600,
-    GOLD: 700,
+  const plans = [
+    {
+      id: 1,
+      name: 'Silver',
+      price: 600,
+    },
+    {
+      id: 2,
+      name: 'Gold',
+      price: 500,
+    },
+  ];
+
+  const contractTypeRules: any = {
+    REGULAR: {
+      label: 'عادي',
+      maxMonths: 12,
+      discountPercentage: 0,
+    },
+
+    SIX_MONTHS: {
+      label: '6 أشهر',
+      maxMonths: 6,
+      discountPercentage: 50,
+    },
   };
 
-  const planName = {
-    SILVER: 'الخطة الفضية',
-    GOLD: 'الخطة الذهبية',
+  const currentContractTypeRule = contractTypeRules[contractType] || {
+    label: '',
+    maxMonths: 0,
+    discountPercentage: 0,
   };
 
   const paymentMethodName = {
@@ -352,46 +380,48 @@ export default function AddCustomerContract() {
 
   const joiningFee = 10000;
 
-  const monthlySubscription =
-    selectedMonths.length *
-    (planPrices[plan as keyof typeof planPrices] || 0);
+  const selectedPlan = plans.find((p: any) => p.id === Number(planId));
 
-  // Total before discount.
-  const grossContractValue =
-    joiningFee + monthlySubscription;
+  const monthlyPrice = selectedPlan?.price || 0;
 
-  // Discount applies to the ENTIRE contract:
-  // joining fee + subscription.
-  const discountAmount = Math.min(
-    Math.max(discountAmountInput, 0),
-    grossContractValue
-  );
+  const monthlySubscription = selectedMonths.length * monthlyPrice;
 
-  const totalContractValue =
-    grossContractValue - discountAmount;
+  /*
+   * Contract type rules:
+   *
+   * REGULAR:
+   * - Maximum 12 months
+   * - No discount
+   *
+   * SIX_MONTHS:
+   * - Maximum 6 months
+   * - 50% discount on subscription
+   */
 
-  const remainingAmount = Math.max(
-    totalContractValue - paymentAmount,
-    0
-  );
+  const discountPercentage = currentContractTypeRule.discountPercentage;
+
+  const subscriptionDiscount = monthlySubscription * (discountPercentage / 100);
+
+  const subscriptionPriceAfterDiscount = monthlySubscription - subscriptionDiscount;
+
+  const grossContractValue = joiningFee + monthlySubscription - subscriptionDiscount;
+
+  /*
+   * The contract-type discount applies to the
+   * subscription only, not the joining fee.
+   */
+  const discountAmount = (subscriptionDiscount+discountAmountInput);
+
+  const totalContractValue = grossContractValue - discountAmountInput;
+
+  const remainingAmount = Math.max(totalContractValue - paymentAmount, 0);
 
   const paidPercentage =
-    totalContractValue > 0
-      ? Math.min(
-          (paymentAmount / totalContractValue) * 100,
-          100
-        )
-      : 0;
+    totalContractValue > 0 ? Math.min((paymentAmount / totalContractValue) * 100, 100) : 0;
 
-  const selectedBranch =
-    branchId !== ''
-      ? branches[Number(branchId)]
-      : null;
+  const selectedBranch = branchId !== '' ? branches[Number(branchId)] : null;
 
-  const customerStatus =
-    customerMode === 'reactivate'
-      ? 'إعادة تفعيل'
-      : 'عميل جديد';
+  const customerStatus = customerMode === 'reactivate' ? 'إعادة تفعيل' : 'عميل جديد';
 
   /* =========================================================
      FILE UPLOAD
@@ -400,8 +430,7 @@ export default function AddCustomerContract() {
   const addDocumentInputRef = useRef<any>(null);
   const replaceDocumentInputRef = useRef<any>(null);
 
-  const [replaceDocumentIndex, setReplaceDocumentIndex] =
-    useState<any>(null);
+  const [replaceDocumentIndex, setReplaceDocumentIndex] = useState<any>(null);
 
   const openDocumentPicker = () => {
     addDocumentInputRef.current?.click();
@@ -453,12 +482,8 @@ export default function AddCustomerContract() {
      REACTIVATE CUSTOMER
   ========================================================= */
 
-  const handleInactiveCustomer = (
-    selectedId: string
-  ) => {
-    const customer = inactiveCustomers.find(
-      (item) => item.id === selectedId
-    );
+  const handleInactiveCustomer = (selectedId: string) => {
+    const customer = inactiveCustomers.find((item) => item.id === selectedId);
 
     if (!customer) {
       setValue('customerId', '');
@@ -495,50 +520,80 @@ export default function AddCustomerContract() {
       shouldValidate: true,
     });
 
-    setValue(
-      'licenseNumber',
-      customer.licenseNumber,
-      {
-        shouldDirty: true,
-        shouldValidate: true,
-      }
-    );
+    setValue('licenseNumber', customer.licenseNumber, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
 
     setValue('taxNumber', customer.taxNumber, {
       shouldDirty: true,
       shouldValidate: true,
     });
 
-    setValue(
-      'registrationNumber',
-      customer.registrationNumber,
-      {
-        shouldDirty: true,
-        shouldValidate: true,
-      }
-    );
+    setValue('registrationNumber', customer.registrationNumber, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
   };
 
   /* =========================================================
      MONTHS
   ========================================================= */
 
-  const toggleMonth = (month: string) => {
-    const current =
-      getValues('selectedMonths') || [];
+  const handleContractTypeChange = (value: string) => {
+    setValue('contractType', value, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
 
-    const updated = current.includes(month)
-      ? current.filter(
-          (item: string) => item !== month
-        )
-      : [...current, month];
+    // Contract type changes the allowed
+    // number of months and discount.
+    setValue('selectedMonths', [], {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+
+    // Discount is calculated automatically.
+    setValue('discountAmount', 0, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  };
+
+  const toggleMonth = (month: string) => {
+    const current = getValues('selectedMonths') || [];
+
+    const isSelected = current.includes(month);
+
+    // Remove selected month
+    if (isSelected) {
+      const updated = current.filter((item: string) => item !== month);
+
+      setValue('selectedMonths', updated, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+
+      return;
+    }
+
+    // Contract type must be selected first
+    if (!contractType) {
+      return;
+    }
+
+    // Prevent selecting more than allowed
+    if (current.length >= currentContractTypeRule.maxMonths) {
+      return;
+    }
+
+    const updated = [...current, month];
 
     setValue('selectedMonths', updated, {
       shouldDirty: true,
       shouldValidate: true,
     });
   };
-
   /* =========================================================
      STEP VALIDATION
   ========================================================= */
@@ -611,6 +666,7 @@ export default function AddCustomerContract() {
       grossContractValue,
 
       discountAmount,
+      discountAmountInput,
 
       totalContractValue,
 
@@ -653,48 +709,33 @@ export default function AddCustomerContract() {
   };
 
   return (
-    <div
-      dir={isRtl ? 'rtl' : 'ltr'}
-      className="min-h-screen bg-background text-foreground"
-    >
+    <div dir={isRtl ? 'rtl' : 'ltr'} className="min-h-screen bg-background text-foreground">
       <form onSubmit={handleSubmit(onSubmit)}>
         <div className="mx-auto max-w-[1500px] space-y-6 p-4 md:p-6 lg:p-8">
-
           {/* =================================================
               HIDDEN FIELDS
           ================================================= */}
 
-          <input
-            type="hidden"
-            {...register('customerMode')}
-          />
+          <input type="hidden" {...register('customerMode')} />
 
           <input
             type="hidden"
             {...register('customerId', {
-              validate: (value) =>
-                customerMode === 'new' ||
-                value ||
-                'يجب اختيار العميل غير النشط',
+              validate: (value) => customerMode === 'new' || value || 'يجب اختيار العميل غير النشط',
             })}
           />
 
           <input
             type="hidden"
             {...register('selectedMonths', {
-              validate: (value) =>
-                value?.length > 0 ||
-                'يجب اختيار شهر واحد على الأقل',
+              validate: (value) => value?.length > 0 || 'يجب اختيار شهر واحد على الأقل',
             })}
           />
 
           <input
             type="hidden"
             {...register('participantId', {
-              validate: (value) =>
-                !hasParticipant ||
-                value ||
-                'يجب اختيار المشارك',
+              validate: (value) => !hasParticipant || value || 'يجب اختيار المشارك',
             })}
           />
 
@@ -703,9 +744,7 @@ export default function AddCustomerContract() {
           ================================================= */}
 
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">
-              إنشاء عميل وعقد جديد
-            </h1>
+            <h1 className="text-2xl font-bold tracking-tight">إنشاء عميل وعقد جديد</h1>
 
             <p className="mt-1 text-sm text-muted-foreground">
               قم بإدخال بيانات العميل ثم تفاصيل العقد والخطة والتحصيل.
@@ -723,35 +762,28 @@ export default function AddCustomerContract() {
                   {
                     id: 1,
                     title: 'بيانات العميل',
-                    description:
-                      'العميل، المستندات، جهات الاتصال، الفروع',
+                    description: 'العميل، المستندات، جهات الاتصال، الفروع',
                     icon: Users,
                   },
                   {
                     id: 2,
                     title: 'العقد والخطة',
-                    description:
-                      'الخطة، الدفع، التحصيل، المراجعة',
+                    description: 'الخطة، الدفع، التحصيل، المراجعة',
                     icon: FileText,
                   },
                 ].map((step: any) => {
                   const Icon = step.icon;
 
-                  const isActive =
-                    activeStep === step.id;
+                  const isActive = activeStep === step.id;
 
-                  const isDone =
-                    activeStep > step.id;
+                  const isDone = activeStep > step.id;
 
                   return (
                     <button
                       key={step.id}
                       type="button"
                       onClick={() => {
-                        if (
-                          step.id === 1 ||
-                          activeStep > step.id
-                        ) {
+                        if (step.id === 1 || activeStep > step.id) {
                           setActiveStep(step.id);
                         }
                       }}
@@ -784,22 +816,14 @@ export default function AddCustomerContract() {
                           }
                         `}
                       >
-                        {isDone ? (
-                          <Check className="h-5 w-5" />
-                        ) : (
-                          <Icon className="h-5 w-5" />
-                        )}
+                        {isDone ? <Check className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
                       </div>
 
                       <div>
                         <div
                           className={`
                             text-sm font-semibold
-                            ${
-                              isActive
-                                ? 'text-background'
-                                : 'text-foreground'
-                            }
+                            ${isActive ? 'text-background' : 'text-foreground'}
                           `}
                         >
                           {step.id}. {step.title}
@@ -808,11 +832,7 @@ export default function AddCustomerContract() {
                         <div
                           className={`
                             mt-1 text-xs
-                            ${
-                              isActive
-                                ? 'text-background/70'
-                                : 'text-muted-foreground'
-                            }
+                            ${isActive ? 'text-background/70' : 'text-muted-foreground'}
                           `}
                         >
                           {step.description}
@@ -835,7 +855,6 @@ export default function AddCustomerContract() {
 
           {activeStep === 1 && (
             <div className="space-y-6">
-
               {/* Customer Mode */}
 
               <Card className="border-border bg-card shadow-sm">
@@ -848,24 +867,16 @@ export default function AddCustomerContract() {
 
                 <CardContent className="space-y-5">
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-
                     {/* New */}
 
                     <button
                       type="button"
                       onClick={() => {
-                        setValue(
-                          'customerMode',
-                          'new',
-                          {
-                            shouldDirty: true,
-                          }
-                        );
+                        setValue('customerMode', 'new', {
+                          shouldDirty: true,
+                        });
 
-                        setValue(
-                          'customerId',
-                          ''
-                        );
+                        setValue('customerId', '');
                       }}
                       className={`
                         rounded-2xl border p-5
@@ -880,9 +891,7 @@ export default function AddCustomerContract() {
                     >
                       <div className="flex items-start justify-between">
                         <div>
-                          <div className="text-sm font-bold">
-                            عميل جديد
-                          </div>
+                          <div className="text-sm font-bold">عميل جديد</div>
 
                           <p
                             className={`
@@ -902,11 +911,7 @@ export default function AddCustomerContract() {
                         <div
                           className={`
                             rounded-xl p-3
-                            ${
-                              customerMode === 'new'
-                                ? 'bg-background/10'
-                                : 'bg-muted'
-                            }
+                            ${customerMode === 'new' ? 'bg-background/10' : 'bg-muted'}
                           `}
                         >
                           <Plus className="h-5 w-5" />
@@ -919,13 +924,9 @@ export default function AddCustomerContract() {
                     <button
                       type="button"
                       onClick={() =>
-                        setValue(
-                          'customerMode',
-                          'reactivate',
-                          {
-                            shouldDirty: true,
-                          }
-                        )
+                        setValue('customerMode', 'reactivate', {
+                          shouldDirty: true,
+                        })
                       }
                       className={`
                         rounded-2xl border p-5
@@ -940,9 +941,7 @@ export default function AddCustomerContract() {
                     >
                       <div className="flex items-start justify-between">
                         <div>
-                          <div className="text-sm font-bold">
-                            إعادة تفعيل عميل غير نشط
-                          </div>
+                          <div className="text-sm font-bold">إعادة تفعيل عميل غير نشط</div>
 
                           <p className="mt-2 text-xs leading-5 text-muted-foreground">
                             اختيار عميل سابق وإعادة تفعيل العقد مع إمكانية تعديل بياناته.
@@ -958,20 +957,14 @@ export default function AddCustomerContract() {
 
                   {customerMode === 'reactivate' && (
                     <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
-                      <Label>
-                        اختر العميل غير النشط
-                      </Label>
+                      <Label>اختر العميل غير النشط</Label>
 
                       <div className="relative mt-2">
                         <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 
                         <select
                           value={customerId}
-                          onChange={(e) =>
-                            handleInactiveCustomer(
-                              e.target.value
-                            )
-                          }
+                          onChange={(e) => handleInactiveCustomer(e.target.value)}
                           className="
                             h-11 w-full appearance-none
                             rounded-xl border border-border
@@ -981,29 +974,17 @@ export default function AddCustomerContract() {
                             focus:ring-ring
                           "
                         >
-                          <option value="">
-                            اختر العميل...
-                          </option>
+                          <option value="">اختر العميل...</option>
 
-                          {inactiveCustomers.map(
-                            (customer) => (
-                              <option
-                                key={customer.id}
-                                value={customer.id}
-                              >
-                                {customer.nameAr} —{' '}
-                                {customer.code}
-                              </option>
-                            )
-                          )}
+                          {inactiveCustomers.map((customer) => (
+                            <option key={customer.id} value={customer.id}>
+                              {customer.nameAr} — {customer.code}
+                            </option>
+                          ))}
                         </select>
                       </div>
 
-                      {errors.customerId && (
-                        <ErrorText>
-                          {errors.customerId.message}
-                        </ErrorText>
-                      )}
+                      {errors.customerId && <ErrorText>{errors.customerId.message}</ErrorText>}
 
                       {customerId && (
                         <div className="mt-3 flex items-center gap-2 text-xs text-amber-800 dark:text-amber-300">
@@ -1027,172 +1008,135 @@ export default function AddCustomerContract() {
                 </CardHeader>
 
                 <CardContent className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
-
                   <FormField
-                    label="اسم العميل بالعربية"
-                    registration={register(
-                      'customerNameAr',
-                      {
-                        required:
-                          'اسم العميل بالعربية مطلوب',
-                        minLength: {
-                          value: 2,
-                          message:
-                            'اسم العميل قصير جدًا',
-                        },
-                      }
-                    )}
-                    placeholder="مثال: صيدلية النور"
-                    error={
-                      errors.customerNameAr?.message
+                    label={
+                      <>
+                        اسم العميل بالعربية
+                        <span className="mr-1 text-red-500">*</span>
+                      </>
                     }
+                    registration={register('customerNameAr', {
+                      required: 'اسم العميل بالعربية مطلوب',
+                      minLength: {
+                        value: 2,
+                        message: 'اسم العميل قصير جدًا',
+                      },
+                    })}
+                    placeholder="مثال: صيدلية الأمل"
+                    error={errors.customerNameAr?.message}
                   />
 
                   <FormField
                     label="اسم العميل بالإنجليزية"
-                    registration={register(
-                      'customerNameEn',
-                      {
-                        required:
-                          'اسم العميل بالإنجليزية مطلوب',
-                      }
-                    )}
-                    placeholder="Example: Al Nour Pharmacy"
-                    error={
-                      errors.customerNameEn?.message
-                    }
+                    registration={register('customerNameEn')}
+                    placeholder="Example: Al Aml Pharmacy"
                   />
 
                   <FormField
-                    label="كود العميل"
-                    registration={register(
-                      'customerCode',
-                      {
-                        required:
-                          'كود العميل مطلوب',
-                      }
-                    )}
+                    label={
+                      <>
+                        كود العميل
+                        <span className="mr-1 text-red-500">*</span>
+                      </>
+                    }
+                    registration={register('customerCode', {
+                      required: 'كود العميل مطلوب',
+                    })}
                     placeholder="PH-0098"
-                    error={
-                      errors.customerCode?.message
-                    }
+                    error={errors.customerCode?.message}
                   />
 
                   <SelectField
-                    label="نوع العميل"
-                    registration={register(
-                      'customerType',
-                      {
-                        required:
-                          'نوع العميل مطلوب',
-                      }
-                    )}
-                    options={[
-                      [
-                        'PHARMACEUTICAL',
-                        'صيدلي',
-                      ],
-                      [
-                        'COMMERCIAL',
-                        'تجاري',
-                      ],
-                    ]}
-                    error={
-                      errors.customerType?.message
+                    label={
+                      <>
+                        نوع العميل
+                        <span className="mr-1 text-red-500">*</span>
+                      </>
                     }
+                    registration={register('customerType', {
+                      required: 'نوع العميل مطلوب',
+                    })}
+                    options={[
+                      ['PHARMACEUTICAL', 'صيدلي'],
+                      ['COMMERCIAL', 'تجاري'],
+                    ]}
+                    error={errors.customerType?.message}
                   />
 
                   <SelectField
-                    label="هيكل العميل"
-                    registration={register(
-                      'structure',
-                      {
-                        required:
-                          'هيكل العميل مطلوب',
-                      }
-                    )}
-                    options={[
-                      [
-                        'SINGLE',
-                        'فرع واحد',
-                      ],
-                      [
-                        'CHAIN',
-                        'سلسلة',
-                      ],
-                    ]}
-                    error={
-                      errors.structure?.message
+                    label={
+                      <>
+                        هيكل العميل
+                        <span className="mr-1 text-red-500">*</span>
+                      </>
                     }
+                    registration={register('structure', {
+                      required: 'هيكل العميل مطلوب',
+                    })}
+                    options={[
+                      ['SINGLE', 'فرع واحد'],
+                      ['CHAIN', 'سلسلة'],
+                    ]}
+                    error={errors.structure?.message}
                   />
 
                   <SelectField
-                    label="فرع المتحدة"
-                    registration={register(
-                      'zoneId',
-                      {
-                        required:
-                          'فرع المتحدة مطلوب',
-                      }
-                    )}
-                    options={[
-                      [
-                        'Zone A',
-                        'منطقة أ',
-                      ],
-                      [
-                        'Zone B',
-                        'منطقة ب',
-                      ],
-                    ]}
-                    error={
-                      errors.zoneId?.message
+                    label={
+                      <>
+                        فرع المتحدة
+                        <span className="mr-1 text-red-500">*</span>
+                      </>
                     }
+                    registration={register('zoneId', {
+                      required: 'فرع المتحدة مطلوب',
+                    })}
+                    options={[
+                      ['Zone A', 'منطقة أ'],
+                      ['Zone B', 'منطقة ب'],
+                    ]}
+                    error={errors.zoneId?.message}
                   />
 
                   <FormField
-                    label="رقم الترخيص"
-                    registration={register(
-                      'licenseNumber',
-                      {
-                        required:
-                          'رقم الترخيص مطلوب',
-                      }
-                    )}
+                    label={
+                      <>
+                        رقم الترخيص
+                        <span className="mr-1 text-red-500">*</span>
+                      </>
+                    }
+                    registration={register('licenseNumber', {
+                      required: 'رقم الترخيص مطلوب',
+                    })}
                     placeholder="LIC-45879"
-                    error={
-                      errors.licenseNumber?.message
-                    }
+                    error={errors.licenseNumber?.message}
                   />
 
                   <FormField
-                    label="الرقم الضريبي / البطاقة الشخصية"
-                    registration={register(
-                      'taxNumber',
-                      {
-                        required:
-                          'الرقم الضريبي مطلوب',
-                      }
-                    )}
+                    label={
+                      <>
+                        الرقم الضريبي \ البطاقة الشخصية
+                        <span className="mr-1 text-red-500">*</span>
+                      </>
+                    }
+                    registration={register('taxNumber', {
+                      required: 'الرقم الضريبي مطلوب',
+                    })}
                     placeholder="302-112-456"
-                    error={
-                      errors.taxNumber?.message
-                    }
+                    error={errors.taxNumber?.message}
                   />
 
                   <FormField
-                    label="السجل التجاري"
-                    registration={register(
-                      'registrationNumber',
-                      {
-                        required:
-                          'رقم التسجيل مطلوب',
-                      }
-                    )}
-                    placeholder="REG-78210"
-                    error={
-                      errors.registrationNumber?.message
+                    label={
+                      <>
+                        السجل التجاري
+                        <span className="mr-1 text-red-500">*</span>
+                      </>
                     }
+                    registration={register('registrationNumber', {
+                      required: 'رقم السجل التجاري مطلوب',
+                    })}
+                    placeholder="REG-78210"
+                    error={errors.registrationNumber?.message}
                   />
                 </CardContent>
               </Card>
@@ -1217,37 +1161,27 @@ export default function AddCustomerContract() {
                       type="button"
                       variant="outline"
                       className="rounded-xl"
-                      onClick={
-                        openDocumentPicker
-                      }
+                      onClick={openDocumentPicker}
                     >
                       <Plus className="ml-2 h-4 w-4" />
                       إضافة مستند
                     </Button>
 
                     <input
-                      ref={
-                        addDocumentInputRef
-                      }
+                      ref={addDocumentInputRef}
                       type="file"
                       multiple
                       accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
                       className="hidden"
-                      onChange={
-                        handleDocumentUpload
-                      }
+                      onChange={handleDocumentUpload}
                     />
 
                     <input
-                      ref={
-                        replaceDocumentInputRef
-                      }
+                      ref={replaceDocumentInputRef}
                       type="file"
                       accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
                       className="hidden"
-                      onChange={
-                        handleDocumentReplace
-                      }
+                      onChange={handleDocumentReplace}
                     />
                   </div>
                 </CardHeader>
@@ -1255,83 +1189,61 @@ export default function AddCustomerContract() {
                 <CardContent>
                   {documentFields.length > 0 ? (
                     <div className="space-y-3">
-                      {documentFields.map(
-                        (
-                          document: any,
-                          index: number
-                        ) => (
-                          <div
-                            key={document.id}
-                            className="
+                      {documentFields.map((document: any, index: number) => (
+                        <div
+                          key={document.id}
+                          className="
                               flex items-center justify-between
                               gap-4 rounded-2xl border
                               border-border bg-muted/40 p-4
                             "
-                          >
-                            <div className="flex min-w-0 items-center gap-3">
-                              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-background shadow-sm">
-                                <FileText className="h-5 w-5 text-muted-foreground" />
-                              </div>
-
-                              <div className="min-w-0">
-                                <div className="truncate text-sm font-semibold">
-                                  {document.name}
-                                </div>
-
-                                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                  <span>
-                                    {document.type ||
-                                      'ملف'}
-                                  </span>
-
-                                  {document.size > 0 && (
-                                    <>
-                                      <span>•</span>
-
-                                      <span>
-                                        {formatFileSize(
-                                          document.size
-                                        )}
-                                      </span>
-                                    </>
-                                  )}
-                                </div>
-                              </div>
+                        >
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-background shadow-sm">
+                              <FileText className="h-5 w-5 text-muted-foreground" />
                             </div>
 
-                            <div className="flex shrink-0 items-center gap-2">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="rounded-xl"
-                                onClick={() =>
-                                  openReplacePicker(
-                                    index
-                                  )
-                                }
-                              >
-                                <Upload className="ml-2 h-4 w-4" />
-                                استبدال
-                              </Button>
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-semibold">{document.name}</div>
 
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="rounded-xl text-destructive hover:bg-destructive/10"
-                                onClick={() =>
-                                  removeDocument(
-                                    index
-                                  )
-                                }
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                <span>{document.type || 'ملف'}</span>
+
+                                {document.size > 0 && (
+                                  <>
+                                    <span>•</span>
+
+                                    <span>{formatFileSize(document.size)}</span>
+                                  </>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        )
-                      )}
+
+                          <div className="flex shrink-0 items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="rounded-xl"
+                              onClick={() => openReplacePicker(index)}
+                            >
+                              <Upload className="ml-2 h-4 w-4" />
+                              استبدال
+                            </Button>
+
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="rounded-xl text-destructive hover:bg-destructive/10"
+                              onClick={() => removeDocument(index)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <div
@@ -1346,9 +1258,7 @@ export default function AddCustomerContract() {
                         <Upload className="h-6 w-6 text-muted-foreground" />
                       </div>
 
-                      <p className="text-sm font-semibold">
-                        لا توجد مستندات
-                      </p>
+                      <p className="text-sm font-semibold">لا توجد مستندات</p>
 
                       <p className="mt-1 text-xs text-muted-foreground">
                         يمكنك رفع PDF أو Word أو Excel أو الصور
@@ -1358,9 +1268,7 @@ export default function AddCustomerContract() {
                         type="button"
                         variant="outline"
                         className="mt-4 rounded-xl"
-                        onClick={
-                          openDocumentPicker
-                        }
+                        onClick={openDocumentPicker}
                       >
                         <Upload className="ml-2 h-4 w-4" />
                         رفع مستند
@@ -1411,183 +1319,133 @@ export default function AddCustomerContract() {
                 </CardHeader>
 
                 <CardContent className="space-y-5">
-                  {contactFields.map(
-                    (
-                      contact: any,
-                      contactIndex: number
-                    ) => {
-                      const contactError = (
-                        errors as any
-                      ).contacts?.[
-                        contactIndex
-                      ];
+                  {contactFields.map((contact: any, contactIndex: number) => {
+                    const contactError = (errors as any).contacts?.[contactIndex];
 
-                      return (
-                        <div
-                          key={contact.id}
-                          className="
+                    return (
+                      <div
+                        key={contact.id}
+                        className="
                             rounded-2xl border
                             border-border bg-muted/30 p-5
                           "
-                        >
-                          <div className="mb-5 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-background shadow-sm">
-                                <span className="text-sm font-bold">
-                                  {contactIndex + 1}
-                                </span>
-                              </div>
-
-                              <div>
-                                <div className="text-sm font-semibold">
-                                  جهة الاتصال{' '}
-                                  {contactIndex + 1}
-                                </div>
-
-                                <div className="mt-1 text-xs text-muted-foreground">
-                                  بيانات المسؤول أو الموظف
-                                </div>
-                              </div>
+                      >
+                        <div className="mb-5 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-background shadow-sm">
+                              <span className="text-sm font-bold">{contactIndex + 1}</span>
                             </div>
 
-                            {contactFields.length > 1 && (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="rounded-xl text-destructive hover:bg-destructive/10"
-                                onClick={() =>
-                                  removeContact(
-                                    contactIndex
-                                  )
-                                }
-                              >
-                                <Trash2 className="ml-2 h-4 w-4" />
-                                حذف
-                              </Button>
-                            )}
+                            <div>
+                              <div className="text-sm font-semibold">
+                                جهة الاتصال {contactIndex + 1}
+                              </div>
+
+                              <div className="mt-1 text-xs text-muted-foreground">
+                                بيانات المسؤول أو الموظف
+                              </div>
+                            </div>
                           </div>
 
-                          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                          {contactFields.length > 1 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="rounded-xl text-destructive hover:bg-destructive/10"
+                              onClick={() => removeContact(contactIndex)}
+                            >
+                              <Trash2 className="ml-2 h-4 w-4" />
+                              حذف
+                            </Button>
+                          )}
+                        </div>
 
-                            <SelectField
-                              label="نوع جهة الاتصال"
-                              registration={register(
-                                `contacts.${contactIndex}.type`,
-                                {
-                                  required:
-                                    'نوع جهة الاتصال مطلوب',
-                                }
-                              )}
-                              options={[
-                                [
-                                  'OWNER',
-                                  'مالك',
-                                ],
-                                [
-                                  'MANAGER',
-                                  'مدير',
-                                ],
-                                [
-                                  'EMPLOYEE',
-                                  'موظف',
-                                ],
-                              ]}
-                              error={
-                                contactError?.type
-                                  ?.message
-                              }
-                            />
-
-                            <FormField
-                              label="الاسم بالعربية"
-                              registration={register(
-                                `contacts.${contactIndex}.nameAr`,
-                                {
-                                  required:
-                                    'اسم جهة الاتصال مطلوب',
-                                }
-                              )}
-                              placeholder="الاسم بالعربية"
-                              error={
-                                contactError?.nameAr
-                                  ?.message
-                              }
-                            />
-
-                            <FormField
-                              label="الاسم بالإنجليزية"
-                              registration={register(
-                                `contacts.${contactIndex}.nameEn`,
-                                {
-                                  required:
-                                    'الاسم بالإنجليزية مطلوب',
-                                }
-                              )}
-                              placeholder="English name"
-                              error={
-                                contactError?.nameEn
-                                  ?.message
-                              }
-                            />
-
-                            <FormField
-                              label="الرقم القومي"
-                              registration={register(
-                                `contacts.${contactIndex}.nationalId`,
-                                {
-                                  required:
-                                    'الرقم القومي مطلوب',
-                                  pattern: {
-                                    value: /^\d{14}$/,
-                                    message:
-                                      'الرقم القومي يجب أن يكون 14 رقمًا',
-                                  },
-                                }
-                              )}
-                              placeholder="14 رقم"
-                              error={
-                                contactError
-                                  ?.nationalId
-                                  ?.message
-                              }
-                            />
-
-                            <FormField
-                              label="البريد الإلكتروني"
-                              registration={register(
-                                `contacts.${contactIndex}.email`,
-                                {
-                                  required:
-                                    'البريد الإلكتروني مطلوب',
-                                  pattern: {
-                                    value:
-                                      /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-                                    message:
-                                      'البريد الإلكتروني غير صحيح',
-                                  },
-                                }
-                              )}
-                              placeholder="name@example.com"
-                              error={
-                                contactError?.email
-                                  ?.message
-                              }
-                            />
-                          </div>
-
-                          <ContactPhones
-                            control={control}
-                            register={register}
-                            contactIndex={
-                              contactIndex
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                          <SelectField
+                            label={
+                              <>
+                                نوع جهات الاتصال
+                                <span className="mr-1 text-red-500">*</span>
+                              </>
                             }
-                            errors={errors}
+                            registration={register(`contacts.${contactIndex}.type`, {
+                              required: 'نوع جهة الاتصال مطلوب',
+                            })}
+                            options={[
+                              ['OWNER', 'مالك'],
+                              ['MANAGER', 'مدير'],
+                              ['EMPLOYEE', 'موظف'],
+                            ]}
+                            error={contactError?.type?.message}
+                          />
+
+                          <FormField
+                            label={
+                              <>
+                                الاسم باللغة العربية
+                                <span className="mr-1 text-red-500">*</span>
+                              </>
+                            }
+                            registration={register(`contacts.${contactIndex}.nameAr`, {
+                              required: 'اسم جهة الاتصال مطلوب',
+                            })}
+                            placeholder="الاسم بالعربية"
+                            error={contactError?.nameAr?.message}
+                          />
+
+                          <FormField
+                            label="الاسم بالإنجليزية"
+                            registration={register(`contacts.${contactIndex}.nameEn`)}
+                            placeholder="English name"
+                          />
+
+                          <FormField
+                            label={
+                              <>
+                                الرقم القومي
+                                <span className="mr-1 text-red-500">*</span>
+                              </>
+                            }
+                            registration={register(`contacts.${contactIndex}.nationalId`, {
+                              required: 'الرقم القومي مطلوب',
+                              pattern: {
+                                value: /^\d{14}$/,
+                                message: 'الرقم القومي يجب أن يكون 14 رقمًا',
+                              },
+                            })}
+                            placeholder="29501023201952"
+                            error={contactError?.nationalId?.message}
+                          />
+
+                          <FormField
+                            label={
+                              <>
+                                البريد الإكتروني
+                                <span className="mr-1 text-red-500">*</span>
+                              </>
+                            }
+                            registration={register(`contacts.${contactIndex}.email`, {
+                              required: 'البريد الإلكتروني مطلوب',
+                              pattern: {
+                                value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                                message: 'البريد الإلكتروني غير صحيح',
+                              },
+                            })}
+                            placeholder="name@example.com"
+                            error={contactError?.email?.message}
                           />
                         </div>
-                      );
-                    }
-                  )}
+
+                        <ContactPhones
+                          control={control}
+                          register={register}
+                          contactIndex={contactIndex}
+                          errors={errors}
+                        />
+                      </div>
+                    );
+                  })}
                 </CardContent>
               </Card>
 
@@ -1606,24 +1464,24 @@ export default function AddCustomerContract() {
                         أضف الفروع التابعة للعميل وأدخل بيانات كل فرع
                       </p>
                     </div>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="rounded-xl"
-                      onClick={() =>
-                        appendBranch({
-                          governorate: '',
-                          city: '',
-                          street: '',
-                          buildingNumber: '',
-                          glnCode: '',
-                        })
-                      }
-                    >
-                      <Plus className="ml-2 h-4 w-4" />
-                      إضافة فرع
-                    </Button>
+                    {structure === 'CHAIN' && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-xl"
+                        onClick={() =>
+                          appendBranch({
+                            governorate: '',
+                            city: '',
+                            street: '',
+                            buildingNumber: '',
+                            glnCode: '',
+                          })
+                        }
+                      >
+                        إضافة فرع
+                      </Button>
+                    )}
                   </div>
                 </CardHeader>
 
@@ -1633,69 +1491,45 @@ export default function AddCustomerContract() {
                       <table className="w-full min-w-[1000px] text-sm">
                         <thead>
                           <tr className="border-b bg-muted/40">
-                            <th className="px-4 py-3 text-right font-semibold">
-                              #
-                            </th>
+                            <th className="px-4 py-3 text-right font-semibold">#</th>
 
-                            <th className="px-4 py-3 text-right font-semibold">
-                              المحافظة
-                            </th>
+                            <th className="px-4 py-3 text-right font-semibold">المحافظة</th>
 
-                            <th className="px-4 py-3 text-right font-semibold">
-                              المدينة
-                            </th>
+                            <th className="px-4 py-3 text-right font-semibold">المدينة</th>
 
-                            <th className="px-4 py-3 text-right font-semibold">
-                              الشارع
-                            </th>
+                            <th className="px-4 py-3 text-right font-semibold">الشارع</th>
 
                             <th className="px-4 py-3 text-right font-semibold">
                               رمز الموقع العالمي (GLN)
                             </th>
 
-                            <th className="px-4 py-3 text-right font-semibold">
-                              رقم المبنى
-                            </th>
+                            <th className="px-4 py-3 text-right font-semibold">رقم المبنى</th>
 
-                            <th className="px-4 py-3 text-center font-semibold">
-                              الإجراءات
-                            </th>
+                            <th className="px-4 py-3 text-center font-semibold">الإجراءات</th>
                           </tr>
                         </thead>
 
                         <tbody>
-                          {branchFields.map(
-                            (
-                              branch: any,
-                              index: number
-                            ) => {
-                              const branchError = (
-                                errors as any
-                              ).branches?.[
-                                index
-                              ];
+                          {branchFields.map((branch: any, index: number) => {
+                            const branchError = (errors as any).branches?.[index];
 
-                              return (
-                                <tr
-                                  key={branch.id}
-                                  className="border-b last:border-b-0 hover:bg-muted/20"
-                                >
-                                  <td className="px-4 py-3">
-                                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-xs font-semibold">
-                                      {index + 1}
-                                    </div>
-                                  </td>
+                            return (
+                              <tr
+                                key={branch.id}
+                                className="border-b last:border-b-0 hover:bg-muted/20"
+                              >
+                                <td className="px-4 py-3">
+                                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-xs font-semibold">
+                                    {index + 1}
+                                  </div>
+                                </td>
 
-                                  <td className="px-4 py-3">
-                                    <select
-                                      {...register(
-                                        `branches.${index}.governorate`,
-                                        {
-                                          required:
-                                            'المحافظة مطلوبة',
-                                        }
-                                      )}
-                                      className="
+                                <td className="px-4 py-3">
+                                  <select
+                                    {...register(`branches.${index}.governorate`, {
+                                      required: 'المحافظة مطلوبة',
+                                    })}
+                                    className="
                                         h-11 w-full
                                         rounded-xl border
                                         border-border
@@ -1706,178 +1540,100 @@ export default function AddCustomerContract() {
                                         focus:ring-2
                                         focus:ring-ring
                                       "
+                                  >
+                                    <option value="">اختر المحافظة</option>
+
+                                    <option value="القاهرة">القاهرة</option>
+
+                                    <option value="الجيزة">الجيزة</option>
+
+                                    <option value="القليوبية">القليوبية</option>
+
+                                    <option value="الإسكندرية">الإسكندرية</option>
+
+                                    <option value="الشرقية">الشرقية</option>
+
+                                    <option value="الدقهلية">الدقهلية</option>
+                                  </select>
+
+                                  {branchError?.governorate?.message && (
+                                    <ErrorText>{branchError.governorate.message}</ErrorText>
+                                  )}
+                                </td>
+
+                                <td className="px-4 py-3">
+                                  <Input
+                                    {...register(`branches.${index}.city`, {
+                                      required: 'المدينة مطلوبة',
+                                    })}
+                                    placeholder="مثال: الدقي"
+                                    className="h-11 rounded-xl bg-background"
+                                  />
+
+                                  {branchError?.city?.message && (
+                                    <ErrorText>{branchError.city.message}</ErrorText>
+                                  )}
+                                </td>
+
+                                <td className="px-4 py-3">
+                                  <Input
+                                    {...register(`branches.${index}.street`, {
+                                      required: 'الشارع مطلوب',
+                                    })}
+                                    placeholder="شارع التحرير"
+                                    className="h-11 rounded-xl bg-background"
+                                  />
+
+                                  {branchError?.street?.message && (
+                                    <ErrorText>{branchError.street.message}</ErrorText>
+                                  )}
+                                </td>
+
+                                <td className="px-4 py-3">
+                                  <Input
+                                    {...register(`branches.${index}.glnCode`, {
+                                      required: 'رمز الموقع العالمي (GLN) مطلوب',
+                                    })}
+                                    placeholder="22828317"
+                                    className="h-11 rounded-xl bg-background"
+                                  />
+
+                                  {branchError?.glnCode?.message && (
+                                    <ErrorText>{branchError.glnCode.message}</ErrorText>
+                                  )}
+                                </td>
+
+                                <td className="px-4 py-3">
+                                  <Input
+                                    {...register(`branches.${index}.buildingNumber`, {
+                                      required: 'رقم المبنى مطلوب',
+                                    })}
+                                    placeholder="25"
+                                    className="h-11 rounded-xl bg-background"
+                                  />
+
+                                  {branchError?.buildingNumber?.message && (
+                                    <ErrorText>{branchError.buildingNumber.message}</ErrorText>
+                                  )}
+                                </td>
+
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-9 w-9 rounded-lg text-destructive hover:bg-destructive/10"
+                                      onClick={() => removeBranch(index)}
+                                      disabled={branchFields.length === 1}
                                     >
-                                      <option value="">
-                                        اختر المحافظة
-                                      </option>
-
-                                      <option value="القاهرة">
-                                        القاهرة
-                                      </option>
-
-                                      <option value="الجيزة">
-                                        الجيزة
-                                      </option>
-
-                                      <option value="القليوبية">
-                                        القليوبية
-                                      </option>
-
-                                      <option value="الإسكندرية">
-                                        الإسكندرية
-                                      </option>
-
-                                      <option value="الشرقية">
-                                        الشرقية
-                                      </option>
-
-                                      <option value="الدقهلية">
-                                        الدقهلية
-                                      </option>
-                                    </select>
-
-                                    {branchError
-                                      ?.governorate
-                                      ?.message && (
-                                      <ErrorText>
-                                        {
-                                          branchError
-                                            .governorate
-                                            .message
-                                        }
-                                      </ErrorText>
-                                    )}
-                                  </td>
-
-                                  <td className="px-4 py-3">
-                                    <Input
-                                      {...register(
-                                        `branches.${index}.city`,
-                                        {
-                                          required:
-                                            'المدينة مطلوبة',
-                                        }
-                                      )}
-                                      placeholder="مثال: الدقي"
-                                      className="h-11 rounded-xl bg-background"
-                                    />
-
-                                    {branchError
-                                      ?.city
-                                      ?.message && (
-                                      <ErrorText>
-                                        {
-                                          branchError
-                                            .city
-                                            .message
-                                        }
-                                      </ErrorText>
-                                    )}
-                                  </td>
-
-                                  <td className="px-4 py-3">
-                                    <Input
-                                      {...register(
-                                        `branches.${index}.street`,
-                                        {
-                                          required:
-                                            'الشارع مطلوب',
-                                        }
-                                      )}
-                                      placeholder="شارع التحرير"
-                                      className="h-11 rounded-xl bg-background"
-                                    />
-
-                                    {branchError
-                                      ?.street
-                                      ?.message && (
-                                      <ErrorText>
-                                        {
-                                          branchError
-                                            .street
-                                            .message
-                                        }
-                                      </ErrorText>
-                                    )}
-                                  </td>
-
-                                  <td className="px-4 py-3">
-                                    <Input
-                                      {...register(
-                                        `branches.${index}.glnCode`,
-                                        {
-                                          required:
-                                            'رمز الموقع العالمي (GLN) مطلوب',
-                                        }
-                                      )}
-                                      placeholder="22828317"
-                                      className="h-11 rounded-xl bg-background"
-                                    />
-
-                                    {branchError
-                                      ?.glnCode
-                                      ?.message && (
-                                      <ErrorText>
-                                        {
-                                          branchError
-                                            .glnCode
-                                            .message
-                                        }
-                                      </ErrorText>
-                                    )}
-                                  </td>
-
-                                  <td className="px-4 py-3">
-                                    <Input
-                                      {...register(
-                                        `branches.${index}.buildingNumber`,
-                                        {
-                                          required:
-                                            'رقم المبنى مطلوب',
-                                        }
-                                      )}
-                                      placeholder="25"
-                                      className="h-11 rounded-xl bg-background"
-                                    />
-
-                                    {branchError
-                                      ?.buildingNumber
-                                      ?.message && (
-                                      <ErrorText>
-                                        {
-                                          branchError
-                                            .buildingNumber
-                                            .message
-                                        }
-                                      </ErrorText>
-                                    )}
-                                  </td>
-
-                                  <td className="px-4 py-3">
-                                    <div className="flex items-center justify-center gap-1">
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-9 w-9 rounded-lg text-destructive hover:bg-destructive/10"
-                                        onClick={() =>
-                                          removeBranch(
-                                            index
-                                          )
-                                        }
-                                        disabled={
-                                          branchFields.length ===
-                                          1
-                                        }
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                  </td>
-                                </tr>
-                              );
-                            }
-                          )}
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -1893,7 +1649,6 @@ export default function AddCustomerContract() {
 
           {activeStep === 2 && (
             <div className="space-y-6">
-
               {/* Contract */}
 
               <Card className="border-border bg-card shadow-sm">
@@ -1905,22 +1660,17 @@ export default function AddCustomerContract() {
                 </CardHeader>
 
                 <CardContent className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
-
                   {/* Contract Date */}
 
                   <div>
-                    <Label>
-                      تاريخ العقد
-                    </Label>
+                    <Label>تاريخ العقد</Label>
 
                     <div className="relative mt-2">
                       <CalendarDays className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 
                       <Input
                         type="date"
-                        {...register(
-                          'contractDate'
-                        )}
+                        {...register('contractDate')}
                         readOnly
                         className="h-11 rounded-xl pr-10"
                       />
@@ -1930,132 +1680,130 @@ export default function AddCustomerContract() {
                   {/* Contract Number */}
 
                   <FormField
-                    label="رقم العقد"
-                    registration={register(
-                      'contractNumber',
-                      {
-                        required:
-                          'رقم العقد مطلوب',
-                      }
-                    )}
-                    error={
-                      errors.contractNumber
-                        ?.message
+                    label={
+                      <>
+                        رقم العقد
+                        <span className="mr-1 text-red-500">*</span>
+                      </>
                     }
+                    registration={register('contractNumber', {
+                      required: 'رقم العقد مطلوب',
+                    })}
+                    error={errors.contractNumber?.message}
                   />
 
                   {/* Branch */}
 
                   <SelectField
-                    label="الفرع التابع للعميل"
-                    registration={register(
-                      'branchId',
-                      {
-                        required:
-                          'يجب اختيار الفرع',
-                      }
-                    )}
+                    label={
+                      <>
+                        الفرع التابع للعميل
+                        <span className="mr-1 text-red-500">*</span>
+                      </>
+                    }
+                    registration={register('branchId', {
+                      required: 'يجب اختيار الفرع',
+                    })}
                     options={[
                       ['', 'اختر الفرع'],
 
-                      ...branches.map(
-                        (
-                          branch: any,
-                          index: number
-                        ) => [
-                          String(index),
-                          `الفرع ${index + 1} — ${
-                            branch.city ||
-                            'مدينة غير محددة'
-                          }${
-                            branch.glnCode
-                              ? ` — ${branch.glnCode}`
-                              : ''
-                          }`,
-                        ]
-                      ),
+                      ...branches.map((branch: any, index: number) => [
+                        String(index),
+                        `الفرع ${index + 1} — ${branch.city || 'مدينة غير محددة'}${
+                          branch.glnCode ? ` — ${branch.glnCode}` : ''
+                        }`,
+                      ]),
                     ]}
-                    error={
-                      errors.branchId?.message
-                    }
+                    error={errors.branchId?.message}
                   />
 
-                  {/* Program */}
-
-                  <FormField
-                    label="اسم البرنامج"
-                    registration={register(
-                      'programName',
-                      {
-                        required:
-                          'اسم البرنامج مطلوب',
-                      }
-                    )}
-                    placeholder="اسم البرنامج"
-                    error={
-                      errors.programName
-                        ?.message
+                  <SelectField
+                    label={
+                      <>
+                        اسم البرنامج
+                        <span className="mr-1 text-red-500">*</span>
+                      </>
                     }
+                    registration={register('programId', {
+                      required: 'يجب اختيار البرنامج',
+                    })}
+                    options={[
+                      ['', 'اختر البرنامج'],
+                      ...programs.map((program: any) => [String(program.id), program.name_en]),
+                    ]}
+                    error={errors.programId?.message}
                   />
 
                   {/* Plan */}
 
-                  <SelectField
-                    label="نوع العقد"
-                    registration={register(
-                      'plan',
-                      {
-                        required:
-                          'نوع العقد مطلوب',
-                      }
+                  <div>
+                    <Label>
+                      الخطة
+                      <span className="mr-1 text-red-500">*</span>
+                    </Label>
+
+                    <select
+                      {...register('contractType', {
+                        required: 'نوع الخطة مطلوب',
+                        onChange: (event) => {
+                          handleContractTypeChange(event.target.value);
+                        },
+                      })}
+                      className="
+      mt-2 h-11 w-full
+      rounded-xl border
+      border-border
+      bg-background
+      px-3 text-sm
+      text-foreground
+      outline-none
+      focus:ring-2
+      focus:ring-ring
+    "
+                    >
+                      <option value="">اختر نوع الخطة</option>
+
+                      <option value="REGULAR">عادي — حتى 12 شهر بدون خصم</option>
+
+                      <option value="SIX_MONTHS">6 أشهر — حتى 6 أشهر بخصم 50%</option>
+                    </select>
+
+                    {errors.contractType && (
+                      <ErrorText>{String(errors.contractType.message)}</ErrorText>
                     )}
+                  </div>
+
+                  <SelectField
+                    label="نوع التعاقد"
+                    registration={register('planId', {
+                      required: 'يجب اختيار نوع التعاقد',
+                    })}
                     options={[
-                      [
-                        '',
-                        'اختر الخطة',
-                      ],
-                      [
-                        'SILVER',
-                        'الخطة الفضية — 600 جنيه / شهر',
-                      ],
-                      [
-                        'GOLD',
-                        'الخطة الذهبية — 700 جنيه / شهر',
-                      ],
+                      ['', 'اختار نوع التعاقد'],
+                      ...plans.map((plan: any) => [
+                        String(plan.id),
+                        `${plan.name} — ${plan.price} جنيه شهريًا`,
+                      ]),
                     ]}
-                    error={
-                      errors.plan?.message
-                    }
+                    error={errors.planId?.message}
                   />
 
                   {/* Responsible Representative */}
 
                   <SelectField
                     label="المندوب المسؤول"
-                    registration={register(
-                      'responsibleRep',
-                      {
-                        required:
-                          'المندوب المسؤول مطلوب',
-                      }
-                    )}
+                    registration={register('representativeId', {
+                      required: 'المندوب المسؤول مطلوب',
+                    })}
                     options={[
-                      [
-                        '',
-                        'اختر المندوب',
-                      ],
+                      ['', 'اختر المندوب'],
 
-                      ...salesRepresentatives.map(
-                        (user) => [
-                          String(user.id),
-                          `${user.nameAr} — ${user.name}`,
-                        ]
-                      ),
+                      ...salesRepresentatives.map((user) => [
+                        String(user.id),
+                        `${user.nameAr} — ${user.name}`,
+                      ]),
                     ]}
-                    error={
-                      errors.responsibleRep
-                        ?.message
-                    }
+                    error={errors.representativeId?.message}
                   />
 
                   {/* Participant */}
@@ -2063,9 +1811,7 @@ export default function AddCustomerContract() {
                   <div className="rounded-xl border border-border bg-card p-4 md:col-span-2 lg:col-span-1">
                     <div className="flex items-center justify-between gap-4">
                       <div>
-                        <Label className="text-sm font-medium">
-                          يوجد مشارك في العقد؟
-                        </Label>
+                        <Label className="text-sm font-medium">يوجد مشارك في العقد؟</Label>
 
                         <p className="mt-1 text-xs text-muted-foreground">
                           يمكنك إضافة مستخدم آخر كمشارك في هذا العقد.
@@ -2075,57 +1821,31 @@ export default function AddCustomerContract() {
                       <label className="flex cursor-pointer items-center gap-2">
                         <input
                           type="checkbox"
-                          {...register(
-                            'hasParticipant',
-                            {
-                              onChange: (
-                                event
-                              ) => {
-                                if (
-                                  !event.target
-                                    .checked
-                                ) {
-                                  setValue(
-                                    'participantId',
-                                    ''
-                                  );
-                                }
-                              },
-                            }
-                          )}
+                          {...register('hasParticipant', {
+                            onChange: (event) => {
+                              if (!event.target.checked) {
+                                setValue('participantId', '');
+                              }
+                            },
+                          })}
                           className="h-4 w-4 rounded border-border"
                         />
 
-                        <span className="text-sm">
-                          مشارك
-                        </span>
+                        <span className="text-sm">مشارك</span>
                       </label>
                     </div>
 
                     {hasParticipant && (
                       <div className="mt-4">
-                        <Label>
-                          المشارك
-                        </Label>
+                        <Label>المشارك</Label>
 
-                        <Popover
-                          open={
-                            participantOpen
-                          }
-                          onOpenChange={
-                            setParticipantOpen
-                          }
-                        >
-                          <PopoverTrigger
-                            asChild
-                          >
+                        <Popover open={participantOpen} onOpenChange={setParticipantOpen}>
+                          <PopoverTrigger asChild>
                             <Button
                               type="button"
                               variant="outline"
                               role="combobox"
-                              aria-expanded={
-                                participantOpen
-                              }
+                              aria-expanded={participantOpen}
                               className="mt-2 h-11 w-full justify-between rounded-xl font-normal"
                             >
                               <div className="flex items-center gap-2">
@@ -2138,8 +1858,7 @@ export default function AddCustomerContract() {
                                       : 'text-muted-foreground'
                                   }
                                 >
-                                  {selectedParticipant?.name ||
-                                    'اختر المشارك'}
+                                  {selectedParticipant?.name || 'اختر المشارك'}
                                 </span>
                               </div>
 
@@ -2155,64 +1874,37 @@ export default function AddCustomerContract() {
                               <CommandInput placeholder="ابحث عن مستخدم..." />
 
                               <CommandList>
-                                <CommandEmpty>
-                                  لا يوجد مستخدم بهذا الاسم
-                                </CommandEmpty>
+                                <CommandEmpty>لا يوجد مستخدم بهذا الاسم</CommandEmpty>
 
                                 <CommandGroup heading="المستخدمون">
-                                  {users.map(
-                                    (user) => (
-                                      <CommandItem
-                                        key={
-                                          user.id
-                                        }
-                                        value={`${user.name} ${user.nameAr}`}
-                                        onSelect={() => {
-                                          setValue(
-                                            'participantId',
-                                            String(
-                                              user.id
-                                            ),
-                                            {
-                                              shouldValidate:
-                                                true,
-                                              shouldDirty:
-                                                true,
-                                            }
-                                          );
+                                  {users.map((user) => (
+                                    <CommandItem
+                                      key={user.id}
+                                      value={`${user.name} ${user.nameAr}`}
+                                      onSelect={() => {
+                                        setValue('participantId', String(user.id), {
+                                          shouldValidate: true,
+                                          shouldDirty: true,
+                                        });
 
-                                          setParticipantOpen(
-                                            false
-                                          );
-                                        }}
-                                      >
-                                        <UserRound className="mr-2 h-4 w-4 text-muted-foreground" />
+                                        setParticipantOpen(false);
+                                      }}
+                                    >
+                                      <UserRound className="mr-2 h-4 w-4 text-muted-foreground" />
 
-                                        <span>
-                                          {
-                                            user.nameAr
-                                          }{' '}
-                                          —{' '}
-                                          {
-                                            user.name
-                                          }
-                                        </span>
+                                      <span>
+                                        {user.nameAr} — {user.name}
+                                      </span>
 
-                                        <Check
-                                          className={`mr-auto h-4 w-4 ${
-                                            String(
-                                              participantId
-                                            ) ===
-                                            String(
-                                              user.id
-                                            )
-                                              ? 'opacity-100'
-                                              : 'opacity-0'
-                                          }`}
-                                        />
-                                      </CommandItem>
-                                    )
-                                  )}
+                                      <Check
+                                        className={`mr-auto h-4 w-4 ${
+                                          String(participantId) === String(user.id)
+                                            ? 'opacity-100'
+                                            : 'opacity-0'
+                                        }`}
+                                      />
+                                    </CommandItem>
+                                  ))}
                                 </CommandGroup>
                               </CommandList>
                             </Command>
@@ -2220,13 +1912,7 @@ export default function AddCustomerContract() {
                         </Popover>
 
                         {errors.participantId && (
-                          <ErrorText>
-                            {
-                              errors
-                                .participantId
-                                .message
-                            }
-                          </ErrorText>
+                          <ErrorText>{errors.participantId.message}</ErrorText>
                         )}
                       </div>
                     )}
@@ -2235,51 +1921,34 @@ export default function AddCustomerContract() {
                   {/* Next Due Date */}
 
                   <div>
-                    <Label>
-                      تاريخ استحقاق الاشتراك القادم
-                    </Label>
+                    <Label>تاريخ استحقاق الاشتراك القادم</Label>
 
                     <div className="relative mt-2">
                       <CalendarDays className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 
                       <Input
                         type="date"
-                        {...register(
-                          'nextDueDate',
-                          {
-                            required:
-                              'تاريخ الاستحقاق مطلوب',
-                          }
-                        )}
+                        {...register('nextDueDate', {
+                          required: 'تاريخ الاستحقاق مطلوب',
+                        })}
                         className="h-11 rounded-xl pr-10"
                       />
                     </div>
 
-                    {errors.nextDueDate && (
-                      <ErrorText>
-                        {
-                          errors.nextDueDate
-                            .message
-                        }
-                      </ErrorText>
-                    )}
+                    {errors.nextDueDate && <ErrorText>{errors.nextDueDate.message}</ErrorText>}
                   </div>
 
                   {/* Installation */}
 
                   <div>
-                    <Label>
-                      تاريخ التركيب
-                    </Label>
+                    <Label>تاريخ التركيب</Label>
 
                     <div className="relative mt-2">
                       <Wrench className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 
                       <Input
                         type="date"
-                        {...register(
-                          'installationDate'
-                        )}
+                        {...register('installationDate')}
                         className="h-11 rounded-xl pr-10"
                       />
                     </div>
@@ -2291,34 +1960,38 @@ export default function AddCustomerContract() {
 
               <Card className="border-border bg-card shadow-sm">
                 <CardHeader>
-                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
-                      <CardTitle className="text-base">
-                        الشهور المطلوب سدادها
-                      </CardTitle>
+                      <CardTitle className="text-base">الشهور المطلوب سدادها</CardTitle>
 
                       <p className="mt-1 text-xs text-muted-foreground">
                         اختر الشهور التي يريد العميل سدادها في التحصيل الحالي.
                       </p>
+
+                      {contractType && (
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          <Badge variant="outline" className="rounded-full">
+                            نوع العقد: {currentContractTypeRule.label}
+                          </Badge>
+
+                          <Badge variant="secondary" className="rounded-full">
+                            الحد الأقصى: {currentContractTypeRule.maxMonths} شهر
+                          </Badge>
+
+                          <Badge variant="secondary" className="rounded-full">
+                            الخصم: {discountPercentage}%
+                          </Badge>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex gap-2">
-                      <Badge
-                        variant="secondary"
-                        className="rounded-full"
-                      >
-                        {selectedMonths.length}{' '}
-                        شهور
+                      <Badge variant="secondary" className="rounded-full">
+                        {selectedMonths.length} / {currentContractTypeRule.maxMonths || 0} شهور
                       </Badge>
 
-                      <Badge
-                        variant="outline"
-                        className="rounded-full"
-                      >
-                        {monthlySubscription.toLocaleString(
-                          'ar-EG'
-                        )}{' '}
-                        جنيه
+                      <Badge variant="outline" className="rounded-full">
+                        {monthlySubscription.toLocaleString('ar-EG')} جنيه
                       </Badge>
                     </div>
                   </div>
@@ -2326,64 +1999,50 @@ export default function AddCustomerContract() {
 
                 <CardContent>
                   <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-                    {monthOptions.map(
-                      (month) => {
-                        const checked =
-                          selectedMonths.includes(
-                            month
-                          );
+                    {monthOptions.map((month) => {
+                      const checked = selectedMonths.includes(month);
 
-                        return (
-                          <label
-                            key={month}
-                            className={`
-                              flex cursor-pointer
-                              items-center gap-3
-                              rounded-xl border p-3
-                              transition-all
+                      const maxMonthsReached =
+                        selectedMonths.length >= currentContractTypeRule.maxMonths;
 
-                              ${
-                                checked
-                                  ? 'border-foreground bg-foreground text-background'
-                                  : 'border-border bg-background hover:bg-accent'
-                              }
-                            `}
-                          >
-                            <Checkbox
-                              checked={
-                                checked
-                              }
-                              onCheckedChange={() =>
-                                toggleMonth(
-                                  month
-                                )
-                              }
-                            />
+                      const disabled = !contractType || (!checked && maxMonthsReached);
 
-                            <span className="text-sm font-medium">
-                              {month}
-                            </span>
-                          </label>
-                        );
-                      }
-                    )}
+                      return (
+                        <label
+                          key={month}
+                          className={`
+        flex items-center gap-3
+        rounded-xl border p-3
+        transition-all
+
+        ${
+          checked
+            ? 'border-foreground bg-foreground text-background'
+            : disabled
+              ? 'cursor-not-allowed border-border bg-muted/50 opacity-50'
+              : 'cursor-pointer border-border bg-background hover:bg-accent'
+        }
+      `}
+                        >
+                          <Checkbox
+                            checked={checked}
+                            disabled={disabled}
+                            onCheckedChange={() => toggleMonth(month)}
+                          />
+
+                          <span className="text-sm font-medium">{month}</span>
+                        </label>
+                      );
+                    })}
                   </div>
 
-                  {errors.selectedMonths && (
-                    <ErrorText>
-                      {
-                        errors.selectedMonths
-                          .message
-                      }
-                    </ErrorText>
-                  )}
+                  {errors.selectedMonths && <ErrorText>{errors.selectedMonths.message}</ErrorText>}
                 </CardContent>
               </Card>
 
               {/* Payment + Review */}
 
               <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.35fr_0.65fr]">
-
                 {/* Payment */}
 
                 <Card className="border-border bg-card shadow-sm">
@@ -2395,45 +2054,27 @@ export default function AddCustomerContract() {
                   </CardHeader>
 
                   <CardContent className="space-y-6">
-
                     {/* Money Summary */}
 
                     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-
-                      <MoneyCard
-                        label="رسوم الانضمام"
-                        value={joiningFee}
-                      />
+                      <MoneyCard label="رسوم الانضمام" value={joiningFee} />
 
                       <MoneyCard
                         label="قيمة الاشتراك"
-                        value={
-                          monthlySubscription
-                        }
+                        value={subscriptionPriceAfterDiscount}
                         subtitle={`${selectedMonths.length} شهور`}
                       />
 
-                      <MoneyCard
-                        label="الإجمالي قبل الخصم"
-                        value={
-                          grossContractValue
-                        }
-                      />
+                      <MoneyCard label="الإجمالي قبل الخصم" value={grossContractValue} />
 
                       <div className="rounded-2xl border border-foreground bg-foreground p-4 text-background">
-                        <div className="text-xs opacity-70">
-                          إجمالي العقد
-                        </div>
+                        <div className="text-xs opacity-70">إجمالي العقد</div>
 
                         <div className="mt-2 text-xl font-bold">
-                          {totalContractValue.toLocaleString(
-                            'ar-EG'
-                          )}
+                          {totalContractValue.toLocaleString('ar-EG')}
                         </div>
 
-                        <div className="text-xs opacity-70">
-                          جنيه
-                        </div>
+                        <div className="text-xs opacity-70">جنيه</div>
                       </div>
                     </div>
 
@@ -2443,12 +2084,11 @@ export default function AddCustomerContract() {
 
                     <Card className="border-border bg-card shadow-sm">
                       <CardHeader>
-                        <CardTitle className="text-base">
-                          الخصم
-                        </CardTitle>
+                        <CardTitle className="text-base">الخصم</CardTitle>
 
                         <p className="text-xs text-muted-foreground">
-                          الخصم يتم تطبيقه على إجمالي العقد بالكامل، بما في ذلك رسوم الانضمام والاشتراك.
+                          الخصم يتم تطبيقه على إجمالي العقد بالكامل، بما في ذلك رسوم الانضمام
+                          والاشتراك.
                         </p>
                       </CardHeader>
 
@@ -2456,49 +2096,31 @@ export default function AddCustomerContract() {
                         <div>
                           <FormField
                             label="قيمة الخصم"
-                            registration={register(
-                              'discountAmount',
-                              {
-                                valueAsNumber:
-                                  true,
+                            registration={register('discountAmount', {
+                              valueAsNumber: true,
 
-                                min: {
-                                  value: 0,
-                                  message:
-                                    'الخصم لا يمكن أن يكون سالبًا',
-                                },
+                              min: {
+                                value: 0,
+                                message: 'الخصم لا يمكن أن يكون سالبًا',
+                              },
 
-                                validate: (
-                                  value
-                                ) => {
-                                  const amount =
-                                    Number(
-                                      value || 0
-                                    );
+                              validate: (value) => {
+                                const amount = Number(value || 0);
 
-                                  return (
-                                    amount <=
-                                      grossContractValue ||
-                                    'الخصم لا يمكن أن يتجاوز إجمالي العقد'
-                                  );
-                                },
-                              }
-                            )}
+                                return (
+                                  amount <= grossContractValue ||
+                                  'الخصم لا يمكن أن يتجاوز إجمالي العقد'
+                                );
+                              },
+                            })}
                             type="number"
-                            error={
-                              errors
-                                .discountAmount
-                                ?.message
-                            }
+                            error={errors.discountAmount?.message}
                           />
 
                           <div className="mt-3 rounded-xl bg-muted/50 p-3 text-xs text-muted-foreground">
                             الحد الأقصى للخصم:{' '}
                             <span className="font-semibold text-foreground">
-                              {grossContractValue.toLocaleString(
-                                'ar-EG'
-                              )}{' '}
-                              جنيه
+                              {grossContractValue.toLocaleString('ar-EG')} جنيه
                             </span>
                           </div>
                         </div>
@@ -2509,9 +2131,7 @@ export default function AddCustomerContract() {
 
                     <div>
                       <div className="mb-4">
-                        <h3 className="text-sm font-bold">
-                          تسجيل مبلغ التحصيل
-                        </h3>
+                        <h3 className="text-sm font-bold">تسجيل مبلغ التحصيل</h3>
 
                         <p className="mt-1 text-xs text-muted-foreground">
                           أدخل المبلغ الذي تم تحصيله الآن وحدد وسيلة الدفع.
@@ -2519,42 +2139,27 @@ export default function AddCustomerContract() {
                       </div>
 
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-
                         <div>
-                          <Label>
-                            المبلغ المحصل الآن
-                          </Label>
+                          <Label>المبلغ المحصل الآن</Label>
 
                           <div className="relative mt-2">
                             <Input
                               type="number"
                               min="0"
-                              max={
-                                totalContractValue
-                              }
+                              max={totalContractValue}
                               step="0.01"
-                              {...register(
-                                'paymentAmount',
-                                {
-                                  valueAsNumber:
-                                    true,
+                              {...register('paymentAmount', {
+                                valueAsNumber: true,
 
-                                  min: {
-                                    value: 0,
-                                    message:
-                                      'المبلغ لا يمكن أن يكون سالبًا',
-                                  },
+                                min: {
+                                  value: 0,
+                                  message: 'المبلغ لا يمكن أن يكون سالبًا',
+                                },
 
-                                  validate: (
-                                    value
-                                  ) =>
-                                    Number(
-                                      value || 0
-                                    ) <=
-                                      totalContractValue ||
-                                    'المبلغ المحصل لا يمكن أن يتجاوز إجمالي العقد',
-                                }
-                              )}
+                                validate: (value) =>
+                                  Number(value || 0) <= totalContractValue ||
+                                  'المبلغ المحصل لا يمكن أن يتجاوز إجمالي العقد',
+                              })}
                               className="h-12 rounded-xl pl-16 text-lg font-semibold"
                             />
 
@@ -2564,60 +2169,22 @@ export default function AddCustomerContract() {
                           </div>
 
                           {errors.paymentAmount && (
-                            <ErrorText>
-                              {
-                                errors
-                                  .paymentAmount
-                                  .message
-                              }
-                            </ErrorText>
+                            <ErrorText>{errors.paymentAmount.message}</ErrorText>
                           )}
                         </div>
 
                         <SelectField
                           label="طريقة الدفع"
-                          registration={register(
-                            'paymentMethod',
-                            {
-                              validate:
-                                (value) =>
-                                  paymentAmount <=
-                                    0 ||
-                                  value ||
-                                  'طريقة الدفع مطلوبة عند تسجيل تحصيل',
-                            }
-                          )}
+                          registration={register('paymentMethod')}
                           options={[
-                            [
-                              '',
-                              'اختر طريقة الدفع',
-                            ],
-                            [
-                              'CASH',
-                              'نقدي',
-                            ],
-                            [
-                              'BANK_TRANSFER',
-                              'تحويل بنكي',
-                            ],
-                            [
-                              'CREDIT_CARD',
-                              'بطاقة ائتمان',
-                            ],
-                            [
-                              'CHEQUE',
-                              'شيك',
-                            ],
-                            [
-                              'ONLINE_PAYMENT',
-                              'دفع إلكتروني',
-                            ],
+                            ['', 'اختر طريقة الدفع'],
+                            ['CASH', 'نقدي'],
+                            ['BANK_TRANSFER', 'تحويل بنكي'],
+                            ['CREDIT_CARD', 'بطاقة ائتمان'],
+                            ['CHEQUE', 'شيك'],
+                            ['ONLINE_PAYMENT', 'دفع إلكتروني'],
                           ]}
-                          error={
-                            errors
-                              .paymentMethod
-                              ?.message
-                          }
+                          
                         />
                       </div>
 
@@ -2625,16 +2192,9 @@ export default function AddCustomerContract() {
 
                       <div className="mt-5 rounded-2xl bg-muted p-4">
                         <div className="flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground">
-                            نسبة السداد
-                          </span>
+                          <span className="text-muted-foreground">نسبة السداد</span>
 
-                          <span className="font-bold">
-                            {paidPercentage.toFixed(
-                              0
-                            )}
-                            %
-                          </span>
+                          <span className="font-bold">{paidPercentage.toFixed(0)}%</span>
                         </div>
 
                         <div className="mt-3 h-2 overflow-hidden rounded-full bg-background">
@@ -2650,20 +2210,14 @@ export default function AddCustomerContract() {
                           <span className="text-muted-foreground">
                             مدفوع:
                             <span className="mr-1 font-semibold text-emerald-600 dark:text-emerald-400">
-                              {paymentAmount.toLocaleString(
-                                'ar-EG'
-                              )}{' '}
-                              جنيه
+                              {paymentAmount.toLocaleString('ar-EG')} جنيه
                             </span>
                           </span>
 
                           <span className="text-muted-foreground">
                             متبقي:
                             <span className="mr-1 font-semibold text-amber-600 dark:text-amber-400">
-                              {remainingAmount.toLocaleString(
-                                'ar-EG'
-                              )}{' '}
-                              جنيه
+                              {remainingAmount.toLocaleString('ar-EG')} جنيه
                             </span>
                           </span>
                         </div>
@@ -2675,9 +2229,7 @@ export default function AddCustomerContract() {
                     {/* Notes */}
 
                     <div>
-                      <Label>
-                        ملاحظات العقد
-                      </Label>
+                      <Label>ملاحظات العقد</Label>
 
                       <Textarea
                         {...register('notes')}
@@ -2699,57 +2251,29 @@ export default function AddCustomerContract() {
                   </CardHeader>
 
                   <CardContent className="space-y-5">
-
                     <div className="rounded-2xl bg-foreground p-5 text-background">
-                      <div className="text-xs opacity-70">
-                        نوع العملية
-                      </div>
+                      <div className="text-xs opacity-70">نوع العملية</div>
 
-                      <div className="mt-2 text-lg font-bold">
-                        {customerStatus}
-                      </div>
+                      <div className="mt-2 text-lg font-bold">{customerStatus}</div>
 
                       <div className="mt-4 flex items-center justify-between border-t border-background/10 pt-4">
-                        <span className="text-xs opacity-70">
-                          الخطة
-                        </span>
+                        <span className="text-xs opacity-70">الخطة</span>
 
-                        <span className="text-sm font-semibold">
-                          {
-                            planName[
-                              plan as keyof typeof planName
-                            ]
-                          }
-                        </span>
+                        <span className="text-sm font-semibold">{selectedPlan?.name || '—'}</span>
                       </div>
                     </div>
 
                     <div className="space-y-4">
+                      <ReviewRow label="العميل" value={customerNameAr || '—'} />
 
-                      <ReviewRow
-                        label="العميل"
-                        value={
-                          customerNameAr ||
-                          '—'
-                        }
-                      />
-
-                      <ReviewRow
-                        label="الكود"
-                        value={
-                          customerCode ||
-                          '—'
-                        }
-                      />
+                      <ReviewRow label="الكود" value={customerCode || '—'} />
 
                       <ReviewRow
                         label="نوع العميل"
                         value={
-                          customerType ===
-                          'PHARMACEUTICAL'
+                          customerType === 'PHARMACEUTICAL'
                             ? 'صيدلي'
-                            : customerType ===
-                                'COMMERCIAL'
+                            : customerType === 'COMMERCIAL'
                               ? 'تجاري'
                               : '—'
                         }
@@ -2758,11 +2282,9 @@ export default function AddCustomerContract() {
                       <ReviewRow
                         label="هيكل العميل"
                         value={
-                          structure ===
-                          'CHAIN'
+                          structure === 'CHAIN'
                             ? 'سلسلة'
-                            : structure ===
-                                'SINGLE'
+                            : structure === 'SINGLE'
                               ? 'فرع واحد'
                               : '—'
                         }
@@ -2772,13 +2294,8 @@ export default function AddCustomerContract() {
                         label="الفرع"
                         value={
                           selectedBranch
-                            ? `الفرع ${
-                                Number(
-                                  branchId
-                                ) + 1
-                              } — ${
-                                selectedBranch.city ||
-                                'مدينة غير محددة'
+                            ? `الفرع ${Number(branchId) + 1} — ${
+                                selectedBranch.city || 'مدينة غير محددة'
                               }`
                             : 'لم يتم الاختيار'
                         }
@@ -2786,102 +2303,68 @@ export default function AddCustomerContract() {
 
                       <ReviewRow
                         label="المندوب المسؤول"
-                        value={
-                          selectedResponsibleRep
-                            ? `${selectedResponsibleRep.nameAr}`
-                            : '—'
-                        }
+                        value={selectedResponsibleRep ? `${selectedResponsibleRep.nameAr}` : '—'}
                       />
 
                       <ReviewRow
                         label="المشارك"
                         value={
                           hasParticipant
-                            ? selectedParticipant
-                                ?.nameAr ||
-                              'لم يتم الاختيار'
+                            ? selectedParticipant?.nameAr || 'لم يتم الاختيار'
                             : 'لا يوجد'
                         }
                       />
 
-                      <ReviewRow
-                        label="عدد جهات الاتصال"
-                        value={`${contactFields.length}`}
-                      />
+                      <ReviewRow label="عدد جهات الاتصال" value={`${contactFields.length}`} />
 
-                      <ReviewRow
-                        label="عدد الفروع"
-                        value={`${branchFields.length}`}
-                      />
+                      <ReviewRow label="عدد الفروع" value={`${branchFields.length}`} />
 
-                      <ReviewRow
-                        label="المستندات"
-                        value={`${documentFields.length}`}
-                      />
+                      <ReviewRow label="المستندات" value={`${documentFields.length}`} />
 
-                      <ReviewRow
-                        label="الشهور المحددة"
-                        value={`${selectedMonths.length} شهور`}
-                      />
+                      <ReviewRow label="الشهور المحددة" value={`${selectedMonths.length} شهور`} />
 
                       <Separator />
 
                       <ReviewRow
                         label="رسوم الانضمام"
-                        value={`${joiningFee.toLocaleString(
-                          'ar-EG'
-                        )} جنيه`}
+                        value={`${joiningFee.toLocaleString('ar-EG')} جنيه`}
                       />
 
                       <ReviewRow
-                        label="الاشتراك"
-                        value={`${monthlySubscription.toLocaleString(
-                          'ar-EG'
-                        )} جنيه`}
+                        label="إجمالي الاشتراك"
+                        value={`${subscriptionPriceAfterDiscount.toLocaleString('ar-EG')} جنيه`}
                       />
 
                       <ReviewRow
                         label="الإجمالي قبل الخصم"
-                        value={`${grossContractValue.toLocaleString(
-                          'ar-EG'
-                        )} جنيه`}
+                        value={`${grossContractValue.toLocaleString('ar-EG')} جنيه`}
                       />
 
                       <ReviewRow
                         label="الخصم"
-                        value={`${discountAmount.toLocaleString(
-                          'ar-EG'
-                        )} جنيه`}
+                        value={`${discountAmount.toLocaleString('ar-EG')} جنيه`}
                       />
 
                       <ReviewRow
                         label="إجمالي العقد"
-                        value={`${totalContractValue.toLocaleString(
-                          'ar-EG'
-                        )} جنيه`}
+                        value={`${totalContractValue.toLocaleString('ar-EG')} جنيه`}
                       />
 
                       <ReviewRow
                         label="المحصل"
-                        value={`${paymentAmount.toLocaleString(
-                          'ar-EG'
-                        )} جنيه`}
+                        value={`${paymentAmount.toLocaleString('ar-EG')} جنيه`}
                       />
 
                       <ReviewRow
                         label="المتبقي"
-                        value={`${remainingAmount.toLocaleString(
-                          'ar-EG'
-                        )} جنيه`}
+                        value={`${remainingAmount.toLocaleString('ar-EG')} جنيه`}
                       />
 
                       <ReviewRow
                         label="طريقة الدفع"
                         value={
                           paymentMethod
-                            ? paymentMethodName[
-                                paymentMethod as keyof typeof paymentMethodName
-                              ]
+                            ? paymentMethodName[paymentMethod as keyof typeof paymentMethodName]
                             : 'لا يوجد تحصيل'
                         }
                       />
@@ -2918,13 +2401,9 @@ export default function AddCustomerContract() {
 
           <Card className="sticky bottom-4 border-border bg-card shadow-lg">
             <CardContent className="flex flex-col-reverse gap-3 p-4 md:flex-row md:items-center md:justify-between">
-
-              <div className="text-xs text-muted-foreground">
-                الخطوة {activeStep} من 2
-              </div>
+              <div className="text-xs text-muted-foreground">الخطوة {activeStep} من 2</div>
 
               <div className="flex w-full items-center gap-3 md:w-auto">
-
                 {activeStep === 2 && (
                   <Button
                     type="button"
@@ -2950,7 +2429,6 @@ export default function AddCustomerContract() {
                     "
                   >
                     التالي
-
                     <ArrowLeft className="mr-2 h-4 w-4" />
                   </Button>
                 ) : (
@@ -2965,9 +2443,7 @@ export default function AddCustomerContract() {
                       md:flex-none
                     "
                   >
-                    {isSubmitting
-                      ? 'جاري الإرسال...'
-                      : 'إرسال العقد للمراجعة'}
+                    {isSubmitting ? 'جاري الإرسال...' : 'إرسال العقد للمراجعة'}
 
                     <Check className="mr-2 h-4 w-4" />
                   </Button>
@@ -2985,12 +2461,7 @@ export default function AddCustomerContract() {
    CONTACT PHONES
 ========================================================= */
 
-function ContactPhones({
-  control,
-  register,
-  contactIndex,
-  errors,
-}: any) {
+function ContactPhones({ control, register, contactIndex, errors }: any) {
   const {
     fields: phoneFields,
     append,
@@ -3004,13 +2475,9 @@ function ContactPhones({
     <div className="mt-5">
       <div className="mb-3 flex items-center justify-between">
         <div>
-          <div className="text-sm font-semibold">
-            أرقام الهاتف
-          </div>
+          <div className="text-sm font-semibold">أرقام الهاتف</div>
 
-          <div className="mt-1 text-xs text-muted-foreground">
-            بحد أقصى 3 أرقام لكل جهة اتصال
-          </div>
+          <div className="mt-1 text-xs text-muted-foreground">بحد أقصى 3 أرقام لكل جهة اتصال</div>
         </div>
 
         <Button
@@ -3032,109 +2499,70 @@ function ContactPhones({
       </div>
 
       <div className="space-y-3">
-        {phoneFields.map(
-          (
-            phone: any,
-            phoneIndex: number
-          ) => {
-            const phoneError = (
-              errors as any
-            )?.contacts?.[
-              contactIndex
-            ]?.phones?.[phoneIndex];
+        {phoneFields.map((phone: any, phoneIndex: number) => {
+          const phoneError = (errors as any)?.contacts?.[contactIndex]?.phones?.[phoneIndex];
 
-            return (
-              <div
-                key={phone.id}
-                className="grid grid-cols-12 gap-3"
-              >
-                <div className="col-span-12 md:col-span-2">
-                  <Input
-                    value={`الهاتف ${
-                      phoneIndex + 1
-                    }`}
-                    readOnly
-                    className="h-11 rounded-xl bg-background"
-                  />
-                </div>
+          return (
+            <div key={phone.id} className="grid grid-cols-12 gap-3">
+              <div className="col-span-12 md:col-span-2">
+                <Input
+                  value={`الهاتف ${phoneIndex + 1}`}
+                  readOnly
+                  className="h-11 rounded-xl bg-background"
+                />
+              </div>
 
-                <div className="col-span-8 md:col-span-4">
-                  <Input
-                    {...register(
-                      `contacts.${contactIndex}.phones.${phoneIndex}.number`,
-                      {
-                        required:
-                          'رقم الهاتف مطلوب',
+              <div className="col-span-8 md:col-span-4">
+                <Input
+                  {...register(`contacts.${contactIndex}.phones.${phoneIndex}.number`, {
+                    required: 'رقم الهاتف مطلوب',
 
-                        pattern: {
-                          value:
-                            /^[0-9+\-\s]{7,15}$/,
-                          message:
-                            'رقم الهاتف غير صحيح',
-                        },
-                      }
-                    )}
-                    placeholder="010xxxxxxxx"
-                    className="h-11 rounded-xl bg-background"
-                  />
+                    pattern: {
+                      value: /^[0-9+\-\s]{7,15}$/,
+                      message: 'رقم الهاتف غير صحيح',
+                    },
+                  })}
+                  placeholder="010xxxxxxxx"
+                  className="h-11 rounded-xl bg-background"
+                />
 
-                  {phoneError?.number
-                    ?.message && (
-                    <ErrorText>
-                      {
-                        phoneError
-                          .number
-                          .message
-                      }
-                    </ErrorText>
-                  )}
-                </div>
+                {phoneError?.number?.message && <ErrorText>{phoneError.number.message}</ErrorText>}
+              </div>
 
-                <div className="col-span-4 md:col-span-4">
-                  <select
-                    {...register(
-                      `contacts.${contactIndex}.phones.${phoneIndex}.type`
-                    )}
-                    className="
+              <div className="col-span-4 md:col-span-4">
+                <select
+                  {...register(`contacts.${contactIndex}.phones.${phoneIndex}.type`)}
+                  className="
                       h-11 w-full rounded-xl
                       border border-border
                       bg-background px-3
                       text-sm text-foreground
                     "
-                  >
-                    <option value="محمول">
-                      محمول
-                    </option>
+                >
+                  <option value="محمول">محمول</option>
 
-                    <option value="هاتف أرضي">
-                      هاتف أرضي
-                    </option>
+                  <option value="هاتف أرضي">هاتف أرضي</option>
 
-                    <option value="واتساب">
-                      واتساب
-                    </option>
-                  </select>
-                </div>
-
-                <div className="col-span-12 flex justify-end md:col-span-2">
-                  {phoneFields.length > 1 && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="rounded-xl text-destructive hover:bg-destructive/10"
-                      onClick={() =>
-                        remove(phoneIndex)
-                      }
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
+                  <option value="واتساب">واتساب</option>
+                </select>
               </div>
-            );
-          }
-        )}
+
+              <div className="col-span-12 flex justify-end md:col-span-2">
+                {phoneFields.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="rounded-xl text-destructive hover:bg-destructive/10"
+                    onClick={() => remove(phoneIndex)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -3144,13 +2572,7 @@ function ContactPhones({
    FORM FIELD
 ========================================================= */
 
-function FormField({
-  label,
-  registration,
-  placeholder,
-  type = 'text',
-  error,
-}: any) {
+function FormField({ label, registration, placeholder, type = 'text', error }: any) {
   return (
     <div>
       <Label>{label}</Label>
@@ -3162,11 +2584,7 @@ function FormField({
         className="mt-2 h-11 rounded-xl"
       />
 
-      {error && (
-        <ErrorText>
-          {String(error)}
-        </ErrorText>
-      )}
+      {error && <ErrorText>{String(error)}</ErrorText>}
     </div>
   );
 }
@@ -3175,12 +2593,7 @@ function FormField({
    SELECT
 ========================================================= */
 
-function SelectField({
-  label,
-  registration,
-  options,
-  error,
-}: any) {
+function SelectField({ label, registration, options, error }: any) {
   return (
     <div>
       <Label>{label}</Label>
@@ -3199,25 +2612,14 @@ function SelectField({
           focus:ring-ring
         "
       >
-        {options.map(
-          (
-            [optionValue, optionLabel]: any
-          ) => (
-            <option
-              key={optionValue}
-              value={optionValue}
-            >
-              {optionLabel}
-            </option>
-          )
-        )}
+        {options.map(([optionValue, optionLabel]: any) => (
+          <option key={optionValue} value={optionValue}>
+            {optionLabel}
+          </option>
+        ))}
       </select>
 
-      {error && (
-        <ErrorText>
-          {String(error)}
-        </ErrorText>
-      )}
+      {error && <ErrorText>{String(error)}</ErrorText>}
     </div>
   );
 }
@@ -3226,26 +2628,14 @@ function SelectField({
    MONEY CARD
 ========================================================= */
 
-function MoneyCard({
-  label,
-  value,
-  subtitle = 'جنيه',
-}: any) {
+function MoneyCard({ label, value, subtitle = 'جنيه' }: any) {
   return (
     <div className="rounded-2xl border border-border bg-muted/40 p-4">
-      <div className="text-xs text-muted-foreground">
-        {label}
-      </div>
+      <div className="text-xs text-muted-foreground">{label}</div>
 
-      <div className="mt-2 text-xl font-bold">
-        {Number(value || 0).toLocaleString(
-          'ar-EG'
-        )}
-      </div>
+      <div className="mt-2 text-xl font-bold">{Number(value || 0).toLocaleString('ar-EG')}</div>
 
-      <div className="text-xs text-muted-foreground">
-        {subtitle}
-      </div>
+      <div className="text-xs text-muted-foreground">{subtitle}</div>
     </div>
   );
 }
@@ -3254,19 +2644,12 @@ function MoneyCard({
    REVIEW ROW
 ========================================================= */
 
-function ReviewRow({
-  label,
-  value,
-}: any) {
+function ReviewRow({ label, value }: any) {
   return (
     <div className="flex items-center justify-between gap-4 text-sm">
-      <span className="text-muted-foreground">
-        {label}
-      </span>
+      <span className="text-muted-foreground">{label}</span>
 
-      <span className="max-w-[60%] truncate text-left font-semibold">
-        {value}
-      </span>
+      <span className="max-w-[60%] truncate text-left font-semibold">{value}</span>
     </div>
   );
 }
@@ -3275,36 +2658,22 @@ function ReviewRow({
    ERROR
 ========================================================= */
 
-function ErrorText({
-  children,
-}: any) {
-  return (
-    <p className="mt-1 text-xs font-medium text-destructive">
-      {children}
-    </p>
-  );
+function ErrorText({ children }: any) {
+  return <p className="mt-1 text-xs font-medium text-destructive">{children}</p>;
 }
 
 /* =========================================================
    FILE SIZE
 ========================================================= */
 
-function formatFileSize(
-  bytes: number
-) {
+function formatFileSize(bytes: number) {
   if (!bytes) {
     return '0 KB';
   }
 
   if (bytes < 1024 * 1024) {
-    return `${(
-      bytes / 1024
-    ).toFixed(1)} KB`;
+    return `${(bytes / 1024).toFixed(1)} KB`;
   }
 
-  return `${(
-    bytes /
-    1024 /
-    1024
-  ).toFixed(2)} MB`;
+  return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
 }
