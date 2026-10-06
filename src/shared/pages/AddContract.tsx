@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-
+import axios from 'axios';
 import { Popover, PopoverContent, PopoverTrigger } from 'src/components/ui/popover';
 
 import {
@@ -33,7 +33,7 @@ import {
   Wrench,
 } from 'lucide-react';
 
-import { useFieldArray, useForm } from 'react-hook-form';
+import { useFieldArray, useForm, Controller } from 'react-hook-form';
 
 import { Card, CardContent, CardHeader, CardTitle } from 'src/components/ui/card';
 
@@ -147,7 +147,7 @@ export default function AddCustomerContract() {
       customerNameEn: '',
       customerNameAr: '',
       customerCode: '',
-      customerType: '',
+      customerTypeId: null,
       structure: '',
       zoneId: '',
       licenseNumber: '',
@@ -155,7 +155,7 @@ export default function AddCustomerContract() {
       registrationNumber: '',
 
       contractDate: new Date().toISOString().split('T')[0],
-      branchId: null,
+      branchId: '',
       contractNumber: '',
       programId: null,
       planId: null,
@@ -171,12 +171,14 @@ export default function AddCustomerContract() {
       notes: '',
 
       paymentAmount: 0,
-      paymentMethod: '',
+      paymentMethodId: null,
 
       discountAmount: 0,
       discountAmountInput: 0,
+      baseSubscriptionAmount: 0,
 
-      selectedMonths: [],
+      // Each month is { label: 'نوفمبر 2026', value: '2026-11-01' }
+      selectedMonths: [] as { label: string; value: string }[],
 
       documents: [],
 
@@ -196,16 +198,13 @@ export default function AddCustomerContract() {
         },
       ],
 
-      branches: [
-        {
-          id:null,
-          governorate: '',
-          city: '',
-          street: '',
-          buildingNumber: '',
-          glnCode: '',
-        },
-      ],
+      address: {
+  governorate: '',
+  cityId: '',
+  street: '',
+  buildingNumber: '',
+  glnCode: '',
+},
     },
   });
 
@@ -232,14 +231,14 @@ export default function AddCustomerContract() {
     name: 'contacts',
   });
 
-  const {
-    fields: branchFields,
-    append: appendBranch,
-    remove: removeBranch,
-  } = useFieldArray({
-    control,
-    name: 'branches',
-  });
+  // const {
+  //   fields: branchFields,
+  //   append: appendBranch,
+  //   remove: removeBranch,
+  // } = useFieldArray({
+  //   control,
+  //   name: 'branches',
+  // });
 
   /* =========================================================
      WATCH
@@ -250,7 +249,7 @@ export default function AddCustomerContract() {
 
   const customerNameAr = watch('customerNameAr');
   const customerCode = watch('customerCode');
-  const customerType = watch('customerType');
+  const customerTypeId = watch('customerTypeId');
   const structure = watch('structure');
 
   const planId = watch('planId');
@@ -262,7 +261,7 @@ export default function AddCustomerContract() {
   const branchId = watch('branchId');
   const representativeId = watch('representativeId');
 
-  const paymentMethod = watch('paymentMethod');
+  const paymentMethodId = watch('paymentMethodId');
 
   const selectedMonths = watch('selectedMonths') || [];
 
@@ -319,18 +318,29 @@ export default function AddCustomerContract() {
   ];
 
   const monthOptions = [
-    'سبتمبر 2026',
-    'أكتوبر 2026',
-    'نوفمبر 2026',
-    'ديسمبر 2026',
-    'يناير 2027',
-    'فبراير 2027',
-    'مارس 2027',
-    'أبريل 2027',
-    'مايو 2027',
-    'يونيو 2027',
-    'يوليو 2027',
-    'أغسطس 2027',
+    { label: 'سبتمبر 2026', value: '2026-09-01' },
+    { label: 'أكتوبر 2026', value: '2026-10-01' },
+    { label: 'نوفمبر 2026', value: '2026-11-01' },
+    { label: 'ديسمبر 2026', value: '2026-12-01' },
+    { label: 'يناير 2027', value: '2027-01-01' },
+    { label: 'فبراير 2027', value: '2027-02-01' },
+    { label: 'مارس 2027', value: '2027-03-01' },
+    { label: 'أبريل 2027', value: '2027-04-01' },
+    { label: 'مايو 2027', value: '2027-05-01' },
+    { label: 'يونيو 2027', value: '2027-06-01' },
+    { label: 'يوليو 2027', value: '2027-07-01' },
+    { label: 'أغسطس 2027', value: '2027-08-01' },
+  ];
+
+  const cities = [
+    { id: 1, nameAr: 'الدقي', nameEn: 'Dokki' },
+    { id: 2, nameAr: 'المهندسين', nameEn: 'Mohandessin' },
+    { id: 3, nameAr: 'مدينة نصر', nameEn: 'Nasr City' },
+    { id: 4, nameAr: 'المعادي', nameEn: 'Maadi' },
+    { id: 5, nameAr: 'الهرم', nameEn: 'Haram' },
+    { id: 6, nameAr: '6 أكتوبر', nameEn: '6th of October' },
+    { id: 7, nameAr: 'الشيخ زايد', nameEn: 'Sheikh Zayed' },
+    { id: 8, nameAr: 'العجوزة', nameEn: 'Agouza' },
   ];
 
   const plans = [
@@ -351,12 +361,14 @@ export default function AddCustomerContract() {
       label: 'عادي',
       maxMonths: 12,
       discountPercentage: 0,
+      autoSelectConsecutive: false,
     },
 
     SIX_MONTHS: {
       label: '6 أشهر',
       maxMonths: 6,
       discountPercentage: 50,
+      autoSelectConsecutive: true,
     },
   };
 
@@ -366,14 +378,13 @@ export default function AddCustomerContract() {
     discountPercentage: 0,
   };
 
-  const paymentMethodName = {
-    CASH: 'نقدي',
-    BANK_TRANSFER: 'تحويل بنكي',
-    CREDIT_CARD: 'بطاقة ائتمان',
-    CHEQUE: 'شيك',
-    ONLINE_PAYMENT: 'دفع إلكتروني',
-  };
-
+  const paymentMethods = [
+    { id: 1, code: 'CASH', label: 'نقدي' },
+    { id: 2, code: 'BANK_TRANSFER', label: 'تحويل بنكي' },
+    { id: 3, code: 'CREDIT_CARD', label: 'بطاقة ائتمان' },
+    { id: 4, code: 'CHEQUE', label: 'شيك' },
+    { id: 5, code: 'ONLINE_PAYMENT', label: 'دفع إلكتروني' },
+  ];
   /* =========================================================
      CALCULATIONS
   ========================================================= */
@@ -382,9 +393,21 @@ export default function AddCustomerContract() {
 
   const selectedPlan = plans.find((p: any) => p.id === Number(planId));
 
+  const baseSubscriptionAmount = selectedPlan?.price ?? 0;
+
   const monthlyPrice = selectedPlan?.price || 0;
 
   const monthlySubscription = selectedMonths.length * monthlyPrice;
+
+  /*
+   * Latest selected month (ISO dates compare correctly as strings).
+   * null when no month is selected.
+   */
+  const latestSelectedMonth = selectedMonths.length
+    ? selectedMonths.reduce((latest: any, month: any) =>
+        month.value > latest.value ? month : latest,
+      )
+    : null;
 
   /*
    * Contract type rules:
@@ -410,7 +433,7 @@ export default function AddCustomerContract() {
    * The contract-type discount applies to the
    * subscription only, not the joining fee.
    */
-  const discountAmount = (subscriptionDiscount+discountAmountInput);
+  const discountAmount = subscriptionDiscount + discountAmountInput;
 
   const totalContractValue = grossContractValue - discountAmountInput;
 
@@ -419,7 +442,7 @@ export default function AddCustomerContract() {
   const paidPercentage =
     totalContractValue > 0 ? Math.min((paymentAmount / totalContractValue) * 100, 100) : 0;
 
-  const selectedBranch = branchId !== '' ? branches[Number(branchId)] : null;
+  const selectedBranch = branchId !== '' ? (branches[Number(branchId)] ?? null) : null;
 
   const customerStatus = customerMode === 'reactivate' ? 'إعادة تفعيل' : 'عميل جديد';
 
@@ -510,7 +533,7 @@ export default function AddCustomerContract() {
       shouldValidate: true,
     });
 
-    setValue('customerType', customer.type, {
+    setValue('customerTypeId', customer.typeId, {
       shouldDirty: true,
       shouldValidate: true,
     });
@@ -540,6 +563,14 @@ export default function AddCustomerContract() {
      MONTHS
   ========================================================= */
 
+  // Re-check nextDueDate whenever the selected months change,
+  // but only if the user already picked a date.
+  const revalidateNextDueDate = () => {
+    if (getValues('nextDueDate')) {
+      trigger('nextDueDate');
+    }
+  };
+
   const handleContractTypeChange = (value: string) => {
     setValue('contractType', value, {
       shouldDirty: true,
@@ -553,6 +584,8 @@ export default function AddCustomerContract() {
       shouldValidate: true,
     });
 
+    revalidateNextDueDate();
+
     // Discount is calculated automatically.
     setValue('discountAmount', 0, {
       shouldDirty: true,
@@ -560,19 +593,24 @@ export default function AddCustomerContract() {
     });
   };
 
-  const toggleMonth = (month: string) => {
+  const toggleMonth = (month: { label: string; value: string }) => {
     const current = getValues('selectedMonths') || [];
 
-    const isSelected = current.includes(month);
+    const isSelected = current.some((item: any) => item.value === month.value);
+
+    const autoSelect = currentContractTypeRule.autoSelectConsecutive;
 
     // Remove selected month
+    // (auto-select plans clear the whole block, since it must stay consecutive)
     if (isSelected) {
-      const updated = current.filter((item: string) => item !== month);
+      const updated = autoSelect ? [] : current.filter((item: any) => item.value !== month.value);
 
       setValue('selectedMonths', updated, {
         shouldDirty: true,
         shouldValidate: true,
       });
+
+      revalidateNextDueDate();
 
       return;
     }
@@ -582,17 +620,42 @@ export default function AddCustomerContract() {
       return;
     }
 
+    // Auto-select plans (e.g. 6 months): picking a month selects it
+    // plus the following consecutive months up to the plan limit.
+    if (autoSelect) {
+      const startIndex = monthOptions.findIndex((item) => item.value === month.value);
+
+      const block = monthOptions.slice(startIndex, startIndex + currentContractTypeRule.maxMonths);
+
+      // Not enough months left in the list to complete the block
+      if (block.length < currentContractTypeRule.maxMonths) {
+        return;
+      }
+
+      setValue('selectedMonths', block, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+
+      revalidateNextDueDate();
+
+      return;
+    }
+
     // Prevent selecting more than allowed
     if (current.length >= currentContractTypeRule.maxMonths) {
       return;
     }
 
-    const updated = [...current, month];
+    // Keep months sorted by date
+    const updated = [...current, month].sort((a: any, b: any) => a.value.localeCompare(b.value));
 
     setValue('selectedMonths', updated, {
       shouldDirty: true,
       shouldValidate: true,
     });
+
+    revalidateNextDueDate();
   };
   /* =========================================================
      STEP VALIDATION
@@ -605,7 +668,7 @@ export default function AddCustomerContract() {
       'customerNameAr',
       'customerNameEn',
       'customerCode',
-      'customerType',
+      'customerTypeId',
       'structure',
       'zoneId',
       'licenseNumber',
@@ -655,27 +718,37 @@ export default function AddCustomerContract() {
      FINAL SUBMIT
   ========================================================= */
 
-  const onSubmit = (data: any) => {
+  const onSubmit = async (data: any) => {
     const payload = {
       ...data,
+      contractBranchIndex: Number(branchId),
 
-      joiningFee,
+      joiningFeeAmount:joiningFee,
+      advancePayment:paymentAmount,
+      remainingAmount,
 
-      monthlySubscription,
+      baseSubscriptionAmount,
 
       grossContractValue,
+      // Don't put File objects in JSON
+      // documents: data.documents.map((doc: any) => ({
+      //   documentType: doc.documentType,
+      //   fileName: doc.file.name,
+      // })),
 
       discountAmount,
       discountAmountInput,
-
+      subscriptionDiscountPercentage: discountPercentage,
       totalContractValue,
-
-      remainingAmount,
-
-      paidPercentage,
+      selectedMonths: data.selectedMonths.map((month: any) => month.value),
+      repAssistantId: participantId || null,
     };
 
     console.log('FINAL FORM:', payload);
+
+    const response = await axios.post('http://localhost:3000/api/v1/customers/', payload);
+
+    console.log('RESPONSE:', response.data);
 
     console.log('FILES:', data.documents);
 
@@ -725,18 +798,11 @@ export default function AddCustomerContract() {
             })}
           />
 
-          <input
-            type="hidden"
-            {...register('selectedMonths', {
-              validate: (value) => value?.length > 0 || 'يجب اختيار شهر واحد على الأقل',
-            })}
-          />
+          <input type="hidden" {...register('selectedMonths')} />
 
           <input
             type="hidden"
-            {...register('participantId', {
-              validate: (value) => !hasParticipant || value || 'يجب اختيار المشارك',
-            })}
+            {...register('participantId',{valueAsNumber: true})}
           />
 
           {/* =================================================
@@ -1053,14 +1119,15 @@ export default function AddCustomerContract() {
                         <span className="mr-1 text-red-500">*</span>
                       </>
                     }
-                    registration={register('customerType', {
+                    registration={register('customerTypeId', {
                       required: 'نوع العميل مطلوب',
+                      valueAsNumber: true,
                     })}
                     options={[
-                      ['PHARMACEUTICAL', 'صيدلي'],
-                      ['COMMERCIAL', 'تجاري'],
+                      [1, 'صيدلي'],
+                      [2, 'تجاري'],
                     ]}
-                    error={errors.customerType?.message}
+                    error={errors.customerTypeId?.message}
                   />
 
                   <SelectField
@@ -1089,10 +1156,11 @@ export default function AddCustomerContract() {
                     }
                     registration={register('zoneId', {
                       required: 'فرع المتحدة مطلوب',
+                      valueAsNumber: true,
                     })}
                     options={[
-                      ['Zone A', 'منطقة أ'],
-                      ['Zone B', 'منطقة ب'],
+                      [1, 'منطقة أ'],
+                      [2, 'منطقة ب'],
                     ]}
                     error={errors.zoneId?.message}
                   />
@@ -1451,195 +1519,185 @@ export default function AddCustomerContract() {
 
               {/* Branches */}
 
-              <Card className="border-border bg-card shadow-sm">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="flex items-center gap-2 text-base">
-                        <MapPin className="h-5 w-5 text-muted-foreground" />
-                        فروع العميل
-                      </CardTitle>
+              {/* Facility Address */}
 
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        أضف الفروع التابعة للعميل وأدخل بيانات كل فرع
-                      </p>
-                    </div>
-                    {structure === 'CHAIN' && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="rounded-xl"
-                        onClick={() =>
-                          appendBranch({
-                            governorate: '',
-                            city: '',
-                            street: '',
-                            buildingNumber: '',
-                            glnCode: '',
-                          })
-                        }
-                      >
-                        إضافة فرع
-                      </Button>
-                    )}
-                  </div>
-                </CardHeader>
+<Card className="border-border bg-card shadow-sm">
+  <CardHeader>
+    <div>
+      <CardTitle className="flex items-center gap-2 text-base">
+        <MapPin className="h-5 w-5 text-muted-foreground" />
+        عنوان المنشأة
+      </CardTitle>
 
-                <CardContent>
-                  <div className="overflow-hidden rounded-xl border border-border">
-                    <div className="overflow-x-auto">
-                      <table className="w-full min-w-[1000px] text-sm">
-                        <thead>
-                          <tr className="border-b bg-muted/40">
-                            <th className="px-4 py-3 text-right font-semibold">#</th>
+      <p className="mt-1 text-xs text-muted-foreground">
+        أدخل بيانات عنوان المنشأة بالتفصيل، بما في ذلك المحافظة والمدينة والعنوان ورمز الـ GLN
+      </p>
+    </div>
+  </CardHeader>
 
-                            <th className="px-4 py-3 text-right font-semibold">المحافظة</th>
+  <CardContent>
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
 
-                            <th className="px-4 py-3 text-right font-semibold">المدينة</th>
+      {/* Governorate */}
+      <div>
+        <label className="mb-2 block text-sm font-medium">
+          المحافظة
+          <span className="mr-1 text-red-500">*</span>
+        </label>
 
-                            <th className="px-4 py-3 text-right font-semibold">الشارع</th>
+        <select
+          {...register('address.governorate', {
+            required: 'المحافظة مطلوبة',
+          })}
+          className="
+            h-11 w-full rounded-xl border border-border
+            bg-background px-3 text-sm text-foreground
+            outline-none focus:ring-2 focus:ring-ring
+          "
+        >
+          <option value="">اختر المحافظة</option>
+          <option value="القاهرة">القاهرة</option>
+          <option value="الجيزة">الجيزة</option>
+          <option value="القليوبية">القليوبية</option>
+          <option value="الإسكندرية">الإسكندرية</option>
+          <option value="الشرقية">الشرقية</option>
+          <option value="الدقهلية">الدقهلية</option>
+        </select>
 
-                            <th className="px-4 py-3 text-right font-semibold">
-                              رمز الموقع العالمي (GLN)
-                            </th>
+        {errors.address?.governorate?.message && (
+          <ErrorText>
+            {errors.address.governorate.message}
+          </ErrorText>
+        )}
+      </div>
 
-                            <th className="px-4 py-3 text-right font-semibold">رقم المبنى</th>
+      {/* City */}
+      <div>
+        <label className="mb-2 block text-sm font-medium">
+          المدينة
+          <span className="mr-1 text-red-500">*</span>
+        </label>
 
-                            <th className="px-4 py-3 text-center font-semibold">الإجراءات</th>
-                          </tr>
-                        </thead>
+        <Controller
+          control={control}
+          name="address.cityId"
+          rules={{
+            required: 'المدينة مطلوبة',
+          }}
+          render={({ field }) => {
+            const selectedCity = cities.find(
+              (city) => city.id === Number(field.value),
+            );
 
-                        <tbody>
-                          {branchFields.map((branch: any, index: number) => {
-                            const branchError = (errors as any).branches?.[index];
+            return (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    className="h-11 w-full justify-between rounded-xl bg-background font-normal"
+                  >
+                    {selectedCity
+                      ? isRtl
+                        ? selectedCity.nameAr
+                        : selectedCity.nameEn
+                      : 'اختر المدينة'}
 
-                            return (
-                              <tr
-                                key={branch.id}
-                                className="border-b last:border-b-0 hover:bg-muted/20"
-                              >
-                                <td className="px-4 py-3">
-                                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-xs font-semibold">
-                                    {index + 1}
-                                  </div>
-                                </td>
+                    <ChevronsUpDown className="h-4 w-4 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
 
-                                <td className="px-4 py-3">
-                                  <select
-                                    {...register(`branches.${index}.governorate`, {
-                                      required: 'المحافظة مطلوبة',
-                                    })}
-                                    className="
-                                        h-11 w-full
-                                        rounded-xl border
-                                        border-border
-                                        bg-background
-                                        px-3 text-sm
-                                        text-foreground
-                                        outline-none
-                                        focus:ring-2
-                                        focus:ring-ring
-                                      "
-                                  >
-                                    <option value="">اختر المحافظة</option>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+                  <Command>
+                    <CommandInput
+                      placeholder="ابحث عن المدينة..."
+                      className="h-10"
+                    />
 
-                                    <option value="القاهرة">القاهرة</option>
+                    <CommandList>
+                      <CommandEmpty>
+                        لا توجد مدينة.
+                      </CommandEmpty>
 
-                                    <option value="الجيزة">الجيزة</option>
+                      <CommandGroup>
+                        {cities.map((city) => (
+                          <CommandItem
+                            key={city.id}
+                            value={`${city.nameAr} ${city.nameEn}`}
+                            onSelect={() => field.onChange(city.id)}
+                          >
+                            <Check
+                              className={cn(
+                                'mr-2 h-4 w-4',
+                                Number(field.value) === city.id
+                                  ? 'opacity-100'
+                                  : 'opacity-0',
+                              )}
+                            />
 
-                                    <option value="القليوبية">القليوبية</option>
+                            {isRtl
+                              ? city.nameAr
+                              : city.nameEn}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            );
+          }}
+        />
 
-                                    <option value="الإسكندرية">الإسكندرية</option>
+        {errors.address?.cityId?.message && (
+          <ErrorText>
+            {errors.address.cityId.message}
+          </ErrorText>
+        )}
+      </div>
 
-                                    <option value="الشرقية">الشرقية</option>
+      {/* Street */}
+      <FormField
+        label={
+          <>
+            الشارع
+            <span className="mr-1 text-red-500">*</span>
+          </>
+        }
+        registration={register('address.street', {
+          required: 'الشارع مطلوب',
+        })}
+        placeholder="شارع التحرير"
+        error={errors.address?.street?.message}
+      />
 
-                                    <option value="الدقهلية">الدقهلية</option>
-                                  </select>
+      {/* Building Number */}
+      <FormField
+        label={
+          <>
+            رقم المبنى
+            <span className="mr-1 text-red-500">*</span>
+          </>
+        }
+        registration={register('address.buildingNumber', {
+          required: 'رقم المبنى مطلوب',
+        })}
+        placeholder="25"
+        error={errors.address?.buildingNumber?.message}
+      />
 
-                                  {branchError?.governorate?.message && (
-                                    <ErrorText>{branchError.governorate.message}</ErrorText>
-                                  )}
-                                </td>
+      {/* GLN */}
+      <FormField
+        label="رمز الموقع العالمي (GLN)"
+        registration={register('address.glnCode')}
+        placeholder="22828317"
+        error={errors.address?.glnCode?.message}
+      />
 
-                                <td className="px-4 py-3">
-                                  <Input
-                                    {...register(`branches.${index}.city`, {
-                                      required: 'المدينة مطلوبة',
-                                    })}
-                                    placeholder="مثال: الدقي"
-                                    className="h-11 rounded-xl bg-background"
-                                  />
-
-                                  {branchError?.city?.message && (
-                                    <ErrorText>{branchError.city.message}</ErrorText>
-                                  )}
-                                </td>
-
-                                <td className="px-4 py-3">
-                                  <Input
-                                    {...register(`branches.${index}.street`, {
-                                      required: 'الشارع مطلوب',
-                                    })}
-                                    placeholder="شارع التحرير"
-                                    className="h-11 rounded-xl bg-background"
-                                  />
-
-                                  {branchError?.street?.message && (
-                                    <ErrorText>{branchError.street.message}</ErrorText>
-                                  )}
-                                </td>
-
-                                <td className="px-4 py-3">
-                                  <Input
-                                    {...register(`branches.${index}.glnCode`, {
-                                      required: 'رمز الموقع العالمي (GLN) مطلوب',
-                                    })}
-                                    placeholder="22828317"
-                                    className="h-11 rounded-xl bg-background"
-                                  />
-
-                                  {branchError?.glnCode?.message && (
-                                    <ErrorText>{branchError.glnCode.message}</ErrorText>
-                                  )}
-                                </td>
-
-                                <td className="px-4 py-3">
-                                  <Input
-                                    {...register(`branches.${index}.buildingNumber`, {
-                                      required: 'رقم المبنى مطلوب',
-                                    })}
-                                    placeholder="25"
-                                    className="h-11 rounded-xl bg-background"
-                                  />
-
-                                  {branchError?.buildingNumber?.message && (
-                                    <ErrorText>{branchError.buildingNumber.message}</ErrorText>
-                                  )}
-                                </td>
-
-                                <td className="px-4 py-3">
-                                  <div className="flex items-center justify-center gap-1">
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-9 w-9 rounded-lg text-destructive hover:bg-destructive/10"
-                                      onClick={() => removeBranch(index)}
-                                      disabled={branchFields.length === 1}
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+    </div>
+  </CardContent>
+</Card>
             </div>
           )}
 
@@ -1694,7 +1752,7 @@ export default function AddCustomerContract() {
 
                   {/* Branch */}
 
-                  <SelectField
+                  {/* <SelectField
                     label={
                       <>
                         الفرع التابع للعميل
@@ -1703,6 +1761,11 @@ export default function AddCustomerContract() {
                     }
                     registration={register('branchId', {
                       required: 'يجب اختيار الفرع',
+
+                      // The selected branch must still exist in step 1's branches
+                      validate: (value) =>
+                        !!getValues('branches')?.[Number(value)] ||
+                        'الفرع المختار غير موجود، يرجى اختيار الفرع مرة أخرى',
                     })}
                     options={[
                       ['', 'اختر الفرع'],
@@ -1715,7 +1778,7 @@ export default function AddCustomerContract() {
                       ]),
                     ]}
                     error={errors.branchId?.message}
-                  />
+                  /> */}
 
                   <SelectField
                     label={
@@ -1726,6 +1789,7 @@ export default function AddCustomerContract() {
                     }
                     registration={register('programId', {
                       required: 'يجب اختيار البرنامج',
+                      valueAsNumber: true,
                     })}
                     options={[
                       ['', 'اختر البرنامج'],
@@ -1777,6 +1841,7 @@ export default function AddCustomerContract() {
                     label="نوع التعاقد"
                     registration={register('planId', {
                       required: 'يجب اختيار نوع التعاقد',
+                      valueAsNumber: true,
                     })}
                     options={[
                       ['', 'اختار نوع التعاقد'],
@@ -1794,6 +1859,7 @@ export default function AddCustomerContract() {
                     label="المندوب المسؤول"
                     registration={register('representativeId', {
                       required: 'المندوب المسؤول مطلوب',
+                      valueAsNumber: true,
                     })}
                     options={[
                       ['', 'اختر المندوب'],
@@ -1930,10 +1996,36 @@ export default function AddCustomerContract() {
                         type="date"
                         {...register('nextDueDate', {
                           required: 'تاريخ الاستحقاق مطلوب',
+
+                          // Must be later than the latest selected month.
+                          // If no month is selected, any date is accepted.
+                          validate: (value) => {
+                            const months = getValues('selectedMonths') || [];
+
+                            if (months.length === 0) {
+                              return true;
+                            }
+
+                            const latest = months.reduce((max: any, month: any) =>
+                              month.value > max.value ? month : max,
+                            );
+
+                            return (
+                              value > latest.value ||
+                              `يجب أن يكون تاريخ الاستحقاق بعد آخر شهر تم اختياره (${latest.value})`
+                            );
+                          },
                         })}
                         className="h-11 rounded-xl pr-10"
                       />
                     </div>
+
+                    {latestSelectedMonth && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        يجب أن يكون التاريخ بعد {latestSelectedMonth.label} (
+                        {latestSelectedMonth.value})
+                      </p>
+                    )}
 
                     {errors.nextDueDate && <ErrorText>{errors.nextDueDate.message}</ErrorText>}
                   </div>
@@ -1968,6 +2060,13 @@ export default function AddCustomerContract() {
                         اختر الشهور التي يريد العميل سدادها في التحصيل الحالي.
                       </p>
 
+                      {currentContractTypeRule.autoSelectConsecutive && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          عند اختيار شهر يتم تحديد {currentContractTypeRule.maxMonths} أشهر متتالية
+                          تلقائيًا، ولإلغاء التحديد اضغط على أي شهر محدد.
+                        </p>
+                      )}
+
                       {contractType && (
                         <div className="mt-3 flex flex-wrap items-center gap-2">
                           <Badge variant="outline" className="rounded-full">
@@ -1991,7 +2090,7 @@ export default function AddCustomerContract() {
                       </Badge>
 
                       <Badge variant="outline" className="rounded-full">
-                        {monthlySubscription.toLocaleString('ar-EG')} جنيه
+                        {subscriptionPriceAfterDiscount.toLocaleString('ar-EG')} جنيه
                       </Badge>
                     </div>
                   </div>
@@ -1999,17 +2098,28 @@ export default function AddCustomerContract() {
 
                 <CardContent>
                   <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-                    {monthOptions.map((month) => {
-                      const checked = selectedMonths.includes(month);
+                    {monthOptions.map((month, monthIndex) => {
+                      const checked = selectedMonths.some(
+                        (item: any) => item.value === month.value,
+                      );
 
                       const maxMonthsReached =
                         selectedMonths.length >= currentContractTypeRule.maxMonths;
 
-                      const disabled = !contractType || (!checked && maxMonthsReached);
+                      // Auto-select plans need enough months left to complete the block
+                      const notEnoughMonthsLeft =
+                        monthOptions.length - monthIndex < currentContractTypeRule.maxMonths;
+
+                      const disabled =
+                        !contractType ||
+                        (!checked &&
+                          (currentContractTypeRule.autoSelectConsecutive
+                            ? notEnoughMonthsLeft
+                            : maxMonthsReached));
 
                       return (
                         <label
-                          key={month}
+                          key={month.value}
                           className={`
         flex items-center gap-3
         rounded-xl border p-3
@@ -2030,7 +2140,7 @@ export default function AddCustomerContract() {
                             onCheckedChange={() => toggleMonth(month)}
                           />
 
-                          <span className="text-sm font-medium">{month}</span>
+                          <span className="text-sm font-medium">{month.label}</span>
                         </label>
                       );
                     })}
@@ -2175,16 +2285,12 @@ export default function AddCustomerContract() {
 
                         <SelectField
                           label="طريقة الدفع"
-                          registration={register('paymentMethod')}
-                          options={[
-                            ['', 'اختر طريقة الدفع'],
-                            ['CASH', 'نقدي'],
-                            ['BANK_TRANSFER', 'تحويل بنكي'],
-                            ['CREDIT_CARD', 'بطاقة ائتمان'],
-                            ['CHEQUE', 'شيك'],
-                            ['ONLINE_PAYMENT', 'دفع إلكتروني'],
-                          ]}
-                          
+                          registration={register('paymentMethodId', {
+                            required: 'طريقة الدفع مطلوبة',
+                            valueAsNumber: true,
+                          })}
+                          options={paymentMethods.map((method) => [method.id, method.label])}
+                          error={errors.paymentMethodId?.message}
                         />
                       </div>
 
@@ -2271,11 +2377,7 @@ export default function AddCustomerContract() {
                       <ReviewRow
                         label="نوع العميل"
                         value={
-                          customerType === 'PHARMACEUTICAL'
-                            ? 'صيدلي'
-                            : customerType === 'COMMERCIAL'
-                              ? 'تجاري'
-                              : '—'
+                          customerTypeId === 1 ? 'صيدلي' : customerTypeId === 2 ? 'تجاري' : '—'
                         }
                       />
 
@@ -2317,7 +2419,7 @@ export default function AddCustomerContract() {
 
                       <ReviewRow label="عدد جهات الاتصال" value={`${contactFields.length}`} />
 
-                      <ReviewRow label="عدد الفروع" value={`${branchFields.length}`} />
+                      
 
                       <ReviewRow label="المستندات" value={`${documentFields.length}`} />
 
@@ -2363,8 +2465,9 @@ export default function AddCustomerContract() {
                       <ReviewRow
                         label="طريقة الدفع"
                         value={
-                          paymentMethod
-                            ? paymentMethodName[paymentMethod as keyof typeof paymentMethodName]
+                          paymentMethodId
+                            ? paymentMethods.find((method) => method.id === Number(paymentMethodId))
+                                ?.label || 'غير معروف'
                             : 'لا يوجد تحصيل'
                         }
                       />
@@ -2419,7 +2522,10 @@ export default function AddCustomerContract() {
                 {activeStep === 1 ? (
                   <Button
                     type="button"
-                    onClick={handleNext}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleNext();
+                    }}
                     className="
                       h-11 flex-1 rounded-xl
                       bg-foreground

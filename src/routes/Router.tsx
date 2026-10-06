@@ -33,9 +33,12 @@ import Announcements from 'src/shared/pages/Announcements';
 import ViewUncollectedTargets from 'src/shared/pages/ViewUncollectedTargets';
 import OutstandingReport from 'src/shared/pages/OutstandingRecivablesReport';
 import AddTargetPlan from 'src/shared/pages/AddTargetPlan';
+import OutstandingMonthlySubscriptions from 'src/shared/pages/OutstandingMonthlySubscriptions';
 import ToDoList from 'src/shared/pages/ToDoList';
 import TaskDetails from 'src/shared/pages/TaskDetails';
 import InstallationAssignment from 'src/shared/pages/AssignInstallation';
+import ManagerOfAll from 'src/shared/pages/ManagerOfAll';
+import CollectAdditionalUnits from 'src/shared/pages/CollectAdditionalUnits';
 /* ***Layouts**** */
 const FullLayout = Loadable(lazy(() => import('../layouts/full/FullLayout')));
 const BlankLayout = Loadable(lazy(() => import('../layouts/blank/BlankLayout')));
@@ -351,6 +354,24 @@ const Router = [
         path:'assign-installation',
         element:(
           <InstallationAssignment />
+        )
+      },
+      {
+        path:'/outstanding-monthly-subscriptions',
+        element:(
+          <OutstandingMonthlySubscriptions />
+        )
+      },
+      {
+        path:'/manager-of-all',
+        element:(
+          <ManagerOfAll />
+        )
+      },
+      {
+        path:'/collect-additional-units',
+        element:(
+          <CollectAdditionalUnits />
         )
       }
     ],
