@@ -39,6 +39,7 @@ import TaskDetails from 'src/shared/pages/TaskDetails';
 import InstallationAssignment from 'src/shared/pages/AssignInstallation';
 import ManagerOfAll from 'src/shared/pages/ManagerOfAll';
 import CollectAdditionalUnits from 'src/shared/pages/CollectAdditionalUnits';
+import SubscriptionCollectionPage from 'src/shared/pages/Targets';
 /* ***Layouts**** */
 const FullLayout = Loadable(lazy(() => import('../layouts/full/FullLayout')));
 const BlankLayout = Loadable(lazy(() => import('../layouts/blank/BlankLayout')));
@@ -372,6 +373,12 @@ const Router = [
         path:'/collect-additional-units',
         element:(
           <CollectAdditionalUnits />
+        )
+      },
+      {
+        path:'/targets',
+        element:(
+          <SubscriptionCollectionPage />
         )
       }
     ],

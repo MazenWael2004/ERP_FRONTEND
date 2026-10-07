@@ -2,16 +2,18 @@ import SimpleBar from 'simplebar-react';
 import { Icon } from '@iconify/react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { useEffect, useState } from 'react';
+
 import companyLogo from '../../../../assets/images/logos/b_connect_egypt_logo-removebg-preview.png';
-import usersIcon from '../../../../assets/images/logos/users.png';
+
 import { ArrowLeft } from 'lucide-react';
 import { useTheme } from 'src/components/provider/theme-provider';
 import { useAuth } from 'src/features/auth/hooks/useAuth';
 import { useTranslation } from 'react-i18next';
 
-import { AMMenu, AMMenuItem, AMSidebar } from 'tailwind-sidebar';
+import { AMMenuItem, AMSidebar } from 'tailwind-sidebar';
 
 import 'tailwind-sidebar/styles.css';
+
 import { fetchApps } from 'src/shared/api/axios';
 
 // ============================================================
@@ -31,7 +33,7 @@ interface SidebarItemType {
   isPro?: boolean;
 }
 
-interface AppPage {
+interface ModulePage {
   id: number | string;
   title_ar: string;
   title_en: string;
@@ -39,31 +41,12 @@ interface AppPage {
   url: string;
 }
 
-interface AppModule {
+interface Module {
   id: number | string;
   name_ar: string;
   name_en: string;
-  pages: AppPage[];
+  pages: ModulePage[];
 }
-
-interface App {
-  id: number;
-  name?: string;
-  name_ar: string;
-  name_en: string;
-  modules: AppModule[];
-}
-
-const withAppContext = (url: string | undefined, appId: number | undefined) => {
-  if (!url || !appId || url.startsWith('https')) {
-    return url;
-  }
-
-  const [pathWithQuery, hash] = url.split('#');
-  const separator = pathWithQuery.includes('?') ? '&' : '?';
-
-  return `${pathWithQuery}${separator}app=${appId}${hash ? `#${hash}` : ''}`;
-};
 
 // ============================================================
 // Render Sidebar Items
@@ -77,7 +60,6 @@ const renderSidebarItems = (
   isSubItem: boolean = false,
   openModules?: Record<number, boolean>,
   setOpenModules?: React.Dispatch<React.SetStateAction<Record<number, boolean>>>,
-  selectedAppId?: number,
 ) => {
   return items.map((item) => {
     // --------------------------------------------------------
@@ -90,8 +72,9 @@ const renderSidebarItems = (
       const isOpen = openModules?.[moduleId] ?? false;
 
       return (
-        <div className="mb-2" key={item.heading}>
+        <div className="mb-2" key={item.id ?? item.heading}>
           {/* Module Header */}
+
           <button
             type="button"
             onClick={() =>
@@ -129,11 +112,12 @@ const renderSidebarItems = (
               icon={isOpen ? 'mdi:chevron-down' : isRTL ? 'mdi:chevron-left' : 'mdi:chevron-right'}
               width={26}
               height={26}
-              className="text-primary" // or text-muted-foreground, text-gray-500, etc.
+              className="text-primary"
             />
           </button>
 
           {/* Module Pages */}
+
           {isOpen && item.children && item.children.length > 0 && (
             <div className="mt-1">
               {renderSidebarItems(
@@ -144,7 +128,6 @@ const renderSidebarItems = (
                 true,
                 openModules,
                 setOpenModules,
-                selectedAppId,
               )}
             </div>
           )}
@@ -153,12 +136,10 @@ const renderSidebarItems = (
     }
 
     // --------------------------------------------------------
-    // Submenu
+    // Nested Submenu
     // --------------------------------------------------------
 
     if (item.children && item.children.length > 0) {
-      const IconComp = item.icon || null;
-
       const iconElement = item.iconImage ? (
         <img src={item.iconImage} alt="" className="h-[21px] w-[21px] object-contain" />
       ) : item.icon ? (
@@ -169,10 +150,6 @@ const renderSidebarItems = (
 
       return (
         <div key={item.id}>
-          {/*
-            You can keep this if later you want
-            nested pages/submenus.
-          */}
           <AMMenuItem
             icon={iconElement}
             isSelected={false}
@@ -195,7 +172,6 @@ const renderSidebarItems = (
               true,
               openModules,
               setOpenModules,
-              selectedAppId,
             )}
           </div>
         </div>
@@ -208,17 +184,13 @@ const renderSidebarItems = (
 
     const isSelected = currentPath === item.url;
 
-    const IconComp = item.icon || null;
-
-    const iconElement = IconComp ? (
-      <Icon icon={IconComp} height={21} width={21} />
+    const iconElement = item.icon ? (
+      <Icon icon={item.icon} height={21} width={21} />
     ) : (
       <Icon icon="ri:checkbox-blank-circle-line" height={9} width={9} />
     );
 
-    const appAwareUrl = withAppContext(item.url, selectedAppId);
-
-    const linkTarget = appAwareUrl?.startsWith('https') ? '_blank' : '_self';
+    const linkTarget = item.url?.startsWith('https') ? '_blank' : '_self';
 
     const itemClassNames = `
       mt-0.5
@@ -233,7 +205,7 @@ const renderSidebarItems = (
         <AMMenuItem
           icon={iconElement}
           isSelected={isSelected}
-          link={appAwareUrl}
+          link={item.url}
           target={linkTarget}
           badge={!!item.isPro}
           badgeColor="bg-lightsecondary"
@@ -255,87 +227,105 @@ const renderSidebarItems = (
 // ============================================================
 
 const SidebarLayout = ({ onClose }: { onClose?: () => void }) => {
-  const [mockApps, setMockApps] = useState<App[]>([]);
+  const [modules, setModules] = useState<Module[]>([]);
+
   const [isLoading, setLoading] = useState(false);
+
   const { hasPermission } = useAuth();
+
   const { i18n, t } = useTranslation();
+
   const isRTL = (i18n.resolvedLanguage ?? i18n.language) === 'ar';
 
-  const loadApps = async () => {
+  const location = useLocation();
+
+  const navigate = useNavigate();
+
+  const pathname = location.pathname;
+
+  const [openModules, setOpenModules] = useState<Record<number, boolean>>({});
+
+  // ==========================================================
+  // Load Modules
+  // ==========================================================
+
+  const loadModules = async () => {
     try {
       setLoading(true);
 
       const response = await fetchApps();
-      const apps: App[] = response.data;
-      const filteredApps = apps.map((app) => ({
-        ...app,
-        modules: app.modules.map((module) => ({
-          ...module,
-          pages: module.pages.filter((page) => hasPermission(page.url, 'READ')),
-        })),
-      }));
 
-      setMockApps(filteredApps);
+      const fetchedModules: Module[] = response.data;
+      console.log(response.data);
+
+      // ------------------------------------------------------
+      // Filter pages according to READ permission
+      // ------------------------------------------------------
+
+      const filteredModules = fetchedModules
+        .map((module) => ({
+          ...module,
+
+          pages: module.pages.filter((page) => hasPermission(page.url, 'READ')),
+        }))
+
+        // --------------------------------------------------
+        // Don't display modules with no accessible pages
+        // --------------------------------------------------
+
+        .filter((module) => module.pages.length > 0);
+
+      setModules(filteredModules);
     } catch (error) {
-      console.error('Failed to fetch apps:', error);
+      console.error('Failed to fetch modules:', error);
     } finally {
       setLoading(false);
     }
   };
 
+  // ==========================================================
+  // Load Modules On Mount
+  // ==========================================================
+
   useEffect(() => {
-    loadApps();
+    loadModules();
   }, []);
 
-  const location = useLocation();
-  const navigate = useNavigate();
-
-  const pathname = location.pathname;
-
-  const selectedAppFromUrl = Number(new URLSearchParams(location.search).get('app'));
-
-  const selectedApp = mockApps.some((app) => app.id === selectedAppFromUrl)
-    ? selectedAppFromUrl
-    : (mockApps.find((app) =>
-        app.modules.some((module) => module.pages.some((page) => page.url === pathname)),
-      )?.id ?? mockApps[0]?.id);
-
-  const [openModules, setOpenModules] = useState<Record<number, boolean>>({});
+  // ==========================================================
+  // Reset Open Modules
+  // ==========================================================
 
   useEffect(() => {
     setOpenModules({});
-  }, [selectedApp]);
+  }, [pathname]);
 
-  // ----------------------------------------------------------
-  // Find Selected App
-  // ----------------------------------------------------------
-
-  const currentApp = mockApps.find((app) => app.id === selectedApp);
-
-  // ----------------------------------------------------------
+  // ==========================================================
   // Theme
-  // ----------------------------------------------------------
+  // ==========================================================
 
   const { theme } = useTheme();
 
   const sidebarMode = theme === 'light' || theme === 'dark' ? theme : undefined;
 
-  // ----------------------------------------------------------
+  // ==========================================================
   // Convert Modules → Sidebar Items
-  // ----------------------------------------------------------
-  console.log(currentApp);
-  const sidebarItems: SidebarItemType[] =
-    currentApp?.modules.map((module) => ({
-      id: module.id,
-      heading: i18n.language === 'ar' ? module.name_ar : module.name_en,
+  // ==========================================================
 
-      children: module.pages.map((page) => ({
-        id: page.id,
-        name: i18n.language === 'ar' ? page.title_ar : page.title_en,
-        icon: page.icon,
-        url: page.url,
-      })),
-    })) ?? [];
+  const sidebarItems: SidebarItemType[] = modules.map((module) => ({
+    id: module.id,
+
+    heading: i18n.language === 'ar' ? module.name_ar : module.name_en,
+
+    children: module.pages.map((page) => ({
+      id: page.id,
+
+      name: i18n.language === 'ar' ? page.title_ar : page.title_en,
+
+      icon: page.icon,
+
+      url: page.url,
+    })),
+  }));
 
   // ==========================================================
   // JSX
@@ -366,16 +356,16 @@ const SidebarLayout = ({ onClose }: { onClose?: () => void }) => {
       <SimpleBar className="h-[calc(100vh-100px)]">
         <div className="px-6" dir={isRTL ? 'rtl' : 'ltr'}>
           {/* ==================================================
-        Company Logo
-    ================================================== */}
+              Company Logo
+          ================================================== */}
 
           <div className="flex justify-center py-5">
             <img src={companyLogo} alt="B-Connect" className="h-32 w-auto object-contain" />
           </div>
 
           {/* ==================================================
-    Global Navigation
-================================================== */}
+              Global Navigation
+          ================================================== */}
 
           <div className="pb-4">
             <AMMenuItem
@@ -384,139 +374,83 @@ const SidebarLayout = ({ onClose }: { onClose?: () => void }) => {
               link="/announcements"
               component={Link}
               className={`
-      mt-0.5
-      text-sidebar-foreground
-      dark:text-sidebar-foreground
-      ${pathname === '/announcements' ? '!bg-transparent !text-primary' : ''}
-    `}
+                mt-0.5
+                text-sidebar-foreground
+                dark:text-sidebar-foreground
+                ${pathname === '/announcements' ? '!bg-transparent !text-primary' : ''}
+              `}
             >
               <span className="truncate flex-1">{t('ANNOUNCEMENTS')}</span>
             </AMMenuItem>
           </div>
 
           {/* ==================================================
-              App Selector
-          ================================================== */}
-
-          <div className="pt-4 pb-5">
-            <label
-              htmlFor="app-selector"
-              className="
-                mb-2
-                block
-                text-xs
-                font-semibold
-                uppercase
-                text-sidebar-foreground
-                text-start
-              "
-            >
-              {t('APPLICATION')}
-            </label>
-
-            <select
-              id="app-selector"
-              value={selectedApp ?? ''}
-              onChange={(e) => {
-                const searchParams = new URLSearchParams(location.search);
-                searchParams.set('app', e.target.value);
-                navigate({
-                  pathname: location.pathname,
-                  search: `?${searchParams.toString()}`,
-                });
-              }}
-              className="
-                w-full
-                rounded-md
-                border
-                border-border
-                bg-background
-                px-3
-                py-2
-                text-sm
-                text-foreground
-                outline-none
-                focus:ring-2
-                focus:ring-primary
-                text-start
-              "
-            >
-              {mockApps.map((app) => (
-                <option key={app.id} value={app.id}>
-                  {i18n.language === 'ar' ? app.name_ar : app.name_en}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* ==================================================
-              Selected App Name
-          ================================================== */}
-
-          <div className="mb-5">
-            <h2
-              className="
-                text-lg
-                font-semibold
-                text-sidebar-foreground
-                text-start
-              "
-            >
-              {currentApp?.name}
-            </h2>
-          </div>
-
-          {/* ==================================================
-              Modules + Pages
+              Modules
           ================================================== */}
 
           <div>
-            {renderSidebarItems(
-              sidebarItems,
-              pathname,
-              isRTL,
-              onClose,
-              false,
-              openModules,
-              setOpenModules,
-              selectedApp,
+            {isLoading ? (
+              <div className="space-y-3 px-2 py-3">
+                <div className="h-4 w-24 animate-pulse rounded bg-muted" />
+
+                <div className="h-4 w-32 animate-pulse rounded bg-muted" />
+
+                <div className="h-4 w-28 animate-pulse rounded bg-muted" />
+
+                <div className="h-4 w-36 animate-pulse rounded bg-muted" />
+              </div>
+            ) : (
+              renderSidebarItems(
+                sidebarItems,
+                pathname,
+                isRTL,
+                onClose,
+                false,
+                openModules,
+                setOpenModules,
+              )
             )}
           </div>
         </div>
       </SimpleBar>
 
-      {/* ==================================================
-    Back to Desk
-================================================== */}
+      {/* ======================================================
+          Back to Desk
+      ======================================================= */}
 
       <button
         type="button"
         onClick={() => navigate('/desk')}
         className="
-    mb-5
-    flex
-    w-full
-    items-center
-    justify-center
-    gap-2
-    rounded-md
-    border
-    border-border
-    bg-background
-    px-4
-    py-2.5
-    text-sm
-    font-medium
-    text-foreground
-    transition-colors
-    hover:bg-accent
-    hover:text-accent-foreground
-    focus:outline-none
-    focus:ring-2
-    focus:ring-primary
-  "
+          mb-5
+          flex
+          w-full
+          items-center
+          justify-center
+          gap-2
+          rounded-md
+          border
+          border-border
+          bg-background
+          px-4
+          py-2.5
+          text-sm
+          font-medium
+          text-foreground
+          transition-colors
+          hover:bg-accent
+          hover:text-accent-foreground
+          focus:outline-none
+          focus:ring-2
+          focus:ring-primary
+        "
       >
-        <ArrowLeft className={`h-4 w-4 ${isRTL ? 'rotate-180' : ''}`} />
+        <ArrowLeft
+          className={`
+            h-4 w-4
+            ${isRTL ? 'rotate-180' : ''}
+          `}
+        />
 
         <span>{t('BACK_TO_DESK')}</span>
       </button>
