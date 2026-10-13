@@ -48,7 +48,7 @@ function LoginPage() {
         showConfirmButton:false,
         timer:1500,
       });
-      nav('/desk');
+      nav('/announcements');
     } catch (error) {
       if (axios.isAxiosError(error)) {
         if (error.response?.status === 401) {

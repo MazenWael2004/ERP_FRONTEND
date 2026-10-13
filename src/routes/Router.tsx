@@ -4,10 +4,10 @@ import { lazy } from 'react';
 import { Navigate, createBrowserRouter } from 'react-router-dom';
 import Loadable from '../layouts/full/shared/loadable/Loadable';
 import ProtectedRoute from '../shared/components/ProtectedRoute'; // Adjust the path if needed
-import AddNewContract from 'src/shared/pages/AddContract';
+import AddNewContract from 'src/features/crm/contracts/pages/AddContract';
 import { element } from 'prop-types';
 import ViewUsers from '../features/users/pages/ViewUsers';
-import AddNewCollection from 'src/shared/pages/AddCollection';
+import AddNewCollection from 'src/features/crm/collections/pages/AddCollection';
 import NewContact from '../features/contacts/pages/AddContact';
 import EditUser from 'src/features/users/pages/EditUser';
 import ViewZones from '../features/zones/pages/ViewZones';
@@ -19,27 +19,29 @@ import NewRole from 'src/features/roles/pages/NewRole';
 import EditJob from 'src/features/jobs/pages/EditJob';
 import Unauthorized from 'src/shared/pages/Unauthorized';
 import ViewJobs from '../features/jobs/pages/ViewJobs';
-import AddNewRequest from 'src/shared/pages/AddRequest';
+import AddNewRequest from 'src/features/crm/requests/pages/AddRequest';
 import ViewEmployees from '../features/employees/pages/ViewEmployees';
 import ViewCustomers from '../features/customers/pages/ViewCustomers';
-import NewCustomer from 'src/shared/pages/NewCustomer';
+import NewCustomer from 'src/features/customers/pages/NewCustomer';
 import EditCustomer from 'src/features/customers/pages/EditCustomer';
 import ViewPrograms from 'src/features/programs/pages/ViewPrograms';
 import NewProgram from 'src/features/programs/pages/NewProgram';
 import EditProgram from 'src/features/programs/pages/EditProgram';
 import ViewPricings from 'src/features/pricings/pages/ViewPricings';
 import NewPricing from 'src/features/pricings/pages/NewPricing';
-import Announcements from 'src/shared/pages/Announcements';
-import ViewUncollectedTargets from 'src/shared/pages/ViewUncollectedTargets';
-import OutstandingReport from 'src/shared/pages/OutstandingRecivablesReport';
-import AddTargetPlan from 'src/shared/pages/AddTargetPlan';
-import OutstandingMonthlySubscriptions from 'src/shared/pages/OutstandingMonthlySubscriptions';
-import ToDoList from 'src/shared/pages/ToDoList';
-import TaskDetails from 'src/shared/pages/TaskDetails';
-import InstallationAssignment from 'src/shared/pages/AssignInstallation';
-import ManagerOfAll from 'src/shared/pages/ManagerOfAll';
-import CollectAdditionalUnits from 'src/shared/pages/CollectAdditionalUnits';
-import SubscriptionCollectionPage from 'src/shared/pages/Targets';
+import Announcements from 'src/features/crm/management/pages/Announcements';
+import ViewUncollectedTargets from 'src/features/crm/collections/pages/ViewUncollectedTargets';
+import OutstandingReport from 'src/features/crm/collections/pages/OutstandingRecivablesReport';
+import ContractsSummaryReport from 'src/features/crm/reports/pages/ContractsSummaryReport';
+import OperationalReports from 'src/features/crm/reports/pages/OperationalReports';
+import AddTargetPlan from 'src/features/crm/targets/pages/AddTargetPlan';
+import OutstandingMonthlySubscriptions from 'src/features/crm/collections/pages/OutstandingMonthlySubscriptions';
+import ToDoList from 'src/features/crm/tasks/pages/ToDoList';
+import TaskDetails from 'src/features/crm/tasks/pages/TaskDetails';
+import InstallationAssignment from 'src/features/crm/tasks/pages/AssignInstallation';
+import ManagerOfAll from 'src/features/crm/management/pages/ManagerOfAll';
+import CollectAdditionalUnits from 'src/features/crm/collections/pages/CollectAdditionalUnits';
+import SubscriptionCollectionPage from 'src/features/crm/targets/pages/Targets';
 /* ***Layouts**** */
 const FullLayout = Loadable(lazy(() => import('../layouts/full/FullLayout')));
 const BlankLayout = Loadable(lazy(() => import('../layouts/blank/BlankLayout')));
@@ -332,6 +334,14 @@ const Router = [
         element:(
           <OutstandingReport />
         )
+      },
+      {
+        path: '/contracts-summary-report',
+        element: <ContractsSummaryReport />,
+      },
+      {
+        path: '/operational-reports',
+        element: <OperationalReports />,
       },
       {
         path:'/add-new-target-plan',

@@ -70,3 +70,14 @@ html[dir="rtl"] table tr th,
 html[dir="rtl"] table tr td {
     text-align: right;
 }
+/* Keep native select indicators on the leading (left) side in Arabic Add Contract forms. */
+html[dir="rtl"] .add-contract-form select:not([size]) {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236b7280' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-position: left 0.75rem center;
+    background-repeat: no-repeat;
+    background-size: 1rem;
+    padding-left: 2.5rem !important;
+}

@@ -1,4 +1,6 @@
 import * as React from 'react';
+import axios from 'axios';
+import Swal from 'sweetalert2';
 
 import {
   Search,
@@ -37,78 +39,59 @@ import {
 
 import { Textarea } from 'src/components/ui/textarea';
 import { Checkbox } from 'src/components/ui/checkbox';
-import { z } from 'zod';
+import { createCollectionSchema, mapZodErrors } from '../validation';
+import {
+  fetchPaidMonths,
+  getScopedContracts,
+  paySelectedMonths,
+  type ScopedContract,
+} from '../api/targetService';
 
-function getRelativeMonthValue(offset = 0) {
-  const now = new Date();
+type TargetContractRow = {
+  id: number;
+  customerName: string;
+  zoneName: string;
+  customerCode: string;
+  contractNumber: string;
+  representativeName: string;
+  subscriptionPrice: number;
+  monthlyAmount: number;
+  nextDueDate: string;
+  lastPaidMonth: string;
+  paidMonths: string[];
+};
 
-  const date = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+function formatContractDate(value?: string | null) {
+  if (!value) return '—';
 
-  const year = date.getFullYear();
-  const month = date.getMonth() + 1;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
 
-  return `${year}-${String(month).padStart(2, '0')}`;
+  return new Intl.DateTimeFormat('ar-EG', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'Africa/Cairo',
+  }).format(date);
 }
+function mapScopedContractToTargetRow(contract: ScopedContract): TargetContractRow {
+  const subscriptionPrice = Number(contract.subscription_price || 0);
+  const discountPercentage = Number(contract.discount_percentage || 0);
 
-const mockCustomers = [
-  {
-    id: 1,
-    customerName: 'صيدلية سيف',
-    branchName: 'فرع المهندسين',
-    customerCode: 'CUS-001',
-    contractNumber: 'CON-2026-001',
-    representativeName: 'أحمد محمد',
-    monthlyAmount: 500,
-
-    // Months that have already been fully paid
-    paidMonths: [getRelativeMonthValue(0)],
-  },
-  {
-    id: 2,
-    customerName: 'صيدلية العزبي',
-    branchName: 'فرع الدقي',
-    customerCode: 'CUS-002',
-    contractNumber: 'CON-2026-002',
-    representativeName: 'محمد السيد',
-    monthlyAmount: 600,
-
-    paidMonths: [getRelativeMonthValue(0), getRelativeMonthValue(1)],
-  },
-  {
-    id: 3,
-    customerName: 'صيدلية 19011',
-    branchName: 'فرع فيصل',
-    customerCode: 'CUS-003',
-    contractNumber: 'CON-2026-003',
-    representativeName: 'علي حسن',
-    monthlyAmount: 500,
-
+  return {
+    id: contract.id,
+    customerName: contract.customer_name_ar || 'عميل بدون اسم',
+    zoneName: contract.zone_name_ar || '—',
+    customerCode: contract.customer_code || '—',
+    contractNumber: contract.contract_number || String(contract.id),
+    representativeName: contract.representative_name_ar || '—',
+    subscriptionPrice,
+    monthlyAmount: subscriptionPrice * (1 - discountPercentage / 100),
+    nextDueDate: formatContractDate(contract.next_subscription_due_date),
+    lastPaidMonth: formatContractDate(contract.last_paid_month),
     paidMonths: [],
-  },
-  {
-    id: 4,
-    customerName: 'صيدلية نور',
-    branchName: 'فرع الهرم',
-    customerCode: 'CUS-004',
-    contractNumber: 'CON-2026-004',
-    representativeName: 'كريم أحمد',
-    monthlyAmount: 500,
-
-    paidMonths: [getRelativeMonthValue(0)],
-  },
-  {
-    id: 5,
-    customerName: 'صيدلية الأمل',
-    branchName: 'فرع أكتوبر',
-    customerCode: 'CUS-005',
-    contractNumber: 'CON-2026-005',
-    representativeName: 'محمود حسن',
-    monthlyAmount: 600,
-
-    paidMonths: [getRelativeMonthValue(0), getRelativeMonthValue(1), getRelativeMonthValue(2)],
-  },
-];
-
+  };
+}
 const paymentMethods = [
   {
     id: '1',
@@ -167,153 +150,10 @@ function generateMonthOptions() {
   return months;
 }
 
-const monthValueSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'صيغة الشهر غير صحيحة');
-
-function createCollectionSchema({ monthlyAmount, paidMonths, allowedMonths }: any) {
-  return z
-    .object({
-      contractId: z.number().int('رقم العقد غير صالح').positive('رقم العقد غير صالح'),
-
-      collectionDate: z
-        .string()
-        .min(1, 'تاريخ التحصيل مطلوب')
-        .regex(/^\d{4}-\d{2}-\d{2}$/, 'صيغة تاريخ التحصيل غير صحيحة'),
-
-      receiptNumber: z
-        .string()
-        .trim()
-        .min(1, 'رقم الإيصال مطلوب')
-        .max(50, 'رقم الإيصال لا يمكن أن يتجاوز 50 حرفاً'),
-
-      paymentMethodId: z.number().int('طريقة الدفع غير صالحة').positive('طريقة الدفع مطلوبة'),
-
-      amount: z.number().positive('إجمالي المبلغ المحصل يجب أن يكون أكبر من صفر'),
-
-      notes: z.string().trim().max(1000, 'الملاحظات لا يمكن أن تتجاوز 1000 حرف').optional(),
-
-      selectedMonths: z.array(monthValueSchema).min(1, 'يجب اختيار شهر واحد على الأقل للتحصيل'),
-
-      monthPayments: z
-        .array(
-          z.object({
-            month: monthValueSchema,
-
-            amount: z
-              .number()
-              .positive('قيمة التحصيل لهذا الشهر يجب أن تكون أكبر من صفر')
-              .max(monthlyAmount, `لا يمكن أن تتجاوز قيمة تحصيل الشهر ${monthlyAmount} جنيه`),
-          }),
-        )
-        .min(1, 'يجب تحديد قيمة التحصيل للشهور المختارة'),
-    })
-    .superRefine((data, ctx) => {
-      const selectedSet = new Set(data.selectedMonths);
-
-      if (selectedSet.size !== data.selectedMonths.length) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['selectedMonths'],
-          message: 'لا يمكن اختيار نفس الشهر أكثر من مرة',
-        });
-      }
-
-      for (const month of data.selectedMonths) {
-        if (!allowedMonths.includes(month)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['selectedMonths'],
-            message: 'أحد الشهور المختارة خارج فترة التحصيل المتاحة',
-          });
-        }
-
-        if (paidMonths.includes(month)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['selectedMonths'],
-            message: 'لا يمكن تحصيل شهر تم سداده بالكامل',
-          });
-        }
-      }
-
-      const paymentMonthSet = new Set<string>();
-
-      data.monthPayments.forEach((payment, index) => {
-        if (paymentMonthSet.has(payment.month)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['monthPayments', index, 'month'],
-            message: 'يوجد شهر مكرر في قيم التحصيل',
-          });
-        }
-
-        paymentMonthSet.add(payment.month);
-
-        if (!selectedSet.has(payment.month)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['monthPayments', index, 'month'],
-            message: 'قيمة التحصيل مرتبطة بشهر غير مختار',
-          });
-        }
-      });
-
-      for (const month of data.selectedMonths) {
-        if (!paymentMonthSet.has(month)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ['selectedMonths'],
-            message: 'يجب تحديد قيمة التحصيل لكل شهر مختار',
-          });
-        }
-      }
-
-      const calculatedTotal = data.monthPayments.reduce(
-        (total, payment) => total + payment.amount,
-        0,
-      );
-
-      if (Math.abs(calculatedTotal - data.amount) > 0.001) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['amount'],
-          message: 'إجمالي المبلغ المحصل لا يطابق مجموع قيم الشهور',
-        });
-      }
-    });
-}
-
-function mapZodErrors(error: z.ZodError, payload: any) {
-  const errors: any = {
-    monthAmounts: {},
-  };
-
-  for (const issue of error.issues) {
-    const [field, index] = issue.path;
-
-    if (field === 'monthPayments' && typeof index === 'number') {
-      const monthValue = payload.monthPayments?.[index]?.month;
-
-      if (monthValue) {
-        errors.monthAmounts[monthValue] = issue.message;
-      } else if (!errors.selectedMonths) {
-        errors.selectedMonths = issue.message;
-      }
-
-      continue;
-    }
-
-    const key = String(field || 'form');
-
-    if (!errors[key]) {
-      errors[key] = issue.message;
-    }
-  }
-
-  return errors;
-}
-
 export default function SubscriptionCollectionPage() {
-  const [customers] = React.useState<any[]>(mockCustomers);
+  const [customers, setCustomers] = React.useState<TargetContractRow[]>([]);
+  const [isContractsLoading, setIsContractsLoading] = React.useState(true);
+  const [contractsLoadError, setContractsLoadError] = React.useState('');
 
   const [search, setSearch] = React.useState('');
 
@@ -337,7 +177,30 @@ export default function SubscriptionCollectionPage() {
 
   const [validationErrors, setValidationErrors] = React.useState<any>({ monthAmounts: {} });
 
+  const [isPaidMonthsLoading, setIsPaidMonthsLoading] = React.useState(false);
+  const [isCollectionSubmitting, setIsCollectionSubmitting] = React.useState(false);
+  const [paidMonthsLoadError, setPaidMonthsLoadError] = React.useState('');
+
   const monthOptions = React.useMemo(() => generateMonthOptions(), []);
+
+  const loadScopedContracts = React.useCallback(async () => {
+    setIsContractsLoading(true);
+    setContractsLoadError('');
+
+    try {
+      const contracts = await getScopedContracts();
+      setCustomers((contracts || []).map(mapScopedContractToTargetRow));
+    } catch (error) {
+      console.error('Failed to load scoped contracts:', error);
+      setContractsLoadError('تعذر تحميل العقود. حاول مرة أخرى.');
+    } finally {
+      setIsContractsLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    void loadScopedContracts();
+  }, [loadScopedContracts]);
 
   const clearValidationError = (field: string) => {
     setValidationErrors((current: any) => ({
@@ -366,7 +229,7 @@ export default function SubscriptionCollectionPage() {
 
       return (
         customer.customerName.toLowerCase().includes(text) ||
-        customer.branchName.toLowerCase().includes(text) ||
+        customer.zoneName.toLowerCase().includes(text) ||
         customer.customerCode.toLowerCase().includes(text) ||
         customer.contractNumber.toLowerCase().includes(text) ||
         customer.representativeName.toLowerCase().includes(text)
@@ -387,9 +250,10 @@ export default function SubscriptionCollectionPage() {
     }, 0);
   }, [selectedMonths, monthAmounts]);
 
-  const openCollection = (customer: any) => {
-    setSelectedCustomer(customer);
+  const openCollection = async (customer: any) => {
+    setSelectedCustomer({ ...customer, paidMonths: [] });
     setSelectedMonths([]);
+    setPaidMonthsLoadError('');
 
     const defaultAmounts: any = {};
 
@@ -398,16 +262,26 @@ export default function SubscriptionCollectionPage() {
     }
 
     setMonthAmounts(defaultAmounts);
-
     setCollectionDate(new Date().toISOString().split('T')[0]);
-
     setReceiptNumber(`RCPT-${Date.now().toString().slice(-7)}`);
-
     setPaymentMethodId('1');
     setNotes('');
     setValidationErrors({ monthAmounts: {} });
-
     setCollectionOpen(true);
+    setIsPaidMonthsLoading(true);
+
+    try {
+      const paidMonths = await fetchPaidMonths(customer.id);
+
+      setSelectedCustomer((current: any) =>
+        current?.id === customer.id ? { ...current, paidMonths } : current,
+      );
+    } catch (error) {
+      console.error('Failed to load paid months:', error);
+      setPaidMonthsLoadError('تعذر تحميل الشهور المسددة. يمكنك إعادة فتح العقد للمحاولة مرة أخرى.');
+    } finally {
+      setIsPaidMonthsLoading(false);
+    }
   };
 
   const isMonthPaid = (monthValue: string) => {
@@ -419,7 +293,7 @@ export default function SubscriptionCollectionPage() {
   };
 
   const toggleMonth = (monthValue: string) => {
-    if (isMonthPaid(monthValue)) {
+    if (isPaidMonthsLoading || isMonthPaid(monthValue)) {
       return;
     }
 
@@ -447,27 +321,19 @@ export default function SubscriptionCollectionPage() {
     }));
   };
 
-  const handleSubmitCollection = () => {
-    if (!selectedCustomer) {
+  const handleSubmitCollection = async () => {
+    if (!selectedCustomer || isPaidMonthsLoading || isCollectionSubmitting) {
       return;
     }
 
     const payload = {
       contractId: selectedCustomer.id,
-
       collectionDate,
-
       receiptNumber,
-
       paymentMethodId: Number(paymentMethodId),
-
-      // Read-only total calculated from the selected month inputs
       amount: selectedTotal,
-
       notes,
-
       selectedMonths,
-
       monthPayments: selectedMonths.map((monthValue: string) => ({
         month: monthValue,
         amount: Number(monthAmounts[monthValue]),
@@ -476,9 +342,7 @@ export default function SubscriptionCollectionPage() {
 
     const schema = createCollectionSchema({
       monthlyAmount: Number(selectedCustomer.monthlyAmount),
-
       paidMonths: selectedCustomer.paidMonths || [],
-
       allowedMonths: monthOptions.map((month: any) => month.value),
     });
 
@@ -486,19 +350,74 @@ export default function SubscriptionCollectionPage() {
 
     if (!result.success) {
       setValidationErrors(mapZodErrors(result.error, payload));
-
       return;
     }
 
-    setValidationErrors({
-      monthAmounts: {},
+    setValidationErrors({ monthAmounts: {} });
+
+    // Radix Dialog disables pointer events outside its content. Close it before
+    // mounting SweetAlert, which renders in document.body.
+    setCollectionOpen(false);
+    await new Promise<void>((resolve) => {
+      window.requestAnimationFrame(() => window.requestAnimationFrame(resolve));
     });
 
-    console.log('COLLECTION PAYLOAD:', result.data);
+    const confirmation = await Swal.fire({
+      icon: 'question',
+      title: 'تأكيد عملية التحصيل',
+      text: `سيتم تسجيل تحصيل بقيمة ${money(result.data.amount)}. هل تريد المتابعة؟`,
+      showCancelButton: true,
+      confirmButtonText: 'تأكيد التحصيل',
+      cancelButtonText: 'إلغاء',
+      reverseButtons: true,
+    });
 
-    setCollectionOpen(false);
+    if (!confirmation.isConfirmed) {
+      setCollectionOpen(true);
+      return;
+    }
+
+    setIsCollectionSubmitting(true);
+    void Swal.fire({
+      title: 'جارٍ تسجيل التحصيل...',
+      text: 'يرجى الانتظار حتى يتم حفظ العملية.',
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      didOpen: () => Swal.showLoading(),
+    });
+
+    try {
+      const response = await paySelectedMonths(result.data);
+
+      Swal.close();
+      await Swal.fire({
+        icon: 'success',
+        title: 'تم تسجيل التحصيل بنجاح',
+        text: response?.message || 'تم حفظ عملية تحصيل الاشتراكات الشهرية.',
+        confirmButtonText: 'حسناً',
+      });
+
+      setCollectionOpen(false);
+      void loadScopedContracts();
+    } catch (error) {
+      Swal.close();
+
+      const message = axios.isAxiosError(error)
+        ? error.response?.data?.message || error.response?.data?.error?.message
+        : undefined;
+
+      await Swal.fire({
+        icon: 'error',
+        title: 'تعذر تسجيل التحصيل',
+        text: message || 'حدث خطأ أثناء حفظ عملية التحصيل. حاول مرة أخرى.',
+        confirmButtonText: 'حسناً',
+      });
+
+      setCollectionOpen(true);
+    } finally {
+      setIsCollectionSubmitting(false);
+    }
   };
-
   return (
     <div dir="rtl" className="min-h-screen bg-background p-4 md:p-6">
       <div className="mx-auto max-w-[1600px] space-y-6">
@@ -512,14 +431,19 @@ export default function SubscriptionCollectionPage() {
             </p>
           </div>
 
-          <Button variant="outline" className="gap-2 self-start">
-            <RefreshCw className="h-4 w-4" />
+          <Button
+            variant="outline"
+            className="gap-2 self-start"
+            onClick={loadScopedContracts}
+            disabled={isContractsLoading}
+          >
+            <RefreshCw className={`h-4 w-4 ${isContractsLoading ? 'animate-spin' : ''}`} />
             تحديث البيانات
           </Button>
         </div>
 
         {/* Statistics */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {/* <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <Card>
             <CardContent className="flex items-center justify-between p-5">
               <div>
@@ -569,17 +493,17 @@ export default function SubscriptionCollectionPage() {
               </div>
             </CardContent>
           </Card>
-        </div>
+        </div> */}
 
         {/* Customers Table */}
         <Card>
           <CardHeader className="border-b">
             <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
               <div>
-                <CardTitle className="text-lg">العملاء</CardTitle>
+                <CardTitle className="text-lg">العقود</CardTitle>
 
                 <p className="mt-1 text-sm text-muted-foreground">
-                  اختر العميل لتسجيل عملية تحصيل جديدة
+                  اختر عقداً لتسجيل عملية تحصيل جديدة
                 </p>
               </div>
 
@@ -604,19 +528,18 @@ export default function SubscriptionCollectionPage() {
                     <th className="px-5 py-4 text-right text-xs font-semibold text-muted-foreground">
                       العميل
                     </th>
-
                     <th className="px-5 py-4 text-right text-xs font-semibold text-muted-foreground">
-                      رقم العقد
+                      الفرع
                     </th>
-
-                    <th className="px-5 py-4 text-right text-xs font-semibold text-muted-foreground">
-                      المندوب
-                    </th>
-
                     <th className="px-5 py-4 text-center text-xs font-semibold text-muted-foreground">
-                      قيمة الاشتراك الشهري
+                      سعر الاشتراك
                     </th>
-
+                    <th className="px-5 py-4 text-center text-xs font-semibold text-muted-foreground">
+                      تاريخ الاستحقاق القادم
+                    </th>
+                    <th className="px-5 py-4 text-center text-xs font-semibold text-muted-foreground">
+                      آخر شهر مسدد
+                    </th>
                     <th className="px-5 py-4 text-center text-xs font-semibold text-muted-foreground">
                       الإجراء
                     </th>
@@ -624,51 +547,82 @@ export default function SubscriptionCollectionPage() {
                 </thead>
 
                 <tbody>
-                  {filteredCustomers.map((customer: any) => (
-                    <tr
-                      key={customer.id}
-                      className="border-b transition-colors last:border-0 hover:bg-muted/30"
-                    >
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                            <Building2 className="h-5 w-5" />
-                          </div>
-
-                          <div>
-                            <p className="font-semibold">{customer.customerName}</p>
-
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {customer.branchName} • {customer.customerCode}
-                            </p>
-                          </div>
-                        </div>
+                  {isContractsLoading && (
+                    <tr>
+                      <td colSpan={6} className="px-5 py-14 text-center">
+                        <RefreshCw className="mx-auto mb-3 h-9 w-9 animate-spin text-primary" />
+                        <p className="font-medium">جارٍ تحميل العقود...</p>
                       </td>
+                    </tr>
+                  )}
 
-                      <td className="px-5 py-4">
-                        <span className="text-sm font-medium">{customer.contractNumber}</span>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <span className="text-sm">{customer.representativeName}</span>
-                      </td>
-
-                      <td className="px-5 py-4 text-center">
-                        <span className="font-semibold">{money(customer.monthlyAmount)}</span>
-                      </td>
-
-                      <td className="px-5 py-4 text-center">
-                        <Button size="sm" onClick={() => openCollection(customer)}>
-                          <Banknote className="ml-2 h-4 w-4" />
-                          تسجيل تحصيل
+                  {contractsLoadError && (
+                    <tr>
+                      <td colSpan={6} className="px-5 py-14 text-center">
+                        <AlertCircle className="mx-auto mb-3 h-9 w-9 text-destructive" />
+                        <p className="font-medium">{contractsLoadError}</p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-4"
+                          onClick={loadScopedContracts}
+                        >
+                          إعادة المحاولة
                         </Button>
                       </td>
                     </tr>
-                  ))}
+                  )}
+                  {!isContractsLoading &&
+                    !contractsLoadError &&
+                    filteredCustomers.map((customer: any) => (
+                      <tr
+                        key={customer.id}
+                        className="border-b transition-colors last:border-0 hover:bg-muted/30"
+                      >
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                              <Building2 className="h-5 w-5" />
+                            </div>
 
-                  {filteredCustomers.length === 0 && (
+                            <div>
+                              <p className="font-semibold">{customer.customerName}</p>
+
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                {customer.customerCode}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="px-5 py-4">
+                          <span className="text-sm">{customer.zoneName}</span>
+                        </td>
+
+                        <td className="px-5 py-4 text-center">
+                          <span className="font-semibold">{money(customer.subscriptionPrice)}</span>
+                        </td>
+
+                        <td className="px-5 py-4 text-center">
+                          <span className="text-sm">{customer.nextDueDate}</span>
+                        </td>
+
+                        <td className="px-5 py-4 text-center">
+                          <span className="text-sm">{customer.lastPaidMonth}</span>
+                        </td>
+
+                        <td className="px-5 py-4 text-center">
+                          <Button size="sm" onClick={() => openCollection(customer)}>
+                            <Banknote className="ml-2 h-4 w-4" />
+                            تسجيل تحصيل
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+
+                  {!isContractsLoading && !contractsLoadError && filteredCustomers.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="px-5 py-14 text-center">
+                      <td colSpan={6} className="px-5 py-14 text-center">
                         <Search className="mx-auto mb-3 h-9 w-9 text-muted-foreground/50" />
 
                         <p className="font-medium">لا توجد نتائج</p>
@@ -702,7 +656,7 @@ export default function SubscriptionCollectionPage() {
               <div className="grid grid-cols-1 gap-3 rounded-2xl border bg-muted/30 p-4 sm:grid-cols-2 lg:grid-cols-4">
                 <InfoItem label="العميل" value={selectedCustomer.customerName} />
 
-                <InfoItem label="الفرع" value={selectedCustomer.branchName} />
+                <InfoItem label="الفرع" value={selectedCustomer.zoneName} />
 
                 <InfoItem label="رقم العقد" value={selectedCustomer.contractNumber} />
 
@@ -711,6 +665,19 @@ export default function SubscriptionCollectionPage() {
                   value={money(selectedCustomer.monthlyAmount)}
                 />
               </div>
+
+              {isPaidMonthsLoading && (
+                <div className="flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 p-3 text-sm text-primary">
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  جاري تحميل الشهور المسددة لهذا العقد...
+                </div>
+              )}
+
+              {paidMonthsLoadError && (
+                <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+                  {paidMonthsLoadError}
+                </div>
+              )}
 
               {/* Collection Information */}
               <div>
@@ -845,6 +812,7 @@ export default function SubscriptionCollectionPage() {
                     const selected = selectedMonths.includes(month.value);
 
                     const paid = isMonthPaid(month.value);
+                    const disabled = paid || isPaidMonthsLoading;
 
                     const monthAmount = monthAmounts[month.value] ?? '';
 
@@ -852,7 +820,7 @@ export default function SubscriptionCollectionPage() {
                       <div
                         key={month.value}
                         onClick={() => {
-                          if (!paid) {
+                          if (!disabled) {
                             toggleMonth(month.value);
                           }
                         }}
@@ -868,7 +836,7 @@ export default function SubscriptionCollectionPage() {
                           <div className="flex min-w-0 items-start gap-3">
                             <Checkbox
                               checked={paid || selected}
-                              disabled={paid}
+                              disabled={disabled}
                               onCheckedChange={() => toggleMonth(month.value)}
                               onClick={(e) => e.stopPropagation()}
                             />
@@ -903,10 +871,10 @@ export default function SubscriptionCollectionPage() {
                               max={selectedCustomer.monthlyAmount}
                               step="0.01"
                               value={monthAmount}
-                              disabled={paid || !selected}
+                              disabled={disabled || !selected}
                               onClick={(e) => e.stopPropagation()}
                               onChange={(e) => updateMonthAmount(month.value, e.target.value)}
-                              className={`h-10 pr-10 ${paid || !selected ? 'bg-muted' : ''} ${
+                              className={`h-10 pr-10 ${disabled || !selected ? 'bg-muted' : ''} ${
                                 validationErrors.monthAmounts?.[month.value]
                                   ? 'border-destructive'
                                   : ''
@@ -995,9 +963,13 @@ export default function SubscriptionCollectionPage() {
           )}
 
           <DialogFooter className="gap-2 border-t pt-4 sm:justify-start">
-            <Button onClick={handleSubmitCollection} className="min-w-36">
+            <Button
+              onClick={handleSubmitCollection}
+              disabled={isPaidMonthsLoading || isCollectionSubmitting}
+              className="min-w-36"
+            >
               <CheckCircle2 className="ml-2 h-4 w-4" />
-              تسجيل التحصيل
+              {isCollectionSubmitting ? 'جارٍ التسجيل...' : 'تسجيل التحصيل'}
             </Button>
 
             <Button variant="outline" onClick={() => setCollectionOpen(false)}>
