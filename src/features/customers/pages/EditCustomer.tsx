@@ -486,7 +486,16 @@ function EditCustomer() {
         <Label htmlFor="customerTaxNumber">
           {t('CUSTOMER_REGISTRATION_NUMBER')} <span className="text-red-500">*</span>
         </Label>
-        <Input id="jobCode" className="mt-2 w-full" {...register('registrationNumber')} />
+        <Input
+          id="jobCode"
+          className="mt-2 w-full"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          {...register('registrationNumber')}
+          onInput={(event) => {
+            event.currentTarget.value = event.currentTarget.value.replace(/\D/g, '');
+          }}
+        />
         {errors.registrationNumber && (
           <span className="error-message">{t(errors.registrationNumber.message!)}</span>
         )}

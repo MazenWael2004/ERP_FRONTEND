@@ -20,7 +20,8 @@ export const createCustomerSchema = z.object({
 
   registrationNumber: z
   .string()
-  .min(1,"CUSTOMER_REGISTRATION_NUMBER_REQUIRED"),
+  .min(1,"CUSTOMER_REGISTRATION_NUMBER_REQUIRED")
+  .regex(/^\d+$/, "CUSTOMER_REGISTRATION_NUMBER_ONLY_NUMBERS"),
 
   street: z
   .string()

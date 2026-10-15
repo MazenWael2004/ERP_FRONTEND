@@ -253,6 +253,7 @@
   "CUSTOMER_TAX_NUMBER_REQUIRED":"رقم الضريبة الخاص بالعميل مطلوب",
   "CUSTOMER_REGISTRATION_NUMBER":"رقم تسجيل العميل",
   "CUSTOMER_REGISTRATION_NUMBER_REQUIRED":"رقم تسجيل العميل مطلوب",
+  "CUSTOMER_REGISTRATION_NUMBER_ONLY_NUMBERS":"رقم السجل التجاري يجب أن يحتوي على أرقام فقط",
   "ZONE_ID_REQUIRED":"المنطقة مطلوبة",
   "PROGRAM":"اسم البرنامج",
   "SELECT_PROGRAM":"من فضلك قم باختيار برنامج",

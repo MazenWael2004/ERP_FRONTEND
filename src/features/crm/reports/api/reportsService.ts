@@ -9,4 +9,5 @@ const report = async (path: string, startDate?: string, endDate?: string) => {
 
 export const fetchCollectionsReport = (startDate?: string, endDate?: string) => report('/reports/collections', startDate, endDate);
 export const fetchAdditionalUnitsReport = (startDate?: string, endDate?: string) => report('/reports/additional-units', startDate, endDate);
+export const fetchReplicationServicesReport = (startDate?: string, endDate?: string) => report('/reports/replication-services', startDate, endDate);
 export const fetchSalesReport = (startDate?: string, endDate?: string) => report('/reports/sales', startDate, endDate);

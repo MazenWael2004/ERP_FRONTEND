@@ -34,6 +34,7 @@ import ViewUncollectedTargets from 'src/features/crm/collections/pages/ViewUncol
 import OutstandingReport from 'src/features/crm/collections/pages/OutstandingRecivablesReport';
 import ContractsSummaryReport from 'src/features/crm/reports/pages/ContractsSummaryReport';
 import OperationalReports from 'src/features/crm/reports/pages/OperationalReports';
+import TicketingPage from 'src/features/crm/tickets/pages/TicketingPage';
 import AddTargetPlan from 'src/features/crm/targets/pages/AddTargetPlan';
 import OutstandingMonthlySubscriptions from 'src/features/crm/collections/pages/OutstandingMonthlySubscriptions';
 import ToDoList from 'src/features/crm/tasks/pages/ToDoList';
@@ -342,6 +343,10 @@ const Router = [
       {
         path: '/operational-reports',
         element: <OperationalReports />,
+      },
+      {
+        path: '/customer-tickets',
+        element: <TicketingPage />,
       },
       {
         path:'/add-new-target-plan',

@@ -26,9 +26,9 @@ import {
   FileText,
   MapPin,
   Plus,
+  Pencil,
   Receipt,
   RefreshCw,
-  Search,
   Trash2,
   Upload,
   UserRound,
@@ -51,7 +51,7 @@ import { Separator } from 'src/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from 'src/components/ui/tabs';
 import { useAuth } from 'src/features/auth/hooks/useAuth';
 import { api } from 'src/shared/api/axios';
-import { fetchPaymentMethods } from '../api/contractService';
+import { fetchBanks, fetchPaymentMethods } from '../api/contractService';
 
 function generateMonthOptions() {
   const now = new Date();
@@ -209,13 +209,17 @@ type SellableService = {
   code: string;
   nameEn: string;
   nameAr: string;
-  price: number;
+  joining_fee: number;
+  subscription_fee: number;
+  isSubscriptionBased: boolean;
+  billingType: 'MONTHLY' | 'ONE_TIME';
   isQuantityBased: boolean;
 };
 export default function AddCustomerContract() {
   const isRtl = true;
   const { user } = useAuth();
   const currentUserName = user?.username || 'المستخدم الحالي';
+  const installationDateMin = new Date().toISOString().split('T')[0];
 
   const [activeStep, setActiveStep] = useState(1);
   const [participantOpen, setParticipantOpen] = useState(false);
@@ -233,6 +237,8 @@ export default function AddCustomerContract() {
   const [servicesRefresh, setServicesRefresh] = useState(0);
   const [zones, setZones] = useState<any[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
+  const [banks, setBanks] = useState<any[]>([]);
+  const [isBanksLoading, setIsBanksLoading] = useState(true);
 
   useEffect(() => {
     const loadZones = async () => {
@@ -263,6 +269,21 @@ export default function AddCustomerContract() {
     };
 
     loadPaymentMethods();
+  }, []);
+
+  useEffect(() => {
+    const loadBanks = async () => {
+      try {
+        const response = await fetchBanks();
+        setBanks(Array.isArray(response) ? response : []);
+      } catch (error) {
+        console.error('Failed to fetch banks:', error);
+      } finally {
+        setIsBanksLoading(false);
+      }
+    };
+
+    loadBanks();
   }, []);
 
   /* =========================================================
@@ -378,13 +399,14 @@ export default function AddCustomerContract() {
       representativeId: user?.id ?? '',
 
       nextDueDate: '',
-      installationDate: new Date().toISOString().split('T')[0],
+      installationDate: installationDateMin,
       notes: '',
 
       paymentAmount: 0,
       paymentMethodId: null,
       paymentDetails: {
         transferDate: '',
+        bankId: '',
         bankName: '',
         referenceNumber: '',
         chequeNumber: '',
@@ -399,6 +421,7 @@ export default function AddCustomerContract() {
       documents: [],
 
       additionalServices: [] as { serviceId: number; quantity: number }[],
+      hardwareDevices: [] as { serviceId: number; quantity: number }[],
 
       contacts: [
         {
@@ -411,6 +434,10 @@ export default function AddCustomerContract() {
             {
               number: '',
               type: 'محمول',
+            },
+            {
+              number: '',
+              type: 'هاتف أرضي',
             },
           ],
         },
@@ -467,6 +494,14 @@ export default function AddCustomerContract() {
     control,
     name: 'additionalServices',
   });
+  const {
+    fields: hardwareDeviceFields,
+    append: appendHardwareDevice,
+    remove: removeHardwareDevice,
+  } = useFieldArray({
+    control,
+    name: 'hardwareDevices',
+  });
 
   const addAdditionalService = (service: SellableService) => {
     const selectedServices = getValues('additionalServices') || [];
@@ -475,7 +510,7 @@ export default function AddCustomerContract() {
     );
 
     if (existingIndex >= 0) {
-      if (service.isQuantityBased) {
+      if (service.isQuantityBased && service.code !== 'REPLICATION_SERVICE') {
         const quantity = Number(selectedServices[existingIndex]?.quantity || 0) + 1;
         setValue(`additionalServices.${existingIndex}.quantity`, quantity, {
           shouldDirty: true,
@@ -486,6 +521,26 @@ export default function AddCustomerContract() {
     }
 
     appendAdditionalService({ serviceId: service.id, quantity: 1 });
+  };
+
+  const addHardwareDevice = (device: SellableService) => {
+    const selectedDevices = getValues('hardwareDevices') || [];
+    const existingIndex = selectedDevices.findIndex(
+      (item: any) => Number(item.serviceId) === device.id,
+    );
+
+    if (existingIndex >= 0) {
+      if (device.isQuantityBased) {
+        const quantity = Number(selectedDevices[existingIndex]?.quantity || 0) + 1;
+        setValue(`hardwareDevices.${existingIndex}.quantity`, quantity, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      }
+      return;
+    }
+
+    appendHardwareDevice({ serviceId: device.id, quantity: 1 });
   };
 
   // const {
@@ -596,7 +651,10 @@ export default function AddCustomerContract() {
             records.map((service: any) => ({
               ...service,
               id: Number(service.id),
-              price: Number(service.price),
+              joining_fee: Number(service.joining_fee ?? 0),
+              subscription_fee: Number(service.subscription_fee ?? 0),
+              isSubscriptionBased: Boolean(service.isSubscriptionBased),
+              billingType: service.billingType === 'MONTHLY' ? 'MONTHLY' : 'ONE_TIME',
               isQuantityBased: Boolean(service.isQuantityBased),
             })),
           );
@@ -620,7 +678,16 @@ export default function AddCustomerContract() {
   const paymentDetails = watch('paymentDetails');
 
   const selectedMonths = watch('selectedMonths') || [];
-  const selectedAdditionalServices = watch('additionalServices') || [];
+  const selectedAdditionalServices =
+    useWatch({
+      control,
+      name: 'additionalServices',
+    }) || [];
+  const selectedHardwareDevices =
+    useWatch({
+      control,
+      name: 'hardwareDevices',
+    }) || [];
 
   const paymentAmount = Number(watch('paymentAmount') || 0);
 
@@ -675,22 +742,40 @@ export default function AddCustomerContract() {
     { id: 2, code: 'GOLD', name: 'Gold' },
   ].map((plan) => ({
     ...plan,
-    price: Number(
+    subscription_fee: Number(
       availableServices.find(
-        (service) => service.type === 'SUBSCRIPTION' && service.code === plan.code,
-      )?.price ?? 0,
+        (service) =>
+          service.type === 'SUBSCRIPTION' &&
+          service.isSubscriptionBased &&
+          service.billingType === 'MONTHLY' &&
+          service.code === plan.code,
+      )?.subscription_fee ?? 0,
     ),
   }));
 
   const joiningFeeService = availableServices.find((service) => service.code === 'JOINING_FEE');
-  const additionalUnitService = availableServices.find((service) => service.code === 'ADDITIONAL_UNIT');
+  const additionalUnitService = availableServices.find(
+    (service) => service.code === 'ADDITIONAL_UNIT',
+  );
   const additionalUnitSubscriptionService = availableServices.find(
     (service) => service.code === 'ADDITIONAL_UNIT_SUBSCRIPTION',
   );
-  // Hardware is deliberately excluded from contract creation. All remaining SERVICE
-  // catalog entries are retained as replication services.
+  // One-time service catalog entries are retained as replication services.
   const replicationServices = availableServices.filter(
-    (service) => service.type === 'SERVICE' && !['JOINING_FEE', 'ADDITIONAL_UNIT'].includes(service.code),
+    (service) =>
+      service.code === 'REPLICATION_SERVICE' &&
+      service.type === 'SERVICE' &&
+      service.billingType === 'ONE_TIME',
+  );
+  const hardwareDevices = availableServices.filter(
+    (service) =>
+      service.type === 'HARDWARE' &&
+      service.billingType === 'ONE_TIME' &&
+      !service.isSubscriptionBased,
+  );
+
+  const replicationSubscriptionService = availableServices.find(
+    (service) => service.code === 'REPLICATION_SUBSCRIPTION',
   );
 
   const contractTypeRules: any = {
@@ -755,15 +840,22 @@ export default function AddCustomerContract() {
      CALCULATIONS
   ========================================================= */
 
-  const joiningFee = Number(joiningFeeService?.price ?? 0);
+  const joiningFee = Number(joiningFeeService?.joining_fee ?? 0);
 
   const selectedPlan = plans.find((p: any) => p.id === Number(planId));
 
-  const mainMonthlySubscription = selectedPlan?.price || 0;
-  const additionalUnitSubscription = Number(additionalUnitSubscriptionService?.price ?? 0);
-  const monthlyRecurringSubscription = mainMonthlySubscription + additionalUnitSubscription;
+  const mainMonthlySubscription = selectedPlan?.subscription_fee || 0;
+  const additionalUnitSubscription = Number(
+    additionalUnitSubscriptionService?.subscription_fee ?? 0,
+  );
 
-  const monthlySubscription = selectedMonths.length * monthlyRecurringSubscription;
+  const replicationSubscription = Number(replicationSubscriptionService?.subscription_fee ?? 0);
+  const monthlyRecurringSubscription =
+    mainMonthlySubscription + additionalUnitSubscription + replicationSubscription;
+
+  // The chosen months at contract creation collect the main plan only.
+  const initialCollectedMonthlySubscription = mainMonthlySubscription;
+  const monthlySubscription = selectedMonths.length * initialCollectedMonthlySubscription;
 
   /*
    * Latest selected month (ISO dates compare correctly as strings).
@@ -784,23 +876,43 @@ export default function AddCustomerContract() {
   const subscriptionPriceAfterDiscount = monthlySubscription - subscriptionDiscount;
   const joiningFeeAfterContractTypeDiscount = joiningFee - joiningFeeDiscount;
 
-  const selectedAdditionalServiceRows = useMemo(
-    () =>
-      selectedAdditionalServices
-        .map((item: any) => {
-          const service = availableServices.find(
-            (candidate) => candidate.id === Number(item.serviceId),
-          );
-          if (!service) return null;
-          const quantity = Math.max(Number(item.quantity) || 1, 1);
-          return { ...service, quantity, total: service.price * quantity };
-        })
-        .filter((item): item is SellableService & { quantity: number; total: number } =>
-          Boolean(item),
-        ),
-    [availableServices, selectedAdditionalServices],
-  );
+  const selectedAdditionalServiceRows = selectedAdditionalServices
+    .map((item: any) => {
+      const service = availableServices.find(
+        (candidate) => candidate.id === Number(item.serviceId),
+      );
+      if (!service) return null;
+      const quantity = Math.max(Number(item.quantity) || 1, 1);
+      return { ...service, quantity, total: service.joining_fee * quantity };
+    })
+    .filter((item): item is SellableService & { quantity: number; total: number } => Boolean(item));
   const additionalServicesTotal = selectedAdditionalServiceRows.reduce(
+    (total, service) => total + service.total,
+    0,
+  );
+  const selectedHardwareDeviceRows = selectedHardwareDevices
+    .map((item: any) => {
+      const device = availableServices.find((candidate) => candidate.id === Number(item.serviceId));
+      if (!device || device.type !== 'HARDWARE') return null;
+      const quantity = Math.max(Number(item.quantity) || 1, 1);
+      return { ...device, quantity, total: device.joining_fee * quantity };
+    })
+    .filter((item): item is SellableService & { quantity: number; total: number } => Boolean(item));
+  const hardwareDevicesTotal = selectedHardwareDeviceRows.reduce(
+    (total, device) => total + device.total,
+    0,
+  );
+  const selectedAdditionalUnitRows = selectedAdditionalServiceRows.filter(
+    (service) => service.code === 'ADDITIONAL_UNIT',
+  );
+  const selectedReplicationServiceRows = selectedAdditionalServiceRows.filter(
+    (service) => service.code !== 'ADDITIONAL_UNIT',
+  );
+  const additionalUnitsQuantity = selectedAdditionalUnitRows.reduce(
+    (total, service) => total + service.quantity,
+    0,
+  );
+  const additionalUnitsTotal = selectedAdditionalUnitRows.reduce(
     (total, service) => total + service.total,
     0,
   );
@@ -836,18 +948,29 @@ export default function AddCustomerContract() {
   const selectedPaymentMethod = paymentMethods.find(
     (method) => Number(method.id) === Number(paymentMethodId),
   );
-  const paymentMethodCode = String(selectedPaymentMethod?.code || '').toUpperCase().replace(/_/g, '');
+  const paymentMethodCode = String(selectedPaymentMethod?.code || '')
+    .toUpperCase()
+    .replace(/_/g, '');
 
   useEffect(() => {
     const fieldsByMethod: Record<string, string[]> = {
-      BANK_TRANSFER: ['transferDate', 'bankName', 'referenceNumber'],
+      BANKTRANSFER: ['transferDate', 'bankId', 'bankName', 'referenceNumber'],
       INSTAPAY: ['referenceNumber'],
       PAYSKY: ['referenceNumber'],
-      CHEQUE: ['bankName', 'chequeNumber'],
+      CHEQUE: ['bankId', 'bankName', 'chequeNumber'],
       CASH: ['receiptNumber'],
     };
     const allowed = new Set(fieldsByMethod[paymentMethodCode] || []);
-    (['transferDate', 'bankName', 'referenceNumber', 'chequeNumber', 'receiptNumber'] as const).forEach((field) => {
+    (
+      [
+        'transferDate',
+        'bankId',
+        'bankName',
+        'referenceNumber',
+        'chequeNumber',
+        'receiptNumber',
+      ] as const
+    ).forEach((field) => {
       if (!allowed.has(field) && paymentDetails?.[field]) {
         setValue(`paymentDetails.${field}`, '', { shouldDirty: true });
       }
@@ -862,6 +985,8 @@ export default function AddCustomerContract() {
   const replaceDocumentInputRef = useRef<any>(null);
 
   const [replaceDocumentIndex, setReplaceDocumentIndex] = useState<any>(null);
+  const [renamingDocumentIndex, setRenamingDocumentIndex] = useState<number | null>(null);
+  const [documentNameDraft, setDocumentNameDraft] = useState('');
 
   const openDocumentPicker = () => {
     addDocumentInputRef.current?.click();
@@ -870,6 +995,30 @@ export default function AddCustomerContract() {
   const openReplacePicker = (index: number) => {
     setReplaceDocumentIndex(index);
     replaceDocumentInputRef.current?.click();
+  };
+  const normaliseDocumentName = (name: string, originalFileName: string) => {
+    const trimmedName = name.trim().replace(/[\\/]/g, '-');
+    if (!trimmedName) return originalFileName;
+
+    const extensionStart = originalFileName.lastIndexOf('.');
+    const extension = extensionStart >= 0 ? originalFileName.slice(extensionStart) : '';
+    return extension && !trimmedName.toLowerCase().endsWith(extension.toLowerCase())
+      ? `${trimmedName}${extension}`
+      : trimmedName;
+  };
+
+  const startDocumentRename = (index: number, name: string) => {
+    setRenamingDocumentIndex(index);
+    setDocumentNameDraft(name);
+  };
+
+  const saveDocumentRename = (index: number, document: any) => {
+    updateDocument(index, {
+      ...document,
+      name: normaliseDocumentName(documentNameDraft, document.file?.name || document.name),
+    });
+    setRenamingDocumentIndex(null);
+    setDocumentNameDraft('');
   };
 
   const isAcceptedDocument = (file: File) => {
@@ -1132,6 +1281,7 @@ export default function AddCustomerContract() {
       'contacts.0.nationalId',
       'contacts.0.email',
       'contacts.0.phones.0.number',
+      'contacts.0.phones.1.number',
 
       'address.governorateId',
       'address.districtId',
@@ -1181,7 +1331,13 @@ export default function AddCustomerContract() {
       });
       return;
     }
-    if (isServicesLoading || servicesError || !joiningFeeService || !selectedPlan?.price || !additionalUnitSubscriptionService) {
+    if (
+      isServicesLoading ||
+      servicesError ||
+      !joiningFeeService ||
+      !selectedPlan?.subscription_fee ||
+      !additionalUnitSubscriptionService
+    ) {
       await Swal.fire({
         icon: 'error',
         title: 'تعذر إنشاء العقد',
@@ -1193,7 +1349,7 @@ export default function AddCustomerContract() {
 
     const selectedMonthsPayload = data.selectedMonths.map((month: any) => month.value.slice(0, 7));
     const discountedMonthlyAmount = Number(
-      (monthlyRecurringSubscription * (1 - subscriptionDiscountPercentage / 100)).toFixed(2),
+      (initialCollectedMonthlySubscription * (1 - subscriptionDiscountPercentage / 100)).toFixed(2),
     );
 
     const contactsPayload = (data.contacts || []).map((contact: any) => ({
@@ -1213,10 +1369,16 @@ export default function AddCustomerContract() {
     }));
 
     const payload = {
-      ...data,
+      customerNameEn: data.customerNameEn,
+      customerNameAr: data.customerNameAr,
+      customerCode: data.customerCode,
+      customerTypeId: data.customerTypeId,
+      structure: data.structure,
+      taxNumber: data.taxNumber,
+      registrationNumber: data.registrationNumber,
+      licenseNumber: data.licenseNumber,
+      zoneId: data.zoneId,
       contacts: contactsPayload,
-      representativeId: user.id,
-      contractBranchIndex: Number(branchId),
       address: {
         governorateId: data.address.governorateId,
         districtId: data.address.districtId,
@@ -1225,39 +1387,21 @@ export default function AddCustomerContract() {
         buildingNumber: data.address.buildingNumber,
         glnCode: data.address.glnCode || null,
       },
-      // Explicit financial values for reporting and contract displays.
-      joiningFeeBeforeDiscount: joiningFee,
-      joiningFeeAfterDiscount,
-      subscriptionFeeBeforeDiscount: monthlySubscription,
-      subscriptionFeeAfterDiscount,
-      totalBeforeDiscount,
-      totalAfterDiscount: totalContractValue,
-
-      // Existing API fields retained for backward compatibility.
-      joiningFeeAmount: joiningFeeAfterDiscount,
-      advancePayment: paymentAmount,
-      remainingAmount,
-      baseSubscriptionAmount: monthlyRecurringSubscription,
-      mainSubscriptionAmount: mainMonthlySubscription,
-      additionalUnitSubscriptionAmount: additionalUnitSubscription,
-      grossContractValue,
-      // Don't put File objects in JSON
-      // documents: data.documents.map((doc: any) => ({
-      //   documentType: doc.documentType,
-      //   fileName: doc.file.name,
-      // })),
-
-      discountAmount,
-      subscriptionDiscountPercentage,
-      joiningFeeDiscountPercentage,
-      joiningFeeDiscount,
-      totalContractValue,
+      planId: data.planId,
+      programId: data.programId,
+      contractNumber: data.contractNumber,
+      contractDate: data.contractDate,
       selectedMonths: selectedMonthsPayload,
       monthPayments: selectedMonthsPayload.map((month: string) => ({
         month,
         amount: discountedMonthlyAmount,
       })),
-      // The server resolves the current catalog price; the client only selects item IDs and quantities.
+      repAssistantId: participantId || null,
+      subscriptionDiscountPercentage,
+      joiningFeeDiscountPercentage,
+      paymentAmount,
+      paymentMethodId: data.paymentMethodId,
+      paymentDetails: data.paymentDetails,
       additionalServices: (data.additionalServices || [])
         .map((service: any) => ({
           serviceId: Number(service.serviceId),
@@ -1265,10 +1409,25 @@ export default function AddCustomerContract() {
         }))
         .filter(
           (service: any) =>
-            Number.isInteger(service.serviceId) && service.serviceId > 0 && service.quantity > 0 &&
+            Number.isInteger(service.serviceId) &&
+            service.serviceId > 0 &&
+            service.quantity > 0 &&
             availableServices.find((item) => item.id === service.serviceId)?.type === 'SERVICE',
         ),
-      repAssistantId: participantId || null,
+      hardwareDevices: (data.hardwareDevices || [])
+        .map((device: any) => ({
+          serviceId: Number(device.serviceId),
+          quantity: Math.max(Number(device.quantity) || 0, 0),
+        }))
+        .filter(
+          (device: any) =>
+            Number.isInteger(device.serviceId) &&
+            device.serviceId > 0 &&
+            device.quantity > 0 &&
+            availableServices.find((item) => item.id === device.serviceId)?.type === 'HARDWARE',
+        ),
+      installationDate: data.installationDate,
+      notes: data.notes,
     };
 
     console.log(payload);
@@ -1307,7 +1466,11 @@ export default function AddCustomerContract() {
 
       (data.documents || []).forEach((document: any) => {
         if (document.file instanceof File) {
-          formData.append('documents', document.file);
+          formData.append(
+            'documents',
+            document.file,
+            normaliseDocumentName(document.name, document.file.name),
+          );
         }
       });
 
@@ -1610,26 +1773,22 @@ export default function AddCustomerContract() {
                     <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
                       <Label>اختر العميل غير النشط</Label>
 
-                      <div className="relative mt-2">
-                        <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-
-                        <select
+                      <div>
+                        {' '}
+                        <SearchableSelect
                           value={customerId}
-                          onChange={(e) => handleInactiveCustomer(e.target.value)}
-                          className={cn(
-                            'h-11 w-full appearance-none rounded-xl border border-border bg-background pr-10 pl-4 text-sm text-foreground outline-none transition-shadow focus:ring-2 focus:ring-ring',
-                            errors.customerId &&
-                              'border-error bg-error/10 text-error focus:ring-error',
-                          )}
-                        >
-                          <option value="">اختر العميل...</option>
-
-                          {inactiveCustomers.map((customer) => (
-                            <option key={customer.id} value={customer.id}>
-                              {customer.nameAr} — {customer.code}
-                            </option>
-                          ))}
-                        </select>
+                          onValueChange={handleInactiveCustomer}
+                          options={[
+                            ['', 'اختر العميل...'],
+                            ...inactiveCustomers.map((customer) => [
+                              customer.id,
+                              `${customer.nameAr} — ${customer.code}`,
+                            ]),
+                          ]}
+                          error={Boolean(errors.customerId)}
+                          placeholder="اختر العميل..."
+                          searchPlaceholder="ابحث باسم العميل أو الكود..."
+                        />
                       </div>
 
                       {errors.customerId && <ErrorText>{errors.customerId.message}</ErrorText>}
@@ -1802,6 +1961,7 @@ export default function AddCustomerContract() {
                         ['SINGLE', 'فرع واحد'],
                         ['CHAIN', 'سلسلة'],
                       ]}
+                      control={control}
                       error={errors.structure?.message}
                     />
 
@@ -1817,6 +1977,7 @@ export default function AddCustomerContract() {
                         valueAsNumber: true,
                       })}
                       options={zones.map((zone) => [zone.id, zone.name_ar])}
+                      control={control}
                       error={errors.zoneId?.message}
                     />
 
@@ -1829,8 +1990,16 @@ export default function AddCustomerContract() {
                       }
                       registration={register('licenseNumber', {
                         required: 'رقم الترخيص مطلوب',
+                        pattern: {
+                          value: /^\d+$/,
+                          message: 'رقم الترخيص يجب أن يحتوي على أرقام فقط',
+                        },
                       })}
-                      placeholder="LIC-45879"
+                      placeholder="45879"
+                      inputMode="numeric"
+                      onInput={(event: React.FormEvent<HTMLInputElement>) => {
+                        event.currentTarget.value = event.currentTarget.value.replace(/\D/g, '');
+                      }}
                       error={errors.licenseNumber?.message}
                     />
 
@@ -1903,8 +2072,16 @@ export default function AddCustomerContract() {
                       }
                       registration={register('registrationNumber', {
                         required: 'رقم السجل التجاري مطلوب',
+                        pattern: {
+                          value: /^\d+$/,
+                          message: 'رقم السجل التجاري يجب أن يحتوي على أرقام فقط',
+                        },
                       })}
-                      placeholder="REG-78210"
+                      placeholder="78210"
+                      inputMode="numeric"
+                      onInput={(event: React.FormEvent<HTMLInputElement>) => {
+                        event.currentTarget.value = event.currentTarget.value.replace(/\D/g, '');
+                      }}
                       error={errors.registrationNumber?.message}
                     />
                   </div>
@@ -1960,61 +2137,130 @@ export default function AddCustomerContract() {
                 <CardContent>
                   {documentFields.length > 0 ? (
                     <div className="space-y-3">
-                      {documentFields.map((document: any, index: number) => (
-                        <div
-                          key={document.id}
-                          className="
-                              flex items-center justify-between
-                              gap-4 rounded-2xl border
-                              border-border bg-muted/40 p-4
-                            "
-                        >
-                          <div className="flex min-w-0 items-center gap-3">
-                            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-background shadow-sm">
-                              <FileText className="h-5 w-5 text-muted-foreground" />
-                            </div>
+                      {documentFields.map((document: any, index: number) => {
+                        const isRenaming = renamingDocumentIndex === index;
 
-                            <div className="min-w-0">
-                              <div className="truncate text-sm font-semibold">{document.name}</div>
+                        return (
+                          <div
+                            key={document.id}
+                            className="flex flex-col gap-4 rounded-2xl border border-border bg-muted/40 p-4 lg:flex-row lg:items-center lg:justify-between"
+                          >
+                            <div className="flex min-w-0 items-center gap-3">
+                              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-background shadow-sm">
+                                <FileText className="h-5 w-5 text-muted-foreground" />
+                              </div>
 
-                              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                <span>{document.type || 'ملف'}</span>
-
-                                {document.size > 0 && (
-                                  <>
-                                    <span>•</span>
-
-                                    <span>{formatFileSize(document.size)}</span>
-                                  </>
+                              <div className="min-w-0">
+                                {isRenaming ? (
+                                  <div className="space-y-1">
+                                    <Label htmlFor={`document-name-${index}`} className="text-xs">
+                                      اسم المستند
+                                    </Label>
+                                    <Input
+                                      id={`document-name-${index}`}
+                                      autoFocus
+                                      value={documentNameDraft}
+                                      onChange={(event) => setDocumentNameDraft(event.target.value)}
+                                      onKeyDown={(event) => {
+                                        if (event.key === 'Enter') {
+                                          event.preventDefault();
+                                          saveDocumentRename(index, document);
+                                        }
+                                        if (event.key === 'Escape') {
+                                          setRenamingDocumentIndex(null);
+                                          setDocumentNameDraft('');
+                                        }
+                                      }}
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                      سيتم الحفاظ على امتداد الملف الأصلي تلقائياً.
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <div className="truncate text-sm font-semibold">
+                                    {document.name}
+                                  </div>
                                 )}
+
+                                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                  <span>{document.type || 'ملف'}</span>
+                                  {document.size > 0 && (
+                                    <>
+                                      <span>•</span>
+                                      <span>{formatFileSize(document.size)}</span>
+                                    </>
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          </div>
 
-                          <div className="flex shrink-0 items-center gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="rounded-xl"
-                              onClick={() => openReplacePicker(index)}
-                            >
-                              <Upload className="ml-2 h-4 w-4" />
-                              استبدال
-                            </Button>
+                            <div className="flex shrink-0 flex-wrap items-center gap-2">
+                              {isRenaming ? (
+                                <>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    className="rounded-xl"
+                                    onClick={() => saveDocumentRename(index, document)}
+                                  >
+                                    حفظ الاسم
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="rounded-xl"
+                                    onClick={() => {
+                                      setRenamingDocumentIndex(null);
+                                      setDocumentNameDraft('');
+                                    }}
+                                  >
+                                    إلغاء
+                                  </Button>
+                                </>
+                              ) : (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="rounded-xl"
+                                  onClick={() => startDocumentRename(index, document.name)}
+                                >
+                                  <Pencil className="ml-2 h-4 w-4" />
+                                  تعديل الاسم
+                                </Button>
+                              )}
 
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="rounded-xl text-destructive hover:bg-destructive/10"
-                              onClick={() => removeDocument(index)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="rounded-xl"
+                                onClick={() => openReplacePicker(index)}
+                              >
+                                <Upload className="ml-2 h-4 w-4" />
+                                استبدال
+                              </Button>
+
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="rounded-xl text-destructive hover:bg-destructive/10"
+                                onClick={() => {
+                                  removeDocument(index);
+                                  if (isRenaming) {
+                                    setRenamingDocumentIndex(null);
+                                    setDocumentNameDraft('');
+                                  }
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div
@@ -2064,8 +2310,7 @@ export default function AddCustomerContract() {
                     </CardTitle>
 
                     <p className="mt-1 text-xs text-muted-foreground">
-                      اختر المحافظة ثم المركز أو القسم ثم الحي أو الشياخة. يتم حفظ المعرّفات الرسمية
-                      فقط في العقد.
+                      اختر المحافظة ثم المركز أو القسم ثم الحي أو الشياخة.
                     </p>
                   </div>
                 </CardHeader>
@@ -2093,39 +2338,46 @@ export default function AddCustomerContract() {
                         المحافظة
                         <span className="mr-1 text-red-500">*</span>
                       </Label>
-                      <select
-                        {...register('address.governorateId', {
-                          required: 'المحافظة مطلوبة',
-                          onChange: () => {
-                            setDistricts([]);
-                            setShiyakhas([]);
-                            setValue('address.districtId', '', {
-                              shouldDirty: true,
-                              shouldValidate: true,
-                            });
-                            setValue('address.shiyakhaId', '', {
-                              shouldDirty: true,
-                              shouldValidate: true,
-                            });
-                          },
-                        })}
-                        disabled={isGeographyLoading || Boolean(geographyError)}
-                        aria-invalid={Boolean(errors.address?.governorateId)}
-                        className={cn(
-                          'mt-2 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition-shadow focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:bg-muted',
-                          errors.address?.governorateId &&
-                            'border-error bg-error/10 text-error focus:ring-error',
+                      <Controller
+                        control={control}
+                        name="address.governorateId"
+                        rules={{ required: 'المحافظة مطلوبة' }}
+                        render={({ field }) => (
+                          <SearchableSelect
+                            value={field.value}
+                            onValueChange={(value: string) => {
+                              field.onChange(value);
+                              field.onBlur();
+                              setDistricts([]);
+                              setShiyakhas([]);
+                              setValue('address.districtId', '', {
+                                shouldDirty: true,
+                                shouldValidate: true,
+                              });
+                              setValue('address.shiyakhaId', '', {
+                                shouldDirty: true,
+                                shouldValidate: true,
+                              });
+                            }}
+                            disabled={isGeographyLoading || Boolean(geographyError)}
+                            error={Boolean(errors.address?.governorateId)}
+                            placeholder={
+                              isGeographyLoading ? 'جارٍ تحميل المحافظات...' : 'اختر المحافظة'
+                            }
+                            searchPlaceholder="ابحث عن محافظة..."
+                            options={[
+                              [
+                                '',
+                                isGeographyLoading ? 'جارٍ تحميل المحافظات...' : 'اختر المحافظة',
+                              ],
+                              ...governorates.map((governorate) => [
+                                governorate.id,
+                                `${governorate.nameAr} — ${governorate.nameEn}`,
+                              ]),
+                            ]}
+                          />
                         )}
-                      >
-                        <option value="">
-                          {isGeographyLoading ? 'جارٍ تحميل المحافظات...' : 'اختر المحافظة'}
-                        </option>
-                        {governorates.map((governorate) => (
-                          <option key={governorate.id} value={governorate.id}>
-                            {governorate.nameAr} — {governorate.nameEn}
-                          </option>
-                        ))}
-                      </select>
+                      />
                       {errors.address?.governorateId?.message && (
                         <ErrorText>{errors.address.governorateId.message}</ErrorText>
                       )}
@@ -2136,34 +2388,40 @@ export default function AddCustomerContract() {
                         المركز / القسم
                         <span className="mr-1 text-red-500">*</span>
                       </Label>
-                      <select
-                        {...register('address.districtId', {
-                          required: 'المركز أو القسم مطلوب',
-                          onChange: () => {
-                            setShiyakhas([]);
-                            setValue('address.shiyakhaId', '', {
-                              shouldDirty: true,
-                              shouldValidate: true,
-                            });
-                          },
-                        })}
-                        disabled={!governorateId || isGeographyLoading || Boolean(geographyError)}
-                        aria-invalid={Boolean(errors.address?.districtId)}
-                        className={cn(
-                          'mt-2 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition-shadow focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:bg-muted',
-                          errors.address?.districtId &&
-                            'border-error bg-error/10 text-error focus:ring-error',
+                      <Controller
+                        control={control}
+                        name="address.districtId"
+                        rules={{ required: 'المركز أو القسم مطلوب' }}
+                        render={({ field }) => (
+                          <SearchableSelect
+                            value={field.value}
+                            onValueChange={(value: string) => {
+                              field.onChange(value);
+                              field.onBlur();
+                              setShiyakhas([]);
+                              setValue('address.shiyakhaId', '', {
+                                shouldDirty: true,
+                                shouldValidate: true,
+                              });
+                            }}
+                            disabled={
+                              !governorateId || isGeographyLoading || Boolean(geographyError)
+                            }
+                            error={Boolean(errors.address?.districtId)}
+                            placeholder={
+                              governorateId ? 'اختر المركز أو القسم' : 'اختر المحافظة أولاً'
+                            }
+                            searchPlaceholder="ابحث عن مركز أو قسم..."
+                            options={[
+                              ['', governorateId ? 'اختر المركز أو القسم' : 'اختر المحافظة أولاً'],
+                              ...districts.map((district) => [
+                                district.id,
+                                `${district.nameAr} — ${district.nameEn}`,
+                              ]),
+                            ]}
+                          />
                         )}
-                      >
-                        <option value="">
-                          {governorateId ? 'اختر المركز أو القسم' : 'اختر المحافظة أولاً'}
-                        </option>
-                        {districts.map((district) => (
-                          <option key={district.id} value={district.id}>
-                            {district.nameAr} — {district.nameEn}
-                          </option>
-                        ))}
-                      </select>
+                      />
                       {errors.address?.districtId?.message && (
                         <ErrorText>{errors.address.districtId.message}</ErrorText>
                       )}
@@ -2174,37 +2432,52 @@ export default function AddCustomerContract() {
                         الحي / الشياخة
                         {shiyakhas.length > 0 && <span className="mr-1 text-red-500">*</span>}
                       </Label>
-                      <select
-                        {...register('address.shiyakhaId', {
+                      <Controller
+                        control={control}
+                        name="address.shiyakhaId"
+                        rules={{
                           validate: (value) =>
                             shiyakhas.length === 0 || Boolean(value) || 'الحي أو الشياخة مطلوب',
-                        })}
-                        disabled={
-                          !districtId ||
-                          isGeographyLoading ||
-                          Boolean(geographyError) ||
-                          shiyakhas.length === 0
-                        }
-                        aria-invalid={Boolean(errors.address?.shiyakhaId)}
-                        className={cn(
-                          'mt-2 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition-shadow focus:ring-2 focus:ring-ring disabled:cursor-not-allowed disabled:bg-muted',
-                          errors.address?.shiyakhaId &&
-                            'border-error bg-error/10 text-error focus:ring-error',
+                        }}
+                        render={({ field }) => (
+                          <SearchableSelect
+                            value={field.value}
+                            onValueChange={(value: string) => {
+                              field.onChange(value);
+                              field.onBlur();
+                            }}
+                            disabled={
+                              !districtId ||
+                              isGeographyLoading ||
+                              Boolean(geographyError) ||
+                              shiyakhas.length === 0
+                            }
+                            error={Boolean(errors.address?.shiyakhaId)}
+                            placeholder={
+                              !districtId
+                                ? 'اختر المركز أو القسم أولاً'
+                                : shiyakhas.length === 0
+                                  ? 'لا توجد شياخات مسجلة'
+                                  : 'اختر الحي أو الشياخة'
+                            }
+                            searchPlaceholder="ابحث عن حي أو شياخة..."
+                            options={[
+                              [
+                                '',
+                                !districtId
+                                  ? 'اختر المركز أو القسم أولاً'
+                                  : shiyakhas.length === 0
+                                    ? 'لا توجد شياخات مسجلة'
+                                    : 'اختر الحي أو الشياخة',
+                              ],
+                              ...shiyakhas.map((shiyakha) => [
+                                shiyakha.id,
+                                `${shiyakha.nameAr} — ${shiyakha.nameEn}`,
+                              ]),
+                            ]}
+                          />
                         )}
-                      >
-                        <option value="">
-                          {!districtId
-                            ? 'اختر المركز أو القسم أولاً'
-                            : shiyakhas.length === 0
-                              ? 'لا توجد شياخات مسجلة'
-                              : 'اختر الحي أو الشياخة'}
-                        </option>
-                        {shiyakhas.map((shiyakha) => (
-                          <option key={shiyakha.id} value={shiyakha.id}>
-                            {shiyakha.nameAr} — {shiyakha.nameEn}
-                          </option>
-                        ))}
-                      </select>
+                      />
                       {errors.address?.shiyakhaId?.message && (
                         <ErrorText>{errors.address.shiyakhaId.message}</ErrorText>
                       )}
@@ -2233,22 +2506,37 @@ export default function AddCustomerContract() {
                       }
                       registration={register('address.buildingNumber', {
                         required: 'رقم المبنى مطلوب',
+                        pattern: {
+                          value: /^\d+$/,
+                          message: 'رقم المبنى يجب أن يحتوي على أرقام فقط',
+                        },
                       })}
                       placeholder="25"
+                      inputMode="numeric"
+                      onInput={(event: React.FormEvent<HTMLInputElement>) => {
+                        event.currentTarget.value = event.currentTarget.value.replace(/\D/g, '');
+                      }}
                       error={errors.address?.buildingNumber?.message}
                     />
 
                     <FormField
                       label="رمز الموقع العالمي (GLN)"
-                      registration={register('address.glnCode')}
+                      registration={register('address.glnCode', {
+                        validate: (value) =>
+                          !value ||
+                          /^\d+$/.test(String(value)) ||
+                          'رمز GLN يجب أن يحتوي على أرقام فقط',
+                      })}
                       placeholder="22828317"
+                      inputMode="numeric"
+                      onInput={(event: React.FormEvent<HTMLInputElement>) => {
+                        event.currentTarget.value = event.currentTarget.value.replace(/\D/g, '');
+                      }}
                       error={errors.address?.glnCode?.message}
                     />
                   </div>
 
-                  <p className="mt-4 text-xs text-muted-foreground">
-                    مصدر التقسيمات: قاعدة بيانات النظام
-                  </p>
+
                 </CardContent>
               </Card>
               {/* Contacts */}
@@ -2276,6 +2564,10 @@ export default function AddCustomerContract() {
                             {
                               number: '',
                               type: 'محمول',
+                            },
+                            {
+                              number: '',
+                              type: 'هاتف أرضي',
                             },
                           ],
                         })
@@ -2346,6 +2638,7 @@ export default function AddCustomerContract() {
                               ['MANAGER', 'مدير'],
                               ['EMPLOYEE', 'موظف'],
                             ]}
+                            control={control}
                             error={contactError?.type?.message}
                           />
 
@@ -2358,8 +2651,18 @@ export default function AddCustomerContract() {
                             }
                             registration={register(`contacts.${contactIndex}.nameAr`, {
                               required: 'اسم جهة الاتصال مطلوب',
+                              pattern: {
+                                value: /^[\u0621-\u064A\s]+$/,
+                                message: 'اسم جهة الاتصال يجب أن يحتوي على حروف عربية فقط',
+                              },
                             })}
                             placeholder="الاسم بالعربية"
+                            onInput={(event: React.FormEvent<HTMLInputElement>) => {
+                              event.currentTarget.value = event.currentTarget.value.replace(
+                                /[^\u0621-\u064A\s]/g,
+                                '',
+                              );
+                            }}
                             error={contactError?.nameAr?.message}
                           />
 
@@ -2517,6 +2820,7 @@ export default function AddCustomerContract() {
                       ['', 'اختر البرنامج'],
                       ...programs.map((program: any) => [String(program.id), program.name_en]),
                     ]}
+                    control={control}
                     error={errors.programId?.message}
                   />
 
@@ -2528,26 +2832,29 @@ export default function AddCustomerContract() {
                       <span className="mr-1 text-red-500">*</span>
                     </Label>
 
-                    <select
-                      {...register('contractType', {
-                        required: 'نوع الخطة مطلوب',
-                        onChange: (event) => {
-                          handleContractTypeChange(event.target.value);
-                        },
-                      })}
-                      aria-invalid={Boolean(errors.contractType)}
-                      className={cn(
-                        'mt-2 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition-shadow focus:ring-2 focus:ring-ring',
-                        errors.contractType &&
-                          'border-error bg-error/10 text-error focus:ring-error',
+                    <Controller
+                      control={control}
+                      name="contractType"
+                      rules={{ required: 'نوع الخطة مطلوب' }}
+                      render={({ field }) => (
+                        <SearchableSelect
+                          value={field.value}
+                          onValueChange={(value: string) => {
+                            field.onChange(value);
+                            field.onBlur();
+                            handleContractTypeChange(value);
+                          }}
+                          error={Boolean(errors.contractType)}
+                          placeholder="اختر نوع الخطة"
+                          searchPlaceholder="ابحث عن نوع الخطة..."
+                          options={[
+                            ['', 'اختر نوع الخطة'],
+                            ['REGULAR', 'عادي — حتى 12 شهر بدون خصم'],
+                            ['SIX_MONTHS', '6 أشهر — خصم 50% اشتراك، 40% رسوم الانضمام'],
+                          ]}
+                        />
                       )}
-                    >
-                      <option value="">اختر نوع الخطة</option>
-
-                      <option value="REGULAR">عادي — حتى 12 شهر بدون خصم</option>
-
-                      <option value="SIX_MONTHS">6 أشهر — خصم 50% اشتراك، 40% رسوم الانضمام</option>
-                    </select>
+                    />
 
                     {errors.contractType && (
                       <ErrorText>{String(errors.contractType.message)}</ErrorText>
@@ -2564,9 +2871,10 @@ export default function AddCustomerContract() {
                       ['', 'اختار نوع التعاقد'],
                       ...plans.map((plan: any) => [
                         String(plan.id),
-                        `${plan.name} — ${plan.price} جنيه شهريًا`,
+                        `${plan.name} — ${plan.subscription_fee} جنيه شهريًا`,
                       ]),
                     ]}
+                    control={control}
                     error={errors.planId?.message}
                   />
 
@@ -2579,9 +2887,9 @@ export default function AddCustomerContract() {
                       className="mt-2 h-11 cursor-not-allowed bg-muted"
                     />
                     <input type="hidden" {...register('representativeId')} />
-                    <p className="mt-2 text-xs text-muted-foreground">
+                    {/* <p className="mt-2 text-xs text-muted-foreground">
                       يتم تعيين المندوب المسؤول تلقائياً من المستخدم المسجل دخوله.
-                    </p>
+                    </p> */}
                   </div>
                   {/* Participant */}
 
@@ -2755,7 +3063,13 @@ export default function AddCustomerContract() {
 
                       <Input
                         type="date"
-                        {...register('installationDate')}
+                        min={installationDateMin}
+                        {...register('installationDate', {
+                          validate: (value) =>
+                            !value ||
+                            value >= installationDateMin ||
+                            'لا يمكن أن يكون تاريخ التركيب في الماضي',
+                        })}
                         className="h-11 rounded-xl pr-10"
                       />
                     </div>
@@ -2770,14 +3084,14 @@ export default function AddCustomerContract() {
                     <div>
                       <CardTitle className="flex items-center gap-2 text-base">
                         <Wrench className="h-5 w-5 text-muted-foreground" />
-                        الوحدات الإضافية وخدمات النسخ
+                        الوحدات الإضافية وخدمات النسخ والأجهزة
                       </CardTitle>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        رسوم اشتراك الوحدات الإضافية الشهرية إلزامية، أما الوحدات وخدمات النسخ أدناه فهي اختيارية وتُحسب مرة واحدة.
+                        الأجهزة تُفوتر بشكل منفصل ولا تدخل في التحصيل الحالي.
                       </p>
                     </div>
                     <Badge variant="secondary" className="w-fit rounded-full">
-                      {additionalServiceFields.length} عناصر اختيارية
+                      {additionalServiceFields.length + hardwareDeviceFields.length} عناصر اختيارية
                     </Badge>
                   </div>
                 </CardHeader>
@@ -2790,25 +3104,35 @@ export default function AddCustomerContract() {
                   ) : servicesError ? (
                     <div className="flex flex-col items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive sm:flex-row">
                       <span>{servicesError}</span>
-                      <Button type="button" size="sm" variant="outline" onClick={() => setServicesRefresh((value) => value + 1)}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setServicesRefresh((value) => value + 1)}
+                      >
                         <RefreshCw className="ml-2 h-4 w-4" /> إعادة المحاولة
                       </Button>
                     </div>
                   ) : (
                     <Tabs defaultValue="additional-units" dir="rtl">
-                      <TabsList className="grid w-full grid-cols-2">
+                      <TabsList className="grid w-full grid-cols-3">
                         <TabsTrigger value="additional-units">الوحدات الإضافية</TabsTrigger>
                         <TabsTrigger value="replication">خدمات النسخ</TabsTrigger>
+                        {/* <TabsTrigger value="hardware">الأجهزة</TabsTrigger> */}
                       </TabsList>
 
                       <TabsContent value="additional-units" className="space-y-4 pt-3">
-                        <div className="flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm">
+                        {/* <div className="flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm">
                           <div>
                             <p className="font-semibold">اشتراك الوحدات الإضافية الشهري (إلزامي)</p>
-                            <p className="mt-1 text-xs text-muted-foreground">يُضاف مرة واحدة لكل شهر، حتى عند عدم اختيار أي وحدة إضافية.</p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              يُضاف مرة واحدة لكل شهر، حتى عند عدم اختيار أي وحدة إضافية.
+                            </p>
                           </div>
-                          <span className="font-bold">{additionalUnitSubscription.toLocaleString('ar-EG')} جنيه/شهر</span>
-                        </div>
+                          <span className="font-bold">
+                            {additionalUnitSubscription.toLocaleString('ar-EG')} جنيه/شهر
+                          </span>
+                        </div> */}
                         {additionalUnitService ? (
                           <Button
                             type="button"
@@ -2816,29 +3140,83 @@ export default function AddCustomerContract() {
                             onClick={() => addAdditionalService(additionalUnitService)}
                             className={cn(
                               'h-auto min-h-24 w-full justify-between rounded-xl border p-4 text-right hover:bg-accent',
-                              additionalServiceFields.some((item: any) => Number(item.serviceId) === additionalUnitService.id) && 'border-primary bg-primary/5',
+                              additionalServiceFields.some(
+                                (item: any) => Number(item.serviceId) === additionalUnitService.id,
+                              ) && 'border-primary bg-primary/5',
                             )}
                           >
                             <span className="text-right">
-                              <span className="block font-semibold">{additionalUnitService.nameAr}</span>
-                              <span className="mt-1 block text-xs font-normal text-muted-foreground">سعر الوحدة {additionalUnitService.price.toLocaleString('ar-EG')} جنيه · رسوم لمرة واحدة</span>
+                              <span className="block font-semibold">
+                                {additionalUnitService.nameAr}
+                              </span>
+                              <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                                سعر الوحدة{' '}
+                                {additionalUnitService.joining_fee.toLocaleString('ar-EG')} جنيه ·
+                                رسوم لمرة واحدة
+                              </span>
                             </span>
                             <Plus className="h-4 w-4 shrink-0" />
                           </Button>
                         ) : (
-                          <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">لا توجد خدمة وحدات إضافية مهيأة في الكتالوج.</p>
+                          <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+                            لا توجد خدمة وحدات إضافية مهيأة في الكتالوج.
+                          </p>
                         )}
                         {additionalServiceFields.map((field: any, index: number) => {
-                          const service = availableServices.find((item) => item.id === Number(field.serviceId));
+                          const service = availableServices.find(
+                            (item) => item.id === Number(field.serviceId),
+                          );
                           if (!service || service.code !== 'ADDITIONAL_UNIT') return null;
-                          const quantity = Math.max(Number(selectedAdditionalServices[index]?.quantity) || 1, 1);
+                          const quantity = Math.max(
+                            Number(selectedAdditionalServices[index]?.quantity) || 1,
+                            1,
+                          );
                           return (
-                            <div key={field.id} className="grid grid-cols-1 items-end gap-3 rounded-xl border border-border bg-muted/20 p-4 md:grid-cols-[minmax(0,1fr)_130px_150px_auto]">
-                              <input type="hidden" {...register(`additionalServices.${index}.serviceId`, { valueAsNumber: true })} />
-                              <div><p className="font-semibold">{service.nameAr}</p><p className="mt-1 text-xs text-muted-foreground">سعر الوحدة {service.price.toLocaleString('ar-EG')} جنيه</p></div>
-                              <div><Label>الكمية</Label><Input type="number" min="1" step="1" {...register(`additionalServices.${index}.quantity`, { valueAsNumber: true, min: { value: 1, message: 'الكمية يجب أن تكون 1 على الأقل' } })} className="mt-2 h-11 rounded-xl" /></div>
-                              <div><Label>إجمالي لمرة واحدة</Label><div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-background px-3 text-sm font-semibold">{(service.price * quantity).toLocaleString('ar-EG')} جنيه</div></div>
-                              <Button type="button" variant="ghost" size="icon" onClick={() => removeAdditionalService(index)} className="h-11 w-11 rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive" title="حذف الوحدة"><Trash2 className="h-4 w-4" /></Button>
+                            <div
+                              key={field.id}
+                              className="grid grid-cols-1 items-end gap-3 rounded-xl border border-border bg-muted/20 p-4 md:grid-cols-[minmax(0,1fr)_130px_150px_auto]"
+                            >
+                              <input
+                                type="hidden"
+                                {...register(`additionalServices.${index}.serviceId`, {
+                                  valueAsNumber: true,
+                                })}
+                              />
+                              <div>
+                                <p className="font-semibold">{service.nameAr}</p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  سعر الوحدة {service.joining_fee.toLocaleString('ar-EG')} جنيه
+                                </p>
+                              </div>
+                              <div>
+                                <Label>الكمية</Label>
+                                <Input
+                                  type="number"
+                                  min="1"
+                                  step="1"
+                                  {...register(`additionalServices.${index}.quantity`, {
+                                    valueAsNumber: true,
+                                    min: { value: 1, message: 'الكمية يجب أن تكون 1 على الأقل' },
+                                  })}
+                                  className="mt-2 h-11 rounded-xl"
+                                />
+                              </div>
+                              <div>
+                                <Label>إجمالي</Label>
+                                <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-background px-3 text-sm font-semibold">
+                                  {(service.joining_fee * quantity).toLocaleString('ar-EG')} جنيه
+                                </div>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => removeAdditionalService(index)}
+                                className="h-11 w-11 rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                title="حذف الوحدة"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
                             </div>
                           );
                         })}
@@ -2846,27 +3224,230 @@ export default function AddCustomerContract() {
 
                       <TabsContent value="replication" className="space-y-4 pt-3">
                         {replicationServices.length === 0 ? (
-                          <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">لا توجد خدمات نسخ متاحة حالياً.</p>
+                          <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+                            لا توجد خدمات نسخ متاحة حالياً.
+                          </p>
                         ) : (
                           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             {replicationServices.map((service) => (
-                              <Button key={service.id} type="button" variant="outline" onClick={() => addAdditionalService(service)} className={cn('h-auto min-h-24 justify-between rounded-xl border p-4 text-right hover:bg-accent', additionalServiceFields.some((item: any) => Number(item.serviceId) === service.id) && 'border-primary bg-primary/5')}>
-                                <span className="text-right"><span className="block font-semibold">{service.nameAr}</span><span className="mt-1 block text-xs font-normal text-muted-foreground">{service.nameEn} · {service.isQuantityBased ? 'حسب الكمية' : 'لمرة واحدة'}</span><span className="mt-2 block font-bold">{service.price.toLocaleString('ar-EG')} جنيه</span></span><Plus className="h-4 w-4 shrink-0" />
+                              <Button
+                                key={service.id}
+                                type="button"
+                                variant="outline"
+                                onClick={() => addAdditionalService(service)}
+                                className={cn(
+                                  'h-auto min-h-24 justify-between rounded-xl border p-4 text-right hover:bg-accent',
+                                  additionalServiceFields.some(
+                                    (item: any) => Number(item.serviceId) === service.id,
+                                  ) && 'border-primary bg-primary/5',
+                                )}
+                              >
+                                <span className="text-right">
+                                  <span className="block font-semibold">{service.nameAr}</span>
+                                  <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                                    {service.nameEn} ·{' '}
+                                    {service.isQuantityBased &&
+                                    service.code !== 'REPLICATION_SERVICE'
+                                      ? 'حسب الكمية'
+                                      : 'خدمة واحدة لمرة واحدة'}
+                                  </span>
+                                  <span className="mt-2 block font-bold">
+                                    {service.joining_fee.toLocaleString('ar-EG')} جنيه
+                                  </span>
+                                </span>
+                                <Plus className="h-4 w-4 shrink-0" />
                               </Button>
                             ))}
                           </div>
                         )}
                         {additionalServiceFields.map((field: any, index: number) => {
-                          const service = availableServices.find((item) => item.id === Number(field.serviceId));
+                          const service = availableServices.find(
+                            (item) => item.id === Number(field.serviceId),
+                          );
                           if (!service || service.code === 'ADDITIONAL_UNIT') return null;
-                          const quantity = Math.max(Number(selectedAdditionalServices[index]?.quantity) || 1, 1);
+                          const quantity = Math.max(
+                            Number(selectedAdditionalServices[index]?.quantity) || 1,
+                            1,
+                          );
                           return (
-                            <div key={field.id} className="grid grid-cols-1 items-end gap-3 rounded-xl border border-border bg-muted/20 p-4 md:grid-cols-[minmax(0,1fr)_130px_150px_auto]">
-                              <input type="hidden" {...register(`additionalServices.${index}.serviceId`, { valueAsNumber: true })} />
-                              <div><p className="font-semibold">{service.nameAr}</p><p className="mt-1 text-xs text-muted-foreground">{service.nameEn}</p></div>
-                              <div>{service.isQuantityBased ? <><Label>الكمية</Label><Input type="number" min="1" step="1" {...register(`additionalServices.${index}.quantity`, { valueAsNumber: true, min: { value: 1, message: 'الكمية يجب أن تكون 1 على الأقل' } })} className="mt-2 h-11 rounded-xl" /></> : <><Label>الكمية</Label><div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-muted/40 px-3 text-sm">خدمة واحدة</div></>}</div>
-                              <div><Label>الإجمالي</Label><div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-background px-3 text-sm font-semibold">{(service.price * quantity).toLocaleString('ar-EG')} جنيه</div></div>
-                              <Button type="button" variant="ghost" size="icon" onClick={() => removeAdditionalService(index)} className="h-11 w-11 rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive" title="حذف الخدمة"><Trash2 className="h-4 w-4" /></Button>
+                            <div
+                              key={field.id}
+                              className="grid grid-cols-1 items-end gap-3 rounded-xl border border-border bg-muted/20 p-4 md:grid-cols-[minmax(0,1fr)_130px_150px_auto]"
+                            >
+                              <input
+                                type="hidden"
+                                {...register(`additionalServices.${index}.serviceId`, {
+                                  valueAsNumber: true,
+                                })}
+                              />
+                              <div>
+                                <p className="font-semibold">{service.nameAr}</p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {service.nameEn}
+                                </p>
+                              </div>
+                              <div>
+                                {service.isQuantityBased &&
+                                service.code !== 'REPLICATION_SERVICE' ? (
+                                  <>
+                                    <Label>الكمية</Label>
+                                    <Input
+                                      type="number"
+                                      min="1"
+                                      step="1"
+                                      {...register(`additionalServices.${index}.quantity`, {
+                                        valueAsNumber: true,
+                                        min: {
+                                          value: 1,
+                                          message: 'الكمية يجب أن تكون 1 على الأقل',
+                                        },
+                                      })}
+                                      className="mt-2 h-11 rounded-xl"
+                                    />
+                                  </>
+                                ) : (
+                                  <>
+                                    <Label>الكمية</Label>
+                                    <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-muted/40 px-3 text-sm">
+                                      خدمة واحدة
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                              <div>
+                                <Label>الإجمالي</Label>
+                                <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-background px-3 text-sm font-semibold">
+                                  {(service.joining_fee * quantity).toLocaleString('ar-EG')} جنيه
+                                </div>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => removeAdditionalService(index)}
+                                className="h-11 w-11 rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                title="حذف الخدمة"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          );
+                        })}
+                      </TabsContent>
+
+                      <TabsContent value="hardware" className="space-y-4 pt-3">
+                        <div className="rounded-xl border border-amber-300/60 bg-amber-50 p-4 text-sm dark:border-amber-900 dark:bg-amber-950/20">
+                          <p className="font-semibold text-amber-900 dark:text-amber-200">
+                            فاتورة أجهزة مستقلة
+                          </p>
+                          <p className="mt-1 text-xs leading-5 text-amber-800 dark:text-amber-300">
+                            الأجهزة المختارة ستُضاف إلى فاتورة منفصلة مرتبطة بالعقد. لا تدخل في مبلغ
+                            التحصيل الحالي ولن يتم إنشاء تحصيل لها الآن.
+                          </p>
+                        </div>
+                        {hardwareDevices.length === 0 ? (
+                          <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+                            لا توجد أجهزة متاحة حالياً في الكتالوج.
+                          </p>
+                        ) : (
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            {hardwareDevices.map((device) => (
+                              <Button
+                                key={device.id}
+                                type="button"
+                                variant="outline"
+                                onClick={() => addHardwareDevice(device)}
+                                className={cn(
+                                  'h-auto min-h-24 justify-between rounded-xl border p-4 text-right hover:bg-accent',
+                                  hardwareDeviceFields.some(
+                                    (item: any) => Number(item.serviceId) === device.id,
+                                  ) && 'border-amber-500 bg-amber-50 dark:bg-amber-950/20',
+                                )}
+                              >
+                                <span className="text-right">
+                                  <span className="block font-semibold">{device.nameAr}</span>
+                                  <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                                    {device.nameEn} ·{' '}
+                                    {device.isQuantityBased ? 'حسب الكمية' : 'قطعة واحدة'}
+                                  </span>
+                                  <span className="mt-2 block font-bold">
+                                    {device.joining_fee.toLocaleString('ar-EG')} جنيه
+                                  </span>
+                                </span>
+                                <Plus className="h-4 w-4 shrink-0" />
+                              </Button>
+                            ))}
+                          </div>
+                        )}
+                        {hardwareDeviceFields.map((field: any, index: number) => {
+                          const device = availableServices.find(
+                            (item) => item.id === Number(field.serviceId),
+                          );
+                          if (!device || device.type !== 'HARDWARE') return null;
+                          const quantity = Math.max(
+                            Number(selectedHardwareDevices[index]?.quantity) || 1,
+                            1,
+                          );
+                          return (
+                            <div
+                              key={field.id}
+                              className="grid grid-cols-1 items-end gap-3 rounded-xl border border-amber-200 bg-amber-50/40 p-4 md:grid-cols-[minmax(0,1fr)_130px_150px_auto] dark:border-amber-900 dark:bg-amber-950/10"
+                            >
+                              <input
+                                type="hidden"
+                                {...register(`hardwareDevices.${index}.serviceId`, {
+                                  valueAsNumber: true,
+                                })}
+                              />
+                              <div>
+                                <p className="font-semibold">{device.nameAr}</p>
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                  {device.nameEn}
+                                </p>
+                              </div>
+                              <div>
+                                {device.isQuantityBased ? (
+                                  <>
+                                    <Label>الكمية</Label>
+                                    <Input
+                                      type="number"
+                                      min="1"
+                                      step="1"
+                                      {...register(`hardwareDevices.${index}.quantity`, {
+                                        valueAsNumber: true,
+                                        min: {
+                                          value: 1,
+                                          message: 'الكمية يجب أن تكون 1 على الأقل',
+                                        },
+                                      })}
+                                      className="mt-2 h-11 rounded-xl"
+                                    />
+                                  </>
+                                ) : (
+                                  <>
+                                    <Label>الكمية</Label>
+                                    <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-muted/40 px-3 text-sm">
+                                      قطعة واحدة
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                              <div>
+                                <Label>إجمالي الفاتورة</Label>
+                                <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-background px-3 text-sm font-semibold">
+                                  {(device.joining_fee * quantity).toLocaleString('ar-EG')} جنيه
+                                </div>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => removeHardwareDevice(index)}
+                                className="h-11 w-11 rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                title="حذف الجهاز"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
                             </div>
                           );
                         })}
@@ -2875,8 +3456,18 @@ export default function AddCustomerContract() {
                   )}
 
                   <div className="flex items-center justify-between rounded-xl bg-muted/40 px-4 py-3 text-sm">
-                    <span className="text-muted-foreground">إجمالي الاختيارات لمرة واحدة</span>
-                    <span className="font-bold">{additionalServicesTotal.toLocaleString('ar-EG')} جنيه</span>
+                    <span className="text-muted-foreground">إجمالي الخدمات ضمن العقد</span>
+                    <span className="font-bold">
+                      {additionalServicesTotal.toLocaleString('ar-EG')} جنيه
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm dark:border-amber-900 dark:bg-amber-950/20">
+                    <span className="text-amber-900 dark:text-amber-200">
+                      إجمالي فاتورة الأجهزة (غير محصلة)
+                    </span>
+                    <span className="font-bold text-amber-900 dark:text-amber-200">
+                      {hardwareDevicesTotal.toLocaleString('ar-EG')} جنيه
+                    </span>
                   </div>
                 </CardContent>
               </Card>
@@ -3018,40 +3609,84 @@ export default function AddCustomerContract() {
                   <CardContent className="space-y-6">
                     {/* Money Summary */}
 
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                      <MoneyCard label="رسوم الانضمام قبل الخصم" value={joiningFee} />
+                    <div className="space-y-5">
+                      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+                        <FinancialSummaryCard
+                          title="رسوم الانضمام الأساسية"
+                          unitPrice={joiningFee}
+                          quantity={1}
+                          discountAmount={joiningFeeDiscount}
+                          discountPercentage={joiningFeeDiscountPercentage}
+                          totalBeforeDiscount={joiningFee}
+                          totalAfterDiscount={joiningFeeAfterDiscount}
+                        />
 
-                      <MoneyCard label="رسوم الانضمام بعد الخصم" value={joiningFeeAfterDiscount} />
+                        <FinancialSummaryCard
+                          title="الوحدات الإضافية"
+                          unitPrice={Number(additionalUnitService?.joining_fee ?? 0)}
+                          quantity={additionalUnitsQuantity}
+                          discountAmount={0}
+                          discountPercentage={0}
+                          totalBeforeDiscount={additionalUnitsTotal}
+                          totalAfterDiscount={additionalUnitsTotal}
+                        />
 
-                      <MoneyCard label="الاشتراك الرئيسي الشهري" value={mainMonthlySubscription} subtitle="لكل شهر" />
+                        <FinancialSummaryCard
+                          title="الاشتراكات"
+                          description={`المحصل عند إنشاء العقد: الاشتراك الرئيسي ${mainMonthlySubscription.toLocaleString('ar-EG')} فقط.`}
+                          unitPrice={initialCollectedMonthlySubscription}
+                          quantity={selectedMonths.length}
+                          quantityLabel="عدد الشهور"
+                          discountAmount={subscriptionDiscount}
+                          discountPercentage={subscriptionDiscountPercentage}
+                          totalBeforeDiscount={monthlySubscription}
+                          totalAfterDiscount={subscriptionFeeAfterDiscount}
+                        />
+                      </div>
 
-                      <MoneyCard label="اشتراك الوحدات الإضافية الإلزامي" value={additionalUnitSubscription} subtitle="لكل شهر" />
+                      <div className="rounded-2xl border border-border bg-muted/20 p-4">
+                        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <h3 className="text-sm font-bold">خدمات النسخ</h3>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              لكل خدمة سعر وكمية وإجماليات مستقلة.
+                            </p>
+                          </div>
 
-                      <MoneyCard label="إجمالي الاشتراك الشهري قبل الخصم" value={monthlyRecurringSubscription} subtitle="لكل شهر" />
+                          <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+                            {selectedReplicationServiceRows.length} عناصر
+                          </span>
+                        </div>
 
-                      <MoneyCard label="خصم الاشتراك" value={subscriptionDiscount} subtitle={`${subscriptionDiscountPercentage}% · الأشهر المختارة`} />
+                        {selectedReplicationServiceRows.length > 0 ? (
+                          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                            {selectedReplicationServiceRows.map((service) => (
+                              <FinancialSummaryCard
+                                key={service.id}
+                                title={service.nameAr || service.nameEn}
+                                unitPrice={Number(service.joining_fee ?? 0)}
+                                quantity={service.quantity}
+                                discountAmount={0}
+                                discountPercentage={0}
+                                totalBeforeDiscount={service.total}
+                                totalAfterDiscount={service.total}
+                              />
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="rounded-xl border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">
+                            لا توجد خدمات نسخ مختارة.
+                          </p>
+                        )}
+                      </div>
 
-                      <MoneyCard
-                        label="إجمالي الاشتراكات قبل الخصم"
-                        value={monthlySubscription}
-                        subtitle={`${selectedMonths.length} شهور`}
-                      />
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        <MoneyCard label="إجمالي العقد قبل الخصم" value={totalBeforeDiscount} />
 
-                      <MoneyCard
-                        label="إجمالي الاشتراكات بعد الخصم"
-                        value={subscriptionFeeAfterDiscount}
-                        subtitle={`${selectedMonths.length} شهور · ${Number((monthlyRecurringSubscription * (1 - subscriptionDiscountPercentage / 100)).toFixed(2)).toLocaleString('ar-EG')} جنيه/شهر`}
-                      />
+                        <MoneyCard label="إجمالي الخصم" value={discountAmount} />
 
-                      <MoneyCard
-                        label="الخدمات والأجهزة الإضافية"
-                        value={additionalServicesTotal}
-                        subtitle={`${selectedAdditionalServiceRows.length} عناصر`}
-                      />
-
-                      <MoneyCard label="الإجمالي قبل الخصم" value={totalBeforeDiscount} />
-
-                      <MoneyCard label="الإجمالي بعد الخصم" value={totalContractValue} />
+                        <MoneyCard label="إجمالي العقد بعد الخصم" value={totalContractValue} />
+                      </div>
                     </div>
 
                     {/* Collection */}
@@ -3065,7 +3700,7 @@ export default function AddCustomerContract() {
                         </p>
                       </div>
 
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                         <div>
                           <Label>المبلغ المحصل الآن</Label>
 
@@ -3116,25 +3751,105 @@ export default function AddCustomerContract() {
                             method.id,
                             method.nameAr ?? method.name_ar ?? method.code,
                           ])}
+                          control={control}
                           error={errors.paymentMethodId?.message}
                         />
+                       
                       </div>
 
-                      {paymentMethodCode === 'BANK_TRANSFER' && (
+                      {paymentMethodCode === 'BANKTRANSFER' && (
                         <div className="grid grid-cols-1 gap-4 rounded-xl border border-border bg-muted/20 p-4 md:grid-cols-3">
-                          <TextField label="تاريخ الحوالة" type="date" registration={register('paymentDetails.transferDate', { required: 'تاريخ الحوالة مطلوب' })} error={errors.paymentDetails?.transferDate?.message} />
-                          <TextField label="اسم البنك" registration={register('paymentDetails.bankName', { required: 'اسم البنك مطلوب' })} error={errors.paymentDetails?.bankName?.message} placeholder="اسم البنك" />
-                          <TextField label="الرقم المرجعي" registration={register('paymentDetails.referenceNumber', { required: 'الرقم المرجعي مطلوب' })} error={errors.paymentDetails?.referenceNumber?.message} placeholder="الرقم المرجعي" />
+                          <TextField
+                            label="تاريخ الحوالة"
+                            type="date"
+                            registration={register('paymentDetails.transferDate', {
+                              required: 'تاريخ الحوالة مطلوب',
+                            })}
+                            error={errors.paymentDetails?.transferDate?.message}
+                          />
+                          <SelectField
+                            label="البنك"
+                            registration={register('paymentDetails.bankId', {
+                              required: 'البنك مطلوب',
+                              valueAsNumber: true,
+                            })}
+                            options={[
+                              ['', isBanksLoading ? 'جارٍ تحميل البنوك...' : 'اختر البنك'],
+                              ...banks.map((bank) => [
+                                bank.id,
+                                `${bank.nameAr ?? bank.name_ar ?? bank.nameEn ?? bank.name_en} — ${bank.nameEn ?? bank.name_en}`,
+                              ]),
+                            ]}
+                            control={control}
+                            disabled={isBanksLoading}
+                            error={errors.paymentDetails?.bankId?.message}
+                            placeholder={isBanksLoading ? 'جارٍ تحميل البنوك...' : 'اختر البنك'}
+                            searchPlaceholder="ابحث عن بنك..."
+                          />
+                          <TextField
+                            label="الرقم المرجعي"
+                            registration={register('paymentDetails.referenceNumber', {
+                              required: 'الرقم المرجعي مطلوب',
+                            })}
+                            error={errors.paymentDetails?.referenceNumber?.message}
+                            placeholder="الرقم المرجعي"
+                          />
                         </div>
                       )}
                       {(paymentMethodCode === 'INSTAPAY' || paymentMethodCode === 'PAYSKY') && (
-                        <div className="rounded-xl border border-border bg-muted/20 p-4"><TextField label="الرقم المرجعي" registration={register('paymentDetails.referenceNumber', { required: 'الرقم المرجعي مطلوب' })} error={errors.paymentDetails?.referenceNumber?.message} placeholder="الرقم المرجعي" /></div>
+                        <div className="rounded-xl border border-border bg-muted/20 p-4">
+                          <TextField
+                            label="الرقم المرجعي"
+                            registration={register('paymentDetails.referenceNumber', {
+                              required: 'الرقم المرجعي مطلوب',
+                            })}
+                            error={errors.paymentDetails?.referenceNumber?.message}
+                            placeholder="الرقم المرجعي"
+                          />
+                        </div>
                       )}
                       {paymentMethodCode === 'CHEQUE' && (
-                        <div className="grid grid-cols-1 gap-4 rounded-xl border border-border bg-muted/20 p-4 md:grid-cols-2"><TextField label="اسم البنك" registration={register('paymentDetails.bankName', { required: 'اسم البنك مطلوب' })} error={errors.paymentDetails?.bankName?.message} placeholder="اسم البنك" /><TextField label="رقم الشيك" registration={register('paymentDetails.chequeNumber', { required: 'رقم الشيك مطلوب' })} error={errors.paymentDetails?.chequeNumber?.message} placeholder="رقم الشيك" /></div>
+                        <div className="grid grid-cols-1 gap-4 rounded-xl border border-border bg-muted/20 p-4 md:grid-cols-2">
+                          <SelectField
+                            label="البنك"
+                            registration={register('paymentDetails.bankId', {
+                              required: 'البنك مطلوب',
+                              valueAsNumber: true,
+                            })}
+                            options={[
+                              ['', isBanksLoading ? 'جارٍ تحميل البنوك...' : 'اختر البنك'],
+                              ...banks.map((bank) => [
+                                bank.id,
+                                `${bank.nameAr ?? bank.name_ar ?? bank.nameEn ?? bank.name_en} — ${bank.nameEn ?? bank.name_en}`,
+                              ]),
+                            ]}
+                            control={control}
+                            disabled={isBanksLoading}
+                            error={errors.paymentDetails?.bankId?.message}
+                            placeholder={isBanksLoading ? 'جارٍ تحميل البنوك...' : 'اختر البنك'}
+                            searchPlaceholder="ابحث عن بنك..."
+                          />
+                          <TextField
+                            label="رقم الشيك"
+                            registration={register('paymentDetails.chequeNumber', {
+                              required: 'رقم الشيك مطلوب',
+                            })}
+                            error={errors.paymentDetails?.chequeNumber?.message}
+                            placeholder="رقم الشيك"
+                          />
+                        </div>
                       )}
                       {paymentMethodCode === 'CASH' && (
-                        <div className="rounded-xl border border-border bg-muted/20 p-4"><TextField label="رقم الإيصال" registration={register('paymentDetails.receiptNumber', { required: 'رقم الإيصال مطلوب' })} error={errors.paymentDetails?.receiptNumber?.message} placeholder="رقم الإيصال" /></div>
+                        <div className="rounded-xl border border-border bg-muted/20 p-4">
+                          <TextField
+                            label="رقم الإيصال"
+                            registration={register('paymentDetails.receiptNumber', {
+                              required: 'رقم الإيصال مطلوب',
+                            })}
+                            error={errors.paymentDetails?.receiptNumber?.message}
+                            placeholder="رقم الإيصال"
+                          />
+                        </div>
                       )}
 
                       {/* Payment Progress */}
@@ -3284,8 +3999,13 @@ export default function AddCustomerContract() {
                       />
 
                       <ReviewRow
-                        label="الخدمات والأجهزة الإضافية"
+                        label="الخدمات الإضافية"
                         value={`${additionalServicesTotal.toLocaleString('ar-EG')} جنيه`}
+                      />
+
+                      <ReviewRow
+                        label="فاتورة الأجهزة غير المحصلة"
+                        value={`${hardwareDevicesTotal.toLocaleString('ar-EG')} جنيه`}
                       />
 
                       <ReviewRow
@@ -3328,6 +4048,7 @@ export default function AddCustomerContract() {
                             : 'لا يوجد تحصيل'
                         }
                       />
+                     
                     </div>
 
                     <Separator />
@@ -3440,32 +4161,55 @@ function ContactPhones({ control, register, contactIndex, governorate, errors }:
     }) || [];
 
   const mobilePhonePattern = /^(010|011|012|015)\d{8}$/;
+  const mandatoryPhoneTypes = useMemo(() => ['محمول', 'هاتف أرضي'], []);
+  const existingPhoneTypes = useMemo(
+    () => new Set(phoneValues.map((phone: any) => phone?.type).filter(Boolean)),
+    [phoneValues],
+  );
+  const hasWhatsApp = existingPhoneTypes.has('واتساب');
+
+  useEffect(() => {
+    const missingPhoneTypes = mandatoryPhoneTypes.filter(
+      (phoneType) => !existingPhoneTypes.has(phoneType),
+    );
+
+    if (missingPhoneTypes.length > 0) {
+      append(missingPhoneTypes.map((type) => ({ number: '', type })));
+    }
+  }, [append, existingPhoneTypes, mandatoryPhoneTypes]);
 
   return (
     <div className="space-y-3">
+      <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-xs text-muted-foreground">
+        رقم الهاتف المحمول والهاتف الأرضي مطلوبان. يمكنك إضافة رقم واتساب عند الحاجة.
+      </div>
+
       {phoneFields.map((phone: any, phoneIndex: number) => {
         const phoneType = phoneValues[phoneIndex]?.type || phone.type || 'محمول';
         const isLandline = phoneType === 'هاتف أرضي';
+        const isWhatsApp = phoneType === 'واتساب';
         const landlineCode = getLandlineTelephoneCode(governorate);
         const landlineNumberLength = landlineCode ? 10 - landlineCode.code.length : 8;
         const inputName = `contacts.${contactIndex}.phones.${phoneIndex}.number`;
         const fieldError = errors?.contacts?.[contactIndex]?.phones?.[phoneIndex]?.number;
+        const phoneLabel = isLandline
+          ? 'رقم الهاتف الأرضي'
+          : isWhatsApp
+            ? 'رقم واتساب'
+            : 'رقم الهاتف المحمول';
+        const validationLabel = isWhatsApp ? 'رقم واتساب' : phoneLabel;
 
         return (
           <div
             key={phone.id}
             className="rounded-xl border border-border bg-muted/20 p-3.5 shadow-sm"
           >
-            <div className="grid grid-cols-12 gap-3 md:items-end">
-              <div
-                className={`col-span-12 sm:col-span-8 ${isLandline ? 'md:col-span-5' : 'md:col-span-4'}`}
-              >
-                <Label className="text-xs text-muted-foreground">
-                  {isLandline ? 'رقم الهاتف الأرضي *' : 'رقم الهاتف *'}
-                </Label>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+              <div>
+                <Label className="text-xs text-muted-foreground">{phoneLabel} *</Label>
 
                 <div
-                  className={isLandline ? 'mt-1 flex items-center gap-2' : ''}
+                  className={isLandline ? 'mt-1 flex items-center gap-2' : 'mt-1'}
                   dir={isLandline ? 'ltr' : undefined}
                 >
                   {isLandline && (
@@ -3483,14 +4227,12 @@ function ContactPhones({ control, register, contactIndex, governorate, errors }:
 
                   <Input
                     {...register(inputName, {
-                      required: 'رقم الهاتف مطلوب',
-
-                      onChange: (e) => {
-                        e.target.value = e.target.value
+                      required: `${validationLabel} مطلوب`,
+                      onChange: (event: any) => {
+                        event.target.value = event.target.value
                           .replace(/\D/g, '')
                           .slice(0, isLandline ? landlineNumberLength : 11);
                       },
-
                       validate: (value: string) => {
                         const digits = String(value || '').replace(/\D/g, '');
 
@@ -3507,7 +4249,7 @@ function ContactPhones({ control, register, contactIndex, governorate, errors }:
 
                         return (
                           mobilePhonePattern.test(digits) ||
-                          'رقم الهاتف يجب أن يبدأ بـ 010 أو 011 أو 012 أو 015 ويتكون من 11 رقمًا'
+                          `${validationLabel} يجب أن يبدأ بـ 010 أو 011 أو 012 أو 015 ويتكون من 11 رقمًا`
                         );
                       },
                     })}
@@ -3519,7 +4261,7 @@ function ContactPhones({ control, register, contactIndex, governorate, errors }:
                     variant={fieldError ? 'failure' : 'default'}
                     aria-invalid={Boolean(fieldError)}
                     className={`h-11 rounded-xl text-left font-mono tracking-wide tabular-nums ${
-                      isLandline ? 'min-w-0 flex-1' : 'mt-1 w-full'
+                      isLandline ? 'min-w-0 flex-1' : 'w-full'
                     }`}
                   />
                 </div>
@@ -3528,55 +4270,45 @@ function ContactPhones({ control, register, contactIndex, governorate, errors }:
                   <p className="mt-1 text-xs text-destructive">{fieldError.message}</p>
                 )}
               </div>
-              <div
-                className={`col-span-12 sm:col-span-4 ${isLandline ? 'md:col-span-3' : 'md:col-span-4'}`}
-              >
-                <Label className="text-xs text-muted-foreground">النوع</Label>
-                <select
-                  {...register(`contacts.${contactIndex}.phones.${phoneIndex}.type`)}
-                  className="mt-1 h-11 w-full rounded-xl border border-input bg-background px-3 text-sm transition-shadow focus:ring-2 focus:ring-ring"
-                >
-                  <option value="محمول">محمول</option>
-                  <option value="هاتف أرضي">هاتف أرضي</option>
-                  <option value="واتساب">واتساب</option>
-                </select>
-              </div>
 
-              <div
-                className={`col-span-12 flex justify-start sm:justify-end ${isLandline ? 'md:col-span-1' : 'md:col-span-2'}`}
-              >
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => remove(phoneIndex)}
-                  disabled={phoneFields.length <= 1}
-                  className="h-11 w-11 rounded-xl text-destructive hover:text-destructive"
-                  title="حذف الرقم"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+              <div className="flex items-center justify-between gap-3 md:justify-end">
+                <span className="rounded-full bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                  {isWhatsApp ? 'اختياري' : 'مطلوب'}
+                </span>
+                {isWhatsApp ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => remove(phoneIndex)}
+                    className="h-11 w-11 rounded-xl text-destructive hover:text-destructive"
+                    title="حذف رقم واتساب"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                ) : null}
               </div>
             </div>
           </div>
         );
       })}
 
-      {phoneFields.length < 3 && (
+      {!hasWhatsApp && (
         <Button
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => append({ label: '', number: '', type: 'محمول' })}
+          onClick={() => append({ number: '', type: 'واتساب' })}
           className="rounded-xl"
         >
-          <Plus className="me-2 h-4 w-4" />
-          إضافة رقم هاتف
+          <Plus className="ml-2 h-4 w-4" />
+          إضافة رقم واتساب اختياري
         </Button>
       )}
     </div>
   );
 }
+
 /* =========================================================
    FORM FIELD
 ========================================================= */
@@ -3619,35 +4351,197 @@ function TextField({ label, registration, error, type = 'text', placeholder = ''
   return (
     <div>
       <Label>{label}</Label>
-      <Input type={type} {...registration} placeholder={placeholder} variant={error ? 'failure' : 'default'} aria-invalid={Boolean(error)} className="mt-2 h-11 rounded-xl" />
+      <Input
+        type={type}
+        {...registration}
+        placeholder={placeholder}
+        variant={error ? 'failure' : 'default'}
+        aria-invalid={Boolean(error)}
+        className="mt-2 h-11 rounded-xl"
+      />
       {error && <ErrorText>{String(error)}</ErrorText>}
     </div>
   );
 }
-function SelectField({ label, registration, options, error }: any) {
+function SearchableSelect({
+  value,
+  onValueChange,
+  options,
+  placeholder = 'اختر من القائمة',
+  searchPlaceholder = 'ابحث في الخيارات...',
+  emptyMessage = 'لا توجد نتائج مطابقة',
+  disabled = false,
+  error = false,
+  className,
+}: any) {
+  const [open, setOpen] = useState(false);
+  const selectedOption = options.find(
+    ([optionValue]: any) =>
+      String(optionValue) === String(value ?? '') && String(optionValue) !== '',
+  );
+  const availableOptions = options.filter(([optionValue]: any) => String(optionValue) !== '');
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          aria-invalid={error}
+          disabled={disabled}
+          className={cn(
+            'relative mt-2 h-11 w-full justify-start rounded-xl bg-background py-0 pl-10 pr-3 text-right font-normal hover:bg-background',
+            !selectedOption && 'text-muted-foreground',
+            error && 'border-error bg-error/10 text-error hover:bg-error/10 hover:text-error',
+            className,
+          )}
+        >
+          <span className="truncate">{selectedOption?.[1] ?? placeholder}</span>
+          <ChevronsUpDown className="absolute left-3 h-4 w-4 shrink-0 text-muted-foreground" />
+        </Button>
+      </PopoverTrigger>
+
+      <PopoverContent dir="rtl" align="start" className="w-[--radix-popover-trigger-width] p-0">
+        <Command>
+          <CommandInput placeholder={searchPlaceholder} />
+          <CommandList>
+            <CommandEmpty>{emptyMessage}</CommandEmpty>
+            <CommandGroup>
+              {availableOptions.map(([optionValue, optionLabel]: any) => (
+                <CommandItem
+                  key={String(optionValue)}
+                  value={`${optionLabel} ${optionValue}`}
+                  onSelect={() => {
+                    onValueChange(String(optionValue));
+                    setOpen(false);
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      'ml-2 h-4 w-4',
+                      String(value ?? '') === String(optionValue) ? 'opacity-100' : 'opacity-0',
+                    )}
+                  />
+                  <span className="min-w-0 flex-1 truncate">{optionLabel}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function SelectField({
+  label,
+  registration,
+  options,
+  error,
+  control,
+  placeholder,
+  searchPlaceholder,
+  disabled = false,
+}: any) {
+  const value = useWatch({ control, name: registration.name });
+
   return (
     <div>
       <Label>{label}</Label>
-
-      <select
-        {...registration}
-        aria-invalid={Boolean(error)}
-        className={cn(
-          'mt-2 h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition-shadow focus:ring-2 focus:ring-ring',
-          error && 'border-error bg-error/10 text-error focus:ring-error',
-        )}
-      >
-        {options.map(([optionValue, optionLabel]: any) => (
-          <option key={optionValue} value={optionValue}>
-            {optionLabel}
-          </option>
-        ))}
-      </select>
-
+      <SearchableSelect
+        value={value}
+        options={options}
+        error={Boolean(error)}
+        disabled={disabled}
+        placeholder={placeholder}
+        searchPlaceholder={searchPlaceholder}
+        onValueChange={(nextValue: string) => {
+          const event = {
+            target: { name: registration.name, value: nextValue },
+            type: 'change',
+          };
+          registration.onChange(event);
+          registration.onBlur({
+            target: { name: registration.name, value: nextValue },
+            type: 'blur',
+          });
+        }}
+      />
       {error && <ErrorText>{String(error)}</ErrorText>}
     </div>
   );
 }
+/* =========================================================
+   FINANCIAL SUMMARY CARD
+========================================================= */
+
+function FinancialSummaryCard({
+  title,
+  description,
+  unitPrice,
+  quantity,
+  quantityLabel = 'الكمية',
+  discountAmount,
+  discountPercentage,
+  totalBeforeDiscount,
+  totalAfterDiscount,
+}: any) {
+  const formatNumber = (value: number) =>
+    Number(value || 0).toLocaleString('ar-EG', { maximumFractionDigits: 2 });
+
+  return (
+    <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+      <div className="min-h-10">
+        <h3 className="text-sm font-bold">{title}</h3>
+        {description ? (
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
+        ) : null}
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <SummaryDetail label="سعر الوحدة" value={formatNumber(unitPrice)} suffix="جنيه" />
+        <SummaryDetail label={quantityLabel} value={formatNumber(quantity)} />
+        <SummaryDetail label="قيمة الخصم" value={formatNumber(discountAmount)} suffix="جنيه" />
+        <SummaryDetail label="نسبة الخصم" value={formatNumber(discountPercentage)} />
+      </div>
+
+      <div className="mt-4 space-y-2 border-t border-border pt-3">
+        <SummaryTotal label="الإجمالي قبل الخصم" value={formatNumber(totalBeforeDiscount)} />
+        <SummaryTotal
+          label="الإجمالي بعد الخصم"
+          value={formatNumber(totalAfterDiscount)}
+          emphasized
+        />
+      </div>
+    </div>
+  );
+}
+
+function SummaryDetail({ label, value, suffix }: any) {
+  return (
+    <div className="rounded-xl bg-muted/45 px-3 py-2.5">
+      <div className="text-[11px] text-muted-foreground">{label}</div>
+      <div className="mt-1 text-sm font-semibold">
+        {value}{' '}
+        {suffix ? (
+          <span className="text-xs font-normal text-muted-foreground">{suffix}</span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function SummaryTotal({ label, value, emphasized = false }: any) {
+  return (
+    <div className="flex items-center justify-between gap-3 text-sm">
+      <span className={emphasized ? 'font-semibold' : 'text-muted-foreground'}>{label}</span>
+      <span className={emphasized ? 'text-base font-bold' : 'font-semibold'}>{value} جنيه</span>
+    </div>
+  );
+}
+
 /* =========================================================
    MONEY CARD
 ========================================================= */

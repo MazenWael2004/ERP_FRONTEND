@@ -664,9 +664,12 @@ export default function AddCustomer() {
 
               <Input
                 placeholder="Commercial registration"
-                {...register(
-                  "registrationNumber"
-                )}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                {...register("registrationNumber")}
+                onInput={(event) => {
+                  event.currentTarget.value = event.currentTarget.value.replace(/\D/g, "");
+                }}
               />
             </div>
 
@@ -677,7 +680,12 @@ export default function AddCustomer() {
 
               <Input
                 placeholder="License number"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 {...register("licenseNumber")}
+                onInput={(event) => {
+                  event.currentTarget.value = event.currentTarget.value.replace(/\D/g, "");
+                }}
               />
             </div>
           </div>
@@ -799,9 +807,12 @@ export default function AddCustomer() {
 
                   <Input
                     placeholder="GLN code"
-                    {...register(
-                      `branches.${branchIndex}.glnCode`
-                    )}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    {...register(`branches.${branchIndex}.glnCode`)}
+                    onInput={(event) => {
+                      event.currentTarget.value = event.currentTarget.value.replace(/\D/g, "");
+                    }}
                   />
                 </div>
 
@@ -818,9 +829,12 @@ export default function AddCustomer() {
 
                   <Input
                     placeholder="Building number"
-                    {...register(
-                      `branches.${branchIndex}.buildingNumber`
-                    )}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    {...register(`branches.${branchIndex}.buildingNumber`)}
+                    onInput={(event) => {
+                      event.currentTarget.value = event.currentTarget.value.replace(/\D/g, "");
+                    }}
                   />
                 </div>
 

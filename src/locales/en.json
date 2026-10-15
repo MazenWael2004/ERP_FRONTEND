@@ -254,6 +254,7 @@
   "CUSTOMER_TAX_NUMBER_REQUIRED":"Customer Tax Number Required",
   "CUSTOMER_REGISTRATION_NUMBER":"Customer Registration Number",
   "CUSTOMER_REGISTRATION_NUMBER_REQUIRED":"Customer Registration Number required",
+  "CUSTOMER_REGISTRATION_NUMBER_ONLY_NUMBERS":"Commercial registration number must contain numbers only",
   "ZONE_ID_REQUIRED":"Zone is required",
   "PROGRAM":"Program name",
   "SELECT_PROGRAM":"Please select a program",

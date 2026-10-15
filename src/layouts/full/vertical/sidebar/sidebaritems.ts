@@ -81,6 +81,13 @@ const SidebarContent: MenuItem[] = [
         icon: ' ',
         url: '/roles',
         isPro: false,
+      },
+      {
+        id: uniqueId(),
+        name: 'تذاكر العملاء',
+        icon: 'solar:ticket-linear',
+        url: '/customer-tickets',
+        isPro: false,
       }
     ],
   },

@@ -9,15 +9,18 @@ export const newCustomerSchema = z.object({
   statusId: z.string().min(1, 'Status is required'),
   credit: z.coerce.number().min(0, 'Credit cannot be negative'),
   taxNumber: z.string().optional(),
-  registrationNumber: z.string().optional(),
-  licenseNumber: z.string().optional(),
+  registrationNumber: z.string().regex(/^\d*$/, 'Registration number must contain numbers only').optional(),
+  licenseNumber: z.string().regex(/^\d*$/, 'License number must contain numbers only').optional(),
   zoneId: z.string().min(1, 'Zone is required'),
   branches: z.array(z.object({
     managerId: z.string().optional(),
     isMainBranch: z.boolean(),
-    buildingNumber: z.string().min(1, 'Building number is required'),
+    buildingNumber: z
+      .string()
+      .min(1, 'Building number is required')
+      .regex(/^\d+$/, 'Building number must contain numbers only'),
     street: z.string().min(1, 'Street is required'),
-    glnCode: z.string().optional(),
+    glnCode: z.string().regex(/^\d*$/, 'GLN code must contain numbers only').optional(),
     zoneId: z.string().min(1, 'Zone is required'),
     latitude: z.string().optional(),
     longitude: z.string().optional(),

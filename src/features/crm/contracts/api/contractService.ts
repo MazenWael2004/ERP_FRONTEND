@@ -8,4 +8,9 @@ export const fetchPaymentMethods = async () => {
   return response.data.data;
 };
 
+export const fetchBanks = async () => {
+  const response = await api.get('/banks');
+  return response.data.data;
+};
+
 

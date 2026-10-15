@@ -467,7 +467,12 @@ const goToPreviousTab = (e?: React.MouseEvent) => {
               <Input
                 id="customerRegistrationNumber"
                 className="mt-2 w-full"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 {...register('registrationNumber')}
+                onInput={(event) => {
+                  event.currentTarget.value = event.currentTarget.value.replace(/\D/g, '');
+                }}
               />
               {errors.registrationNumber && (
                 <span className="error-message">

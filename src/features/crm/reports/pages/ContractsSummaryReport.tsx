@@ -9,6 +9,8 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 
+import * as XLSX from 'xlsx';
+
 import BreadcrumbComp from 'src/layouts/full/shared/breadcrumb/BreadcrumbComp';
 
 import { Badge } from 'src/components/ui/badge';
@@ -176,7 +178,6 @@ export default function ContractsSummaryReport() {
 
   const [selectedProgram, setSelectedProgram] = useState('all');
 
-
   const [selectedDiscount, setSelectedDiscount] = useState('all');
 
   const [page, setPage] = useState(1);
@@ -261,7 +262,6 @@ export default function ContractsSummaryReport() {
     });
   }, [contracts, search, selectedDiscount, selectedProgram]);
 
-
   const reportColumns = [
     { key: 'contract-id', header: 'رقم العقد', value: (contract: Contract) => `#${contract.id}` },
     {
@@ -313,30 +313,10 @@ export default function ContractsSummaryReport() {
       header: 'تاريخ العقد',
       value: (contract: Contract) => formatDate(contract.contract_date),
     },
-     {
+    {
       key: 'program-name',
       header: 'اسم البرنامج',
       value: (contract: Contract) => contract.program_name_ar ?? '—',
-    },
-    {
-      key: 'joining-before',
-      header: 'رسوم الانضمام قبل الخصم',
-      value: (contract: Contract) => formatMoney(amount(contract.joining_fee_before_discount)),
-    },
-    {
-      key: 'joining-after',
-      header: 'رسوم الانضمام بعد الخصم',
-      value: (contract: Contract) => formatMoney(amount(contract.joining_fee_after_discount)),
-    },
-    {
-      key: 'subscription-before',
-      header: 'الاشتراك قبل الخصم',
-      value: (contract: Contract) => formatMoney(amount(contract.subscription_fee_before_discount)),
-    },
-    {
-      key: 'subscription-after',
-      header: 'الاشتراك بعد الخصم',
-      value: (contract: Contract) => formatMoney(amount(contract.subscription_fee_after_discount)),
     },
     {
       key: 'subscription-price',
@@ -349,39 +329,6 @@ export default function ContractsSummaryReport() {
       value: (contract: Contract) => amount(contract.additional_units_quantity),
     },
     {
-      key: 'hardware-items',
-      header: 'الأجهزة المشتراة',
-      value: (contract: Contract) => contract.hardware_items || '—',
-    },
-    {
-      key: 'total-before',
-      header: 'الإجمالي قبل الخصم',
-      value: (contract: Contract) => formatMoney(amount(contract.total_before_discount)),
-    },
-    {
-      key: 'total-after',
-      header: 'الإجمالي بعد الخصم',
-      value: (contract: Contract) => formatMoney(amount(contract.total_after_discount)),
-    },
-
-    {
-      key: 'joining-discount',
-      header: 'نسبة خصم الانضمام',
-      value: (contract: Contract) =>
-        amount(contract.joining_fee_discount_percentage).toLocaleString('en-US'),
-    },
-    {
-      key: 'subscription-discount',
-      header: 'نسبة خصم الاشتراك',
-      value: (contract: Contract) =>
-        amount(contract.subscription_fee_discount_percentage).toLocaleString('en-US'),
-    },
-    {
-      key: 'plan-id',
-      header: 'معرف الخطة',
-      value: (contract: Contract) => contract.plan_id ?? '—',
-    },
-    {
       key: 'status-name',
       header: 'الحالة',
       value: (contract: Contract) => contract.status_name_ar ?? '—',
@@ -391,15 +338,15 @@ export default function ContractsSummaryReport() {
       header: 'تاريخ التركيب',
       value: (contract: Contract) => formatDate(contract.installation_date),
     },
+     {
+      key: 'last-paid-month',
+      header: 'آخر شهر مسدد',
+      value: (contract: Contract) => formatMonth(contract.last_paid_month),
+    },
     {
       key: 'next-due-date',
       header: 'الاستحقاق القادم',
       value: (contract: Contract) => formatDate(contract.next_subscription_due_date),
-    },
-    {
-      key: 'last-paid-month',
-      header: 'آخر شهر مسدد',
-      value: (contract: Contract) => formatMonth(contract.last_paid_month),
     },
     { key: 'notes', header: 'ملاحظات', value: (contract: Contract) => contract.notes || '—' },
     {
@@ -407,7 +354,6 @@ export default function ContractsSummaryReport() {
       header: 'ملاحظات المدير',
       value: (contract: Contract) => contract.manager_notes || '—',
     },
-
   ];
   const totalPages = Math.max(1, Math.ceil(filteredContracts.length / PAGE_SIZE));
 
@@ -429,18 +375,15 @@ export default function ContractsSummaryReport() {
       reportColumns.map((column) => column.value(contract)),
     );
 
-    const csv = [headers, ...rows]
-      .map((row) => row.map((value) => `"${String(value).split('"').join('""')}"`).join(','))
-      .join('\n');
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
 
-    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
+    worksheet['!cols'] = headers.map((header) => ({ wch: Math.max(header.length + 4, 16) }));
 
-    link.href = url;
-    link.download = 'contracts-summary-report.csv';
-    link.click();
-    URL.revokeObjectURL(url);
+    const workbook = XLSX.utils.book_new();
+
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'ملخص العقود');
+
+    XLSX.writeFile(workbook, 'contracts-summary-report.xlsx');
   };
   return (
     <div dir="rtl">
@@ -504,7 +447,9 @@ export default function ContractsSummaryReport() {
                   disabled={isLoading}
                   className="h-11 min-w-0 whitespace-nowrap px-3"
                 >
-                  <RefreshCw className={`ml-2 h-4 w-4 shrink-0 ${isLoading ? 'animate-spin' : ''}`} />
+                  <RefreshCw
+                    className={`ml-2 h-4 w-4 shrink-0 ${isLoading ? 'animate-spin' : ''}`}
+                  />
                   تحديث
                 </Button>
                 <Button
@@ -514,10 +459,11 @@ export default function ContractsSummaryReport() {
                   className="h-11 min-w-0 whitespace-nowrap px-3"
                 >
                   <Download className="ml-2 h-4 w-4 shrink-0" />
-                  تصدير CSV
+                  تصدير Excel
                 </Button>
               </div>
-            </div>          </CardContent>
+            </div>{' '}
+          </CardContent>
                  {' '}
         </Card>
                {' '}
@@ -573,7 +519,11 @@ export default function ContractsSummaryReport() {
                             >
                               {column.key === 'additional-units' ? (
                                 <Badge
-                                  variant={amount(contract.additional_units_quantity) > 0 ? 'secondary' : 'outline'}
+                                  variant={
+                                    amount(contract.additional_units_quantity) > 0
+                                      ? 'secondary'
+                                      : 'outline'
+                                  }
                                   className="whitespace-nowrap px-2.5 py-1 font-medium"
                                 >
                                   {amount(contract.additional_units_quantity) > 0
@@ -672,7 +622,6 @@ export default function ContractsSummaryReport() {
     </div>
   );
 }
-
 
 function FilterSelect({
   label,
