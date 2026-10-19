@@ -167,7 +167,7 @@ function formatMonth(value?: string | null) {
   }).format(date);
 }
 
-export default function ContractsSummaryReport() {
+export default function ContractFollowUp() {
   const [contracts, setContracts] = useState<Contract[]>([]);
 
   const [isLoading, setIsLoading] = useState(true);

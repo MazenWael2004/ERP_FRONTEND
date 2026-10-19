@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const newCustomerSchema = z.object({
   nameEn: z.string().min(1, 'English name is required'),
   nameAr: z.string().min(1, 'Arabic name is required'),
-  code: z.string().min(1, 'Customer code is required'),
+  code: z.string().optional(),
   customerTypeId: z.string().min(1, 'Customer type is required'),
   structure: z.enum(['SINGLE', 'CHAIN']),
   statusId: z.string().min(1, 'Status is required'),

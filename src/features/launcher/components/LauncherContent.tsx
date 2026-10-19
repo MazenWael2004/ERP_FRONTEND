@@ -8,32 +8,29 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from 'react-router-dom';
 import { fetchApps } from 'src/shared/api/axios';
 import { useAuth } from 'src/features/auth/hooks/useAuth';
+import type { WorkspaceApp } from '../appNavigation';
+import { withAppContext } from '../appNavigation';
 
-interface AppPage {
-  url: string;
-}
-
-interface LauncherApp {
-  id: number;
-  name_ar: string;
-  name_en: string;
-  modules: { pages: AppPage[] }[];
-}
-
-const appIcons = [administrationIcon, CRMIcon, salesIcon, employeesIcon];
+const appIcons: Record<string, string> = {
+  administration: administrationIcon,
+  crm: CRMIcon,
+  sales: salesIcon,
+  employees: employeesIcon,
+};
 
 
 function LauncherContent() {
   const { i18n } = useTranslation();
   const nav = useNavigate();
-  const { hasPermission } = useAuth();
-  const [apps, setApps] = useState<LauncherApp[]>([]);
+  const { hasPermission, refreshPermissions } = useAuth();
+  const [apps, setApps] = useState<WorkspaceApp[]>([]);
 
   useEffect(() => {
     const loadApps = async () => {
       try {
+        await refreshPermissions();
         const response = await fetchApps();
-        const availableApps: LauncherApp[] = response.data.map((app: LauncherApp) => ({
+        const availableApps = response.map((app) => ({
           ...app,
           modules: app.modules.map((module) => ({
             ...module,
@@ -41,21 +38,21 @@ function LauncherContent() {
           })),
         }));
 
-        setApps(availableApps);
+        setApps(
+          availableApps.filter((app) =>
+            app.modules.some((module) => module.pages.length > 0),
+          ),
+        );
       } catch (error) {
         console.error('Failed to fetch apps:', error);
       }
     };
 
-    loadApps();
-  }, [hasPermission]);
+    void loadApps();
+  }, []);
 
-  const launchApp = (app: LauncherApp) => {
-    const landingPage = app.modules.flatMap((module) => module.pages)[0];
-
-    if (landingPage) {
-      nav(`${landingPage.url}?app=${app.id}`);
-    }
+  const launchApp = (app: WorkspaceApp) => {
+    nav(withAppContext('/announcements', app.id));
   };
 
   return (
@@ -65,7 +62,7 @@ function LauncherContent() {
               <LauncherAppItem
                 key={app.id}
                 name={i18n.language === 'ar' ? app.name_ar : app.name_en}
-                icon={appIcons[index % appIcons.length]}
+                icon={appIcons[app.code.toLowerCase()] ?? appIcons[index % Object.keys(appIcons).length]}
                 iconClass={`icon${(index % 5) + 1}`}
                 onClick={() => launchApp(app)}
               />

@@ -11,9 +11,6 @@ export const createCustomerSchema = z.object({
     .min(1, "CUSTOMER_NAME_AR_REQUIRED")
     .regex(/^[\u0600-\u06FF\s]+$/, "CUSTOMER_NAME_ONLY_ARABIC"),
 
-  code: z
-    .string()
-    .min(1, "CUSTOMER_CODE_REQUIRED"),
   taxNumber: z
   .string()
   .min(1,"CUSTOMER_TAX_NUMBER_REQUIRED"),

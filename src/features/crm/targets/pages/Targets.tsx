@@ -115,8 +115,13 @@ const paymentMethods = [
   },
   {
     id: '5',
-    label: 'دفع إلكتروني',
-    value: 'ONLINE_PAYMENT',
+    label: 'إنستاباي',
+    value: 'INSTAPAY',
+  },
+  {
+    id: '6',
+    label: 'باي سكاي',
+    value: 'PAYSKY',
   },
 ];
 
@@ -175,6 +180,14 @@ export default function SubscriptionCollectionPage() {
 
   const [notes, setNotes] = React.useState('');
 
+  const [paymentDetails, setPaymentDetails] = React.useState({
+    bankName: '',
+    chequeNumber: '',
+    chequeDueDate: '',
+    referenceNumber: '',
+    transactionDate: '',
+  });
+
   const [validationErrors, setValidationErrors] = React.useState<any>({ monthAmounts: {} });
 
   const [isPaidMonthsLoading, setIsPaidMonthsLoading] = React.useState(false);
@@ -182,6 +195,8 @@ export default function SubscriptionCollectionPage() {
   const [paidMonthsLoadError, setPaidMonthsLoadError] = React.useState('');
 
   const monthOptions = React.useMemo(() => generateMonthOptions(), []);
+
+  const paymentMethodCode = paymentMethods.find((method) => method.id === paymentMethodId)?.value || '';
 
   const loadScopedContracts = React.useCallback(async () => {
     setIsContractsLoading(true);
@@ -265,6 +280,7 @@ export default function SubscriptionCollectionPage() {
     setCollectionDate(new Date().toISOString().split('T')[0]);
     setReceiptNumber(`RCPT-${Date.now().toString().slice(-7)}`);
     setPaymentMethodId('1');
+    setPaymentDetails({ bankName: '', chequeNumber: '', chequeDueDate: '', referenceNumber: '', transactionDate: '' });
     setNotes('');
     setValidationErrors({ monthAmounts: {} });
     setCollectionOpen(true);
@@ -326,6 +342,18 @@ export default function SubscriptionCollectionPage() {
       return;
     }
 
+    const paymentDetailsError =
+      paymentMethodCode === 'CHEQUE' && (!paymentDetails.bankName.trim() || !paymentDetails.chequeNumber.trim() || !paymentDetails.chequeDueDate)
+        ? 'أدخل البنك ورقم الشيك وتاريخ استحقاقه.'
+        : (paymentMethodCode === 'INSTAPAY' || paymentMethodCode === 'PAYSKY') && (!paymentDetails.referenceNumber.trim() || !paymentDetails.transactionDate)
+          ? 'أدخل الرقم المرجعي وتاريخ العملية.'
+          : '';
+
+    if (paymentDetailsError) {
+      setValidationErrors((current: any) => ({ ...current, paymentDetails: paymentDetailsError }));
+      return;
+    }
+
     const payload = {
       contractId: selectedCustomer.id,
       collectionDate,
@@ -333,6 +361,9 @@ export default function SubscriptionCollectionPage() {
       paymentMethodId: Number(paymentMethodId),
       amount: selectedTotal,
       notes,
+      ...(paymentMethodCode === 'CHEQUE' || paymentMethodCode === 'INSTAPAY' || paymentMethodCode === 'PAYSKY'
+        ? { paymentDetails }
+        : {}),
       selectedMonths,
       monthPayments: selectedMonths.map((monthValue: string) => ({
         month: monthValue,
@@ -762,6 +793,69 @@ export default function SubscriptionCollectionPage() {
 
                     <FieldError message={validationErrors.paymentMethodId} />
                   </div>
+
+                  {paymentMethodCode === 'CHEQUE' && (
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-sm font-medium">بيانات الشيك</label>
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                        <Input
+                          value={paymentDetails.bankName}
+                          onChange={(event) => {
+                            setPaymentDetails((current) => ({ ...current, bankName: event.target.value }));
+                            clearValidationError('paymentDetails');
+                          }}
+                          placeholder="اسم البنك"
+                          className="h-11"
+                        />
+                        <Input
+                          value={paymentDetails.chequeNumber}
+                          onChange={(event) => {
+                            setPaymentDetails((current) => ({ ...current, chequeNumber: event.target.value }));
+                            clearValidationError('paymentDetails');
+                          }}
+                          placeholder="رقم الشيك"
+                          className="h-11"
+                        />
+                        <Input
+                          type="date"
+                          value={paymentDetails.chequeDueDate}
+                          onChange={(event) => {
+                            setPaymentDetails((current) => ({ ...current, chequeDueDate: event.target.value }));
+                            clearValidationError('paymentDetails');
+                          }}
+                          className="h-11"
+                        />
+                      </div>
+                      <FieldError message={validationErrors.paymentDetails} />
+                    </div>
+                  )}
+
+                  {(paymentMethodCode === 'INSTAPAY' || paymentMethodCode === 'PAYSKY') && (
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-sm font-medium">بيانات العملية الإلكترونية</label>
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <Input
+                          value={paymentDetails.referenceNumber}
+                          onChange={(event) => {
+                            setPaymentDetails((current) => ({ ...current, referenceNumber: event.target.value }));
+                            clearValidationError('paymentDetails');
+                          }}
+                          placeholder="الرقم المرجعي"
+                          className="h-11"
+                        />
+                        <Input
+                          type="date"
+                          value={paymentDetails.transactionDate}
+                          onChange={(event) => {
+                            setPaymentDetails((current) => ({ ...current, transactionDate: event.target.value }));
+                            clearValidationError('paymentDetails');
+                          }}
+                          className="h-11"
+                        />
+                      </div>
+                      <FieldError message={validationErrors.paymentDetails} />
+                    </div>
+                  )}
 
                   {/* Read-only Collection Amount */}
                   <div className="space-y-2">

@@ -1,7 +1,7 @@
 import SimpleBar from 'simplebar-react';
 import { Icon } from '@iconify/react';
 import { Link, useLocation, useNavigate } from 'react-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import companyLogo from '../../../../assets/images/logos/b_connect_egypt_logo-removebg-preview.png';
 
@@ -15,6 +15,11 @@ import { AMMenuItem, AMSidebar } from 'tailwind-sidebar';
 import 'tailwind-sidebar/styles.css';
 
 import { fetchApps } from 'src/shared/api/axios';
+import {
+  getAppIdFromSearch,
+  type WorkspaceApp,
+  withAppContext,
+} from 'src/features/launcher/appNavigation';
 
 // ============================================================
 // Sidebar Item Types
@@ -31,21 +36,6 @@ interface SidebarItemType {
   children?: SidebarItemType[];
   disabled?: boolean;
   isPro?: boolean;
-}
-
-interface ModulePage {
-  id: number | string;
-  title_ar: string;
-  title_en: string;
-  icon?: string;
-  url: string;
-}
-
-interface Module {
-  id: number | string;
-  name_ar: string;
-  name_en: string;
-  pages: ModulePage[];
 }
 
 // ============================================================
@@ -227,11 +217,11 @@ const renderSidebarItems = (
 // ============================================================
 
 const SidebarLayout = ({ onClose }: { onClose?: () => void }) => {
-  const [modules, setModules] = useState<Module[]>([]);
+  const [apps, setApps] = useState<WorkspaceApp[]>([]);
 
   const [isLoading, setLoading] = useState(false);
 
-  const { hasPermission } = useAuth();
+  const { hasPermission, refreshPermissions } = useAuth();
 
   const { i18n, t } = useTranslation();
 
@@ -243,39 +233,49 @@ const SidebarLayout = ({ onClose }: { onClose?: () => void }) => {
 
   const pathname = location.pathname;
 
+  const selectedApp = useMemo(() => {
+    const requestedAppId = getAppIdFromSearch(location.search);
+    const byId = apps.find((app) => app.id === requestedAppId);
+
+    if (byId) return byId;
+
+    return apps.find((app) =>
+      app.modules.some((module) =>
+        module.pages.some((page) => page.url === pathname),
+      ),
+    ) ?? apps[0];
+  }, [apps, location.search, pathname]);
+
   const [openModules, setOpenModules] = useState<Record<number, boolean>>({});
 
   // ==========================================================
   // Load Modules
   // ==========================================================
 
-  const loadModules = async () => {
+  const loadApps = async () => {
     try {
       setLoading(true);
 
-      const response = await fetchApps();
-
-      const fetchedModules: Module[] = response.data;
-      console.log(response.data);
+      await refreshPermissions();
+      const fetchedApps = await fetchApps();
 
       // ------------------------------------------------------
       // Filter pages according to READ permission
       // ------------------------------------------------------
 
-      const filteredModules = fetchedModules
-        .map((module) => ({
-          ...module,
-
-          pages: module.pages.filter((page) => hasPermission(page.url, 'READ')),
+      const permittedApps = fetchedApps
+        .map((app) => ({
+          ...app,
+          modules: app.modules
+            .map((module) => ({
+              ...module,
+              pages: module.pages.filter((page) => hasPermission(page.url, 'READ')),
+            }))
+            .filter((module) => module.pages.length > 0),
         }))
+        .filter((app) => app.modules.length > 0);
 
-        // --------------------------------------------------
-        // Don't display modules with no accessible pages
-        // --------------------------------------------------
-
-        .filter((module) => module.pages.length > 0);
-
-      setModules(filteredModules);
+      setApps(permittedApps);
     } catch (error) {
       console.error('Failed to fetch modules:', error);
     } finally {
@@ -288,7 +288,7 @@ const SidebarLayout = ({ onClose }: { onClose?: () => void }) => {
   // ==========================================================
 
   useEffect(() => {
-    loadModules();
+    void loadApps();
   }, []);
 
   // ==========================================================
@@ -311,7 +311,7 @@ const SidebarLayout = ({ onClose }: { onClose?: () => void }) => {
   // Convert Modules → Sidebar Items
   // ==========================================================
 
-  const sidebarItems: SidebarItemType[] = modules.map((module) => ({
+  const sidebarItems: SidebarItemType[] = (selectedApp?.modules ?? []).map((module) => ({
     id: module.id,
 
     heading: i18n.language === 'ar' ? module.name_ar : module.name_en,
@@ -321,9 +321,9 @@ const SidebarLayout = ({ onClose }: { onClose?: () => void }) => {
 
       name: i18n.language === 'ar' ? page.title_ar : page.title_en,
 
-      icon: page.icon,
+      icon: page.icon ?? undefined,
 
-      url: page.url,
+      url: selectedApp ? withAppContext(page.url, selectedApp.id) : page.url,
     })),
   }));
 
@@ -363,6 +363,27 @@ const SidebarLayout = ({ onClose }: { onClose?: () => void }) => {
             <img src={companyLogo} alt="B-Connect" className="h-32 w-auto object-contain" />
           </div>
 
+          <label className="mb-4 block">
+            <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
+              {t('APPLICATION')}
+            </span>
+            <select
+              value={selectedApp ? String(selectedApp.id) : ''}
+              onChange={(event) => {
+                const appId = Number(event.target.value);
+                if (appId) navigate(withAppContext('/announcements', appId));
+              }}
+              className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:ring-2 focus:ring-primary"
+              aria-label={t('APPLICATION')}
+            >
+              {apps.map((app) => (
+                <option key={app.id} value={app.id}>
+                  {isRTL ? app.name_ar : app.name_en}
+                </option>
+              ))}
+            </select>
+          </label>
+
           {/* ==================================================
               Global Navigation
           ================================================== */}
@@ -371,7 +392,7 @@ const SidebarLayout = ({ onClose }: { onClose?: () => void }) => {
             <AMMenuItem
               icon={<Icon icon="mdi:bullhorn-outline" height={21} width={21} />}
               isSelected={pathname === '/announcements'}
-              link="/announcements"
+              link={selectedApp ? withAppContext('/announcements', selectedApp.id) : '/announcements'}
               component={Link}
               className={`
                 mt-0.5

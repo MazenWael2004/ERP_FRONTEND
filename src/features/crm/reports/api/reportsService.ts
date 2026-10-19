@@ -11,3 +11,39 @@ export const fetchCollectionsReport = (startDate?: string, endDate?: string) => 
 export const fetchAdditionalUnitsReport = (startDate?: string, endDate?: string) => report('/reports/additional-units', startDate, endDate);
 export const fetchReplicationServicesReport = (startDate?: string, endDate?: string) => report('/reports/replication-services', startDate, endDate);
 export const fetchSalesReport = (startDate?: string, endDate?: string) => report('/reports/sales', startDate, endDate);
+
+export const fetchMasterfileReport = async (filters: {
+  search?: string;
+  zoneId?: string;
+  programId?: string;
+  workflowStatus?: string;
+  startDate?: string;
+  endDate?: string;
+}) => {
+  const response = await api.get('/reports/masterfile', {
+    params: Object.fromEntries(
+      Object.entries(filters).filter(([, value]) => value !== undefined && value !== ''),
+    ),
+  });
+  return response.data.data;
+};
+export const fetchActionHistoryReport = async (filters: {
+  startDate?: string;
+  endDate?: string;
+  userId?: string;
+  contractId?: string;
+  actionCode?: string;
+  limit?: number;
+}) => {
+  const response = await api.get('/reports/action-history', {
+    params: {
+      ...filters,
+      startDate: filters.startDate || undefined,
+      endDate: filters.endDate || undefined,
+      userId: filters.userId || undefined,
+      contractId: filters.contractId || undefined,
+      actionCode: filters.actionCode || undefined,
+    },
+  });
+  return response.data.data;
+};

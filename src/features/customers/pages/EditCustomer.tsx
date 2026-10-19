@@ -138,7 +138,6 @@ function EditCustomer() {
 
   const name_en = watch('nameEn');
   const name_ar = watch('nameAr');
-  const code = watch('code');
   const tax_number = watch('taxNumber');
   const registration_number = watch('registrationNumber');
   const telephone_number = watch('telephoneNumber');
@@ -179,18 +178,6 @@ function EditCustomer() {
     }
   };
 
-  useEffect(() => {
-    if (!code || code.trim() === '') {
-      clearErrors('code');
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      checkFieldExists('code', code, 'code', 'CUSTOMER_CODE_EXISTS');
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [code]);
 
   useEffect(() => {
     if (!name_en || name_en.trim() === '') {
@@ -470,7 +457,7 @@ function EditCustomer() {
         <Label htmlFor="code">
           {t('CUSTOMER_CODE')} <span className="text-red-500">*</span>
         </Label>
-        <Input id="jobCode" className="mt-2 w-full" {...register('code')} />
+        <Input id="jobCode" className="mt-2 w-full bg-muted" {...register('code')} readOnly />
         {errors.code && <span className="error-message">{t(errors.code.message!)}</span>}
       </div>
 

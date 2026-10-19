@@ -32,8 +32,10 @@ import NewPricing from 'src/features/pricings/pages/NewPricing';
 import Announcements from 'src/features/crm/management/pages/Announcements';
 import ViewUncollectedTargets from 'src/features/crm/collections/pages/ViewUncollectedTargets';
 import OutstandingReport from 'src/features/crm/collections/pages/OutstandingRecivablesReport';
-import ContractsSummaryReport from 'src/features/crm/reports/pages/ContractsSummaryReport';
+
 import OperationalReports from 'src/features/crm/reports/pages/OperationalReports';
+import ActionHistoryReport from 'src/features/crm/reports/pages/ActionHistoryReport';
+import MasterfileReport from 'src/features/crm/reports/pages/MasterfileReport';
 import TicketingPage from 'src/features/crm/tickets/pages/TicketingPage';
 import AddTargetPlan from 'src/features/crm/targets/pages/AddTargetPlan';
 import OutstandingMonthlySubscriptions from 'src/features/crm/collections/pages/OutstandingMonthlySubscriptions';
@@ -43,6 +45,8 @@ import InstallationAssignment from 'src/features/crm/tasks/pages/AssignInstallat
 import ManagerOfAll from 'src/features/crm/management/pages/ManagerOfAll';
 import CollectAdditionalUnits from 'src/features/crm/collections/pages/CollectAdditionalUnits';
 import SubscriptionCollectionPage from 'src/features/crm/targets/pages/Targets';
+import UserZoneAssignments from 'src/features/administration/user-zones/pages/UserZoneAssignments';
+import ContractFollowUp from 'src/features/crm/contracts/pages/ContractFollowUp';
 /* ***Layouts**** */
 const FullLayout = Loadable(lazy(() => import('../layouts/full/FullLayout')));
 const BlankLayout = Loadable(lazy(() => import('../layouts/blank/BlankLayout')));
@@ -200,6 +204,14 @@ const Router = [
         ),
       },
       {
+        path: 'user-zone-assignments',
+        element: (
+          <ProtectedRoute route="/user-zone-assignments" action_code="READ">
+            <UserZoneAssignments />
+          </ProtectedRoute>
+        ),
+      },
+      {
         path: 'roles/edit',
         element: (
           <ProtectedRoute route="/roles" action_code="WRITE">
@@ -337,12 +349,19 @@ const Router = [
         )
       },
       {
-        path: '/contracts-summary-report',
-        element: <ContractsSummaryReport />,
+        path: '/contract-follow-up',
+        element: <ContractFollowUp />,
       },
       {
         path: '/operational-reports',
         element: <OperationalReports />,
+      },
+      {
+        path: '/action-history-report',
+        element: <ActionHistoryReport />,
+      },      {
+        path: '/masterfile-report',
+        element: <MasterfileReport />,
       },
       {
         path: '/customer-tickets',

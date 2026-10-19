@@ -13,4 +13,7 @@ export const fetchBanks = async () => {
   return response.data.data;
 };
 
-
+export const fetchNextCustomerCode = async () => {
+  const response = await api.get('/customers/next-code');
+  return String(response.data?.data?.code ?? '');
+};

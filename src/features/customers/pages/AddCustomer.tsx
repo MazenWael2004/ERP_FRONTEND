@@ -209,11 +209,11 @@ const goToPreviousTab = (e?: React.MouseEvent) => {
     formState: { errors },
   } = useForm({
     resolver: zodResolver(createCustomerSchema),
+    defaultValues: { code: 'سيتم توليده تلقائياً' },
   });
 
   const name_en = watch('nameEn');
   const name_ar = watch('nameAr');
-  const code = watch('code');
   const tax_number = watch('taxNumber');
   const registration_number = watch('registrationNumber');
   const telephone_number = watch('telephoneNumber');
@@ -275,18 +275,6 @@ const goToPreviousTab = (e?: React.MouseEvent) => {
     }
   };
 
-  useEffect(() => {
-    if (!code || code.trim() === '') {
-      clearErrors('code');
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      checkFieldExists('code', code, 'code', 'CUSTOMER_CODE_EXISTS');
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [code]);
 
   useEffect(() => {
     if (!name_en || name_en.trim() === '') {
@@ -440,7 +428,7 @@ const goToPreviousTab = (e?: React.MouseEvent) => {
               <Label htmlFor="code">
                 {t('CUSTOMER_CODE')} <span className="text-red-500">*</span>
               </Label>
-              <Input id="code" className="mt-2 w-full" {...register('code')} />
+              <Input id="code" className="mt-2 w-full bg-muted" {...register('code')} readOnly />
               {errors.code && (
                 <span className="error-message">{t(errors.code.message!)}</span>
               )}

@@ -34,6 +34,8 @@ import {
   UserRound,
   Users,
   Wrench,
+  ExternalLink,
+  MapPinned,
 } from 'lucide-react';
 
 import { useFieldArray, useForm, useWatch, Controller } from 'react-hook-form';
@@ -51,7 +53,7 @@ import { Separator } from 'src/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from 'src/components/ui/tabs';
 import { useAuth } from 'src/features/auth/hooks/useAuth';
 import { api } from 'src/shared/api/axios';
-import { fetchBanks, fetchPaymentMethods } from '../api/contractService';
+import { fetchBanks, fetchNextCustomerCode, fetchPaymentMethods } from '../api/contractService';
 
 function generateMonthOptions() {
   const now = new Date();
@@ -68,12 +70,6 @@ function generateMonthOptions() {
   });
 }
 
-function generateCustomerCode() {
-  const datePart = new Date().toISOString().slice(2, 10).replace(/-/g, '');
-  const randomPart = Math.random().toString(36).slice(2, 6).toUpperCase();
-
-  return `CUS-${datePart}-${randomPart}`;
-}
 type EgyptAdministrativeDivision = {
   id: string;
   level: number;
@@ -239,6 +235,7 @@ export default function AddCustomerContract() {
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
   const [banks, setBanks] = useState<any[]>([]);
   const [isBanksLoading, setIsBanksLoading] = useState(true);
+  const [isCustomerCodePreviewLoading, setIsCustomerCodePreviewLoading] = useState(false);
 
   useEffect(() => {
     const loadZones = async () => {
@@ -378,12 +375,15 @@ export default function AddCustomerContract() {
       customerId: '',
       customerNameEn: '',
       customerNameAr: '',
-      customerCode: '',
+      customerCode: 'سيتم توليده تلقائياً',
       customerTypeId: null,
       structure: '',
       zoneId: '',
       licenseNumber: '',
+      taxRegistrationType: 'TAX_NUMBER',
       taxNumber: '',
+      taxExemptionNationalId: '',
+      taxExemptionComment: '',
       registrationNumber: '',
 
       contractDate: new Date().toISOString().split('T')[0],
@@ -410,7 +410,41 @@ export default function AddCustomerContract() {
         bankName: '',
         referenceNumber: '',
         chequeNumber: '',
+        chequeDueDate: '',
+        transactionDate: '',
         receiptNumber: '',
+      },
+      initialPayments: [
+        {
+          amount: 0,
+          paymentMethodId: null,
+          paymentDetails: {
+            transferDate: '',
+            bankId: '',
+            bankName: '',
+            referenceNumber: '',
+            chequeNumber: '',
+            chequeDueDate: '',
+            transactionDate: '',
+            receiptNumber: '',
+          },
+        },
+      ],
+      addOnPayment: {
+        amount: 0,
+        paymentMethodId: null,
+        collectionReason: 'إضافات العقد',
+        notes: '',
+        paymentDetails: {
+          transferDate: '',
+          bankId: '',
+          bankName: '',
+          referenceNumber: '',
+          chequeNumber: '',
+          chequeDueDate: '',
+          transactionDate: '',
+          receiptNumber: '',
+        },
       },
 
       baseSubscriptionAmount: 0,
@@ -450,13 +484,18 @@ export default function AddCustomerContract() {
         street: '',
         buildingNumber: '',
         glnCode: '',
+        googleMapsUrl: '',
+        latitude: '',
+        longitude: '',
       },
     },
   });
 
   // Pricing starts async and changes with plan, offer, months, and add-ons. Keep the
   // suggested collection equal to the discounted total until the user edits it.
-  const hasManuallyEditedPaymentAmount = useRef(false);
+  const hasManuallyEditedInitialPayments = useRef(false);
+  const hasManuallyEditedAddOnPaymentAmount = useRef(false);
+  const isAdvancingToAddOnsRef = useRef(false);
 
   useEffect(() => {
     if (user?.id) {
@@ -510,7 +549,7 @@ export default function AddCustomerContract() {
     );
 
     if (existingIndex >= 0) {
-      if (service.isQuantityBased && service.code !== 'REPLICATION_SERVICE') {
+      if (service.isQuantityBased) {
         const quantity = Number(selectedServices[existingIndex]?.quantity || 0) + 1;
         setValue(`additionalServices.${existingIndex}.quantity`, quantity, {
           shouldDirty: true,
@@ -558,15 +597,46 @@ export default function AddCustomerContract() {
 
   const customerMode = watch('customerMode');
   const customerId = watch('customerId');
-  useEffect(() => {
-    if (customerMode === 'new') {
-      setValue('customerCode', generateCustomerCode(), { shouldValidate: true });
-    }
-  }, [customerMode, setValue]);
 
+  useEffect(() => {
+    if (customerMode !== 'new') {
+      return;
+    }
+
+    let isActive = true;
+
+    const loadNextCustomerCode = async () => {
+      setIsCustomerCodePreviewLoading(true);
+
+      try {
+        const nextCode = await fetchNextCustomerCode();
+        if (isActive && nextCode) {
+          setValue('customerCode', nextCode, { shouldDirty: false, shouldValidate: false });
+        }
+      } catch {
+        if (isActive) {
+          setValue('customerCode', 'سيتم توليده تلقائياً', {
+            shouldDirty: false,
+            shouldValidate: false,
+          });
+        }
+      } finally {
+        if (isActive) {
+          setIsCustomerCodePreviewLoading(false);
+        }
+      }
+    };
+
+    void loadNextCustomerCode();
+
+    return () => {
+      isActive = false;
+    };
+  }, [customerMode, setValue]);
   const customerNameAr = watch('customerNameAr');
   const customerCode = watch('customerCode');
   const customerTypeId = watch('customerTypeId');
+  const taxRegistrationType = watch('taxRegistrationType');
   const structure = watch('structure');
 
   const planId = watch('planId');
@@ -583,6 +653,29 @@ export default function AddCustomerContract() {
 
   const selectedGovernorate = governorates.find((division) => division.id === governorateId);
 
+  const selectedDistrict = districts.find((division) => division.id === districtId);
+  const shiyakhaId = watch('address.shiyakhaId');
+  const selectedShiyakha = shiyakhas.find((division) => division.id === shiyakhaId);
+
+  const openGoogleMaps = () => {
+    const address = getValues('address');
+    const query = [
+      address.buildingNumber,
+      address.street,
+      selectedShiyakha?.nameAr,
+      selectedDistrict?.nameAr,
+      selectedGovernorate?.nameAr,
+      'Egypt',
+    ]
+      .filter(Boolean)
+      .join(', ');
+
+    window.open(
+      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query || 'Egypt')}`,
+      '_blank',
+      'noopener,noreferrer',
+    );
+  };
   useEffect(() => {
     let isActive = true;
     const abortController = new AbortController();
@@ -674,8 +767,7 @@ export default function AddCustomerContract() {
       abortController.abort();
     };
   }, [servicesRefresh]);
-  const paymentMethodId = watch('paymentMethodId');
-  const paymentDetails = watch('paymentDetails');
+  const addOnPaymentMethodId = watch('addOnPayment.paymentMethodId');
 
   const selectedMonths = watch('selectedMonths') || [];
   const selectedAdditionalServices =
@@ -689,7 +781,12 @@ export default function AddCustomerContract() {
       name: 'hardwareDevices',
     }) || [];
 
-  const paymentAmount = Number(watch('paymentAmount') || 0);
+  const initialPayments = useWatch({ control, name: 'initialPayments' }) || [];
+  const paymentAmount = initialPayments.reduce(
+    (total: number, payment: any) => total + (Number(payment?.amount) || 0),
+    0,
+  );
+  const addOnPaymentAmount = Number(watch('addOnPayment.amount') || 0);
 
   const branches = watch('branches') || [];
 
@@ -757,9 +854,6 @@ export default function AddCustomerContract() {
   const additionalUnitService = availableServices.find(
     (service) => service.code === 'ADDITIONAL_UNIT',
   );
-  const additionalUnitSubscriptionService = availableServices.find(
-    (service) => service.code === 'ADDITIONAL_UNIT_SUBSCRIPTION',
-  );
   // One-time service catalog entries are retained as replication services.
   const replicationServices = availableServices.filter(
     (service) =>
@@ -772,10 +866,6 @@ export default function AddCustomerContract() {
       service.type === 'HARDWARE' &&
       service.billingType === 'ONE_TIME' &&
       !service.isSubscriptionBased,
-  );
-
-  const replicationSubscriptionService = availableServices.find(
-    (service) => service.code === 'REPLICATION_SUBSCRIPTION',
   );
 
   const contractTypeRules: any = {
@@ -812,10 +902,23 @@ export default function AddCustomerContract() {
     }
 
     if (currentContractTypeRule.autoSelectConsecutive) {
-      // An offer starts with two choices. Once one is chosen, show the full
-      // automatically selected offer period so the customer can review it.
-      const visibleOfferMonths = selectedMonths.length > 0 ? currentContractTypeRule.maxMonths : 2;
-      return monthOptions.slice(0, Math.min(visibleOfferMonths, currentContractTypeRule.maxMonths));
+      // Before choosing, allow the customer to select either available start
+      // month. Afterwards, display the six-month period from that chosen start.
+      const selectedStartValue = [...selectedMonths].sort((left: any, right: any) =>
+        left.value.localeCompare(right.value),
+      )[0]?.value;
+      const selectedStartIndex = monthOptions.findIndex(
+        (month) => month.value === selectedStartValue,
+      );
+
+      if (selectedStartIndex >= 0) {
+        return monthOptions.slice(
+          selectedStartIndex,
+          selectedStartIndex + currentContractTypeRule.maxMonths,
+        );
+      }
+
+      return monthOptions.slice(0, 2);
     }
 
     // Regular contracts start with the current and next month. Once selected,
@@ -827,7 +930,7 @@ export default function AddCustomerContract() {
     currentContractTypeRule.autoSelectConsecutive,
     currentContractTypeRule.maxMonths,
     monthOptions,
-    selectedMonths.length,
+    selectedMonths,
   ]);
   // const paymentMethods = [
   //   { id: 1, code: 'CASH', label: 'نقدي' },
@@ -838,20 +941,14 @@ export default function AddCustomerContract() {
   // ];
   /* =========================================================
      CALCULATIONS
-  ========================================================= */
 
-  const joiningFee = Number(joiningFeeService?.joining_fee ?? 0);
+  ========================================================= */
 
   const selectedPlan = plans.find((p: any) => p.id === Number(planId));
 
-  const mainMonthlySubscription = selectedPlan?.subscription_fee || 0;
-  const additionalUnitSubscription = Number(
-    additionalUnitSubscriptionService?.subscription_fee ?? 0,
-  );
+  const joiningFee = Number(joiningFeeService?.joining_fee ?? 0);
 
-  const replicationSubscription = Number(replicationSubscriptionService?.subscription_fee ?? 0);
-  const monthlyRecurringSubscription =
-    mainMonthlySubscription + additionalUnitSubscription + replicationSubscription;
+  const mainMonthlySubscription = selectedPlan?.subscription_fee || 0;
 
   // The chosen months at contract creation collect the main plan only.
   const initialCollectedMonthlySubscription = mainMonthlySubscription;
@@ -908,74 +1005,62 @@ export default function AddCustomerContract() {
   const selectedReplicationServiceRows = selectedAdditionalServiceRows.filter(
     (service) => service.code !== 'ADDITIONAL_UNIT',
   );
-  const additionalUnitsQuantity = selectedAdditionalUnitRows.reduce(
-    (total, service) => total + service.quantity,
-    0,
-  );
-  const additionalUnitsTotal = selectedAdditionalUnitRows.reduce(
-    (total, service) => total + service.total,
-    0,
-  );
-  const grossContractValue =
-    joiningFeeAfterContractTypeDiscount + subscriptionPriceAfterDiscount + additionalServicesTotal;
-  const discountAmount = subscriptionDiscount + joiningFeeDiscount;
 
+  const addOnTotal = additionalServicesTotal + hardwareDevicesTotal;
+  const grossContractValue = joiningFeeAfterContractTypeDiscount + subscriptionPriceAfterDiscount;
+  const discountAmount = subscriptionDiscount + joiningFeeDiscount;
   const totalContractValue = grossContractValue;
 
-  const totalBeforeDiscount = joiningFee + monthlySubscription + additionalServicesTotal;
+  const totalBeforeDiscount = joiningFee + monthlySubscription;
   const joiningFeeAfterDiscount = joiningFeeAfterContractTypeDiscount;
   const subscriptionFeeAfterDiscount = subscriptionPriceAfterDiscount;
 
   useEffect(() => {
-    if (!hasManuallyEditedPaymentAmount.current) {
-      setValue('paymentAmount', totalContractValue, {
+    if (!hasManuallyEditedInitialPayments.current && initialPayments.length === 1) {
+      setValue('initialPayments.0.amount', totalContractValue, {
         shouldDirty: false,
         shouldValidate: false,
       });
     }
-  }, [setValue, totalContractValue]);
+  }, [initialPayments.length, setValue, totalContractValue]);
+
+  useEffect(() => {
+    if (!hasManuallyEditedAddOnPaymentAmount.current) {
+      setValue('addOnPayment.amount', addOnTotal, {
+        shouldDirty: false,
+        shouldValidate: false,
+      });
+    }
+  }, [addOnTotal, setValue]);
 
   const remainingAmount = Math.max(totalContractValue - paymentAmount, 0);
+  const addOnRemainingAmount = Math.max(addOnTotal - addOnPaymentAmount, 0);
 
   const paidPercentage =
     totalContractValue > 0 ? Math.min((paymentAmount / totalContractValue) * 100, 100) : 0;
+  const addOnPaidPercentage =
+    addOnTotal > 0 ? Math.min((addOnPaymentAmount / addOnTotal) * 100, 100) : 0;
 
   const selectedBranch = branchId !== '' ? (branches[Number(branchId)] ?? null) : null;
   const selectedZone = zoneId !== '' ? (zones[Number(zoneId)] ?? null) : null;
 
   const customerStatus = customerMode === 'reactivate' ? 'إعادة تفعيل' : 'عميل جديد';
-
-  const selectedPaymentMethod = paymentMethods.find(
-    (method) => Number(method.id) === Number(paymentMethodId),
+  const selectedAddOnPaymentMethod = paymentMethods.find(
+    (method) => Number(method.id) === Number(addOnPaymentMethodId),
   );
-  const paymentMethodCode = String(selectedPaymentMethod?.code || '')
+  const addOnPaymentMethodCode = String(selectedAddOnPaymentMethod?.code || '')
     .toUpperCase()
     .replace(/_/g, '');
-
-  useEffect(() => {
-    const fieldsByMethod: Record<string, string[]> = {
-      BANKTRANSFER: ['transferDate', 'bankId', 'bankName', 'referenceNumber'],
-      INSTAPAY: ['referenceNumber'],
-      PAYSKY: ['referenceNumber'],
-      CHEQUE: ['bankId', 'bankName', 'chequeNumber'],
-      CASH: ['receiptNumber'],
-    };
-    const allowed = new Set(fieldsByMethod[paymentMethodCode] || []);
-    (
-      [
-        'transferDate',
-        'bankId',
-        'bankName',
-        'referenceNumber',
-        'chequeNumber',
-        'receiptNumber',
-      ] as const
-    ).forEach((field) => {
-      if (!allowed.has(field) && paymentDetails?.[field]) {
-        setValue(`paymentDetails.${field}`, '', { shouldDirty: true });
-      }
-    });
-  }, [paymentDetails, paymentMethodCode, setValue]);
+  const initialPaymentMethodLabel = initialPayments.length
+    ? initialPayments
+        .map((payment: any) => {
+          const method = paymentMethods.find(
+            (item) => Number(item.id) === Number(payment?.paymentMethodId),
+          );
+          return method?.nameAr ?? method?.name_ar ?? method?.code ?? 'غير معروف';
+        })
+        .join(' + ')
+    : 'لا يوجد تحصيل';
 
   /* =========================================================
      FILE UPLOAD
@@ -1178,12 +1263,30 @@ export default function AddCustomerContract() {
     const current = getValues('selectedMonths') || [];
 
     if (currentContractTypeRule.autoSelectConsecutive) {
-      // One of the first two offer months confirms the whole discounted period.
-      if (current.length >= currentContractTypeRule.maxMonths) {
+      const isSelected = current.some((item: any) => item.value === month.value);
+
+      // A six-month offer is one contiguous period. Clicking any selected
+      // month clears it, allowing the user to choose a different start month.
+      if (isSelected) {
+        setValue('selectedMonths', [], {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+        revalidateNextDueDate();
         return;
       }
 
-      setValue('selectedMonths', monthOptions.slice(0, currentContractTypeRule.maxMonths), {
+      const startIndex = monthOptions.findIndex((item) => item.value === month.value);
+      const offerMonths = monthOptions.slice(
+        startIndex,
+        startIndex + currentContractTypeRule.maxMonths,
+      );
+
+      if (startIndex < 0 || offerMonths.length !== currentContractTypeRule.maxMonths) {
+        return;
+      }
+
+      setValue('selectedMonths', offerMonths, {
         shouldDirty: true,
         shouldValidate: true,
       });
@@ -1247,18 +1350,23 @@ export default function AddCustomerContract() {
       'customerId',
       'customerNameAr',
       'customerNameEn',
-      'customerCode',
       'customerTypeId',
       'structure',
       'zoneId',
       'licenseNumber',
       'taxNumber',
+      'taxExemptionNationalId',
+      'taxExemptionComment',
       'registrationNumber',
       'contacts',
       'address',
     ].some((field) => Boolean(submitErrors[field]));
 
-    setActiveStep(hasStepOneError ? 1 : 2);
+    const hasAddOnError = ['addOnPayment', 'additionalServices', 'hardwareDevices'].some((field) =>
+      Boolean(submitErrors[field]),
+    );
+
+    setActiveStep(hasStepOneError ? 1 : hasAddOnError ? 3 : 2);
     scrollToFirstValidationError();
   };
   const handleNext = async () => {
@@ -1267,13 +1375,14 @@ export default function AddCustomerContract() {
 
       'customerNameAr',
       'customerNameEn',
-      'customerCode',
       'customerTypeId',
       'structure',
       'zoneId',
       'licenseNumber',
-      'taxNumber',
       'registrationNumber',
+      ...(taxRegistrationType === 'TAX_NUMBER'
+        ? ['taxNumber']
+        : ['taxExemptionNationalId', 'taxExemptionComment']),
 
       'contacts.0.type',
       'contacts.0.nameAr',
@@ -1288,6 +1397,9 @@ export default function AddCustomerContract() {
       'address.shiyakhaId',
       'address.street',
       'address.buildingNumber',
+      'address.googleMapsUrl',
+      'address.latitude',
+      'address.longitude',
       'address.glnCode',
     ]);
 
@@ -1309,7 +1421,7 @@ export default function AddCustomerContract() {
   };
 
   const handleBack = () => {
-    setActiveStep(1);
+    setActiveStep((step) => Math.max(1, step - 1));
 
     window.scrollTo({
       top: 0,
@@ -1317,11 +1429,67 @@ export default function AddCustomerContract() {
     });
   };
 
+  const handlePlanNext = async () => {
+    const paymentFields = initialPayments.flatMap((payment: any, index: number) => {
+      const prefix = `initialPayments.${index}`;
+      const method = paymentMethods.find(
+        (item) => Number(item.id) === Number(payment?.paymentMethodId),
+      );
+      const code = String(method?.code || '')
+        .toUpperCase()
+        .replace(/_/g, '');
+      const fields = [`${prefix}.amount`, `${prefix}.paymentMethodId`];
+      if (code === 'CASH') fields.push(`${prefix}.paymentDetails.receiptNumber`);
+      if (code === 'BANKTRANSFER')
+        fields.push(
+          `${prefix}.paymentDetails.transferDate`,
+          `${prefix}.paymentDetails.bankId`,
+          `${prefix}.paymentDetails.referenceNumber`,
+        );
+      if (code === 'CHEQUE')
+        fields.push(
+          `${prefix}.paymentDetails.bankId`,
+          `${prefix}.paymentDetails.chequeNumber`,
+          `${prefix}.paymentDetails.chequeDueDate`,
+        );
+      if (code === 'INSTAPAY' || code === 'PAYSKY')
+        fields.push(
+          `${prefix}.paymentDetails.referenceNumber`,
+          `${prefix}.paymentDetails.transactionDate`,
+        );
+      return fields;
+    });
+    const valid = await trigger(paymentFields as any);
+    if (!valid || paymentAmount <= 0 || paymentAmount > totalContractValue + 0.01) {
+      scrollToFirstValidationError();
+      return;
+    }
+    goToAddOnsStep();
+  };
+  const goToAddOnsStep = () => {
+    isAdvancingToAddOnsRef.current = true;
+    setActiveStep(3);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    window.setTimeout(() => {
+      isAdvancingToAddOnsRef.current = false;
+    }, 0);
+  };
+
   /* =========================================================
      FINAL SUBMIT
   ========================================================= */
 
   const onSubmit = async (data: any) => {
+    // Only the final Add-ons step may open the creation confirmation.
+    // This also protects against an Enter-key form submit from the plan step.
+    if (activeStep !== 3 || isAdvancingToAddOnsRef.current) {
+      if (activeStep !== 3) {
+        goToAddOnsStep();
+      }
+      return;
+    }
+
     if (!user?.id) {
       await Swal.fire({
         icon: 'error',
@@ -1335,8 +1503,7 @@ export default function AddCustomerContract() {
       isServicesLoading ||
       servicesError ||
       !joiningFeeService ||
-      !selectedPlan?.subscription_fee ||
-      !additionalUnitSubscriptionService
+      !selectedPlan?.subscription_fee
     ) {
       await Swal.fire({
         icon: 'error',
@@ -1371,10 +1538,14 @@ export default function AddCustomerContract() {
     const payload = {
       customerNameEn: data.customerNameEn,
       customerNameAr: data.customerNameAr,
-      customerCode: data.customerCode,
       customerTypeId: data.customerTypeId,
       structure: data.structure,
-      taxNumber: data.taxNumber,
+      taxRegistrationType: data.taxRegistrationType,
+      taxNumber: data.taxRegistrationType === 'TAX_NUMBER' ? data.taxNumber : null,
+      taxExemptionNationalId:
+        data.taxRegistrationType === 'NATIONAL_ID' ? data.taxExemptionNationalId : null,
+      taxExemptionComment:
+        data.taxRegistrationType === 'NATIONAL_ID' ? data.taxExemptionComment?.trim() : null,
       registrationNumber: data.registrationNumber,
       licenseNumber: data.licenseNumber,
       zoneId: data.zoneId,
@@ -1385,6 +1556,9 @@ export default function AddCustomerContract() {
         shiyakhaId: data.address.shiyakhaId || null,
         street: data.address.street,
         buildingNumber: data.address.buildingNumber,
+        googleMapsUrl: data.address.googleMapsUrl || null,
+        latitude: data.address.latitude || null,
+        longitude: data.address.longitude || null,
         glnCode: data.address.glnCode || null,
       },
       planId: data.planId,
@@ -1400,8 +1574,25 @@ export default function AddCustomerContract() {
       subscriptionDiscountPercentage,
       joiningFeeDiscountPercentage,
       paymentAmount,
-      paymentMethodId: data.paymentMethodId,
-      paymentDetails: data.paymentDetails,
+      // Legacy fields are retained for older servers; the API uses initialPayments
+      // when present and creates one collection receipt for each entry.
+      paymentMethodId: Number(data.initialPayments?.[0]?.paymentMethodId || 0),
+      paymentDetails: data.initialPayments?.[0]?.paymentDetails || {},
+      initialPayments: (data.initialPayments || []).map((payment: any) => ({
+        amount: Number(payment?.amount || 0),
+        paymentMethodId: Number(payment?.paymentMethodId || 0),
+        paymentDetails: payment?.paymentDetails || {},
+      })),
+      addOnPayment:
+        addOnTotal > 0
+          ? {
+              amount: Number(data.addOnPayment?.amount || 0),
+              paymentMethodId: Number(data.addOnPayment?.paymentMethodId || 0),
+              paymentDetails: data.addOnPayment?.paymentDetails || {},
+              collectionReason: data.addOnPayment?.collectionReason || 'إضافات العقد',
+              notes: data.addOnPayment?.notes || null,
+            }
+          : null,
       additionalServices: (data.additionalServices || [])
         .map((service: any) => ({
           serviceId: Number(service.serviceId),
@@ -1457,7 +1648,13 @@ export default function AddCustomerContract() {
     try {
       const formData = new FormData();
       Object.entries(payload).forEach(([key, value]) => {
-        if (key === 'documents') return;
+        if (
+          key === 'documents' ||
+          value === undefined ||
+          (key === 'addOnPayment' && value === null)
+        ) {
+          return;
+        }
         formData.append(
           key,
           value !== null && typeof value === 'object' ? JSON.stringify(value) : String(value ?? ''),
@@ -1483,7 +1680,7 @@ export default function AddCustomerContract() {
         text: response.data?.message || 'تم حفظ العقد بنجاح.',
         confirmButtonText: 'حسناً',
       });
-      nav('/contracts-summary-report');
+      nav('/contract-follow-up');
     } catch (error) {
       Swal.close();
       const message = axios.isAxiosError(error)
@@ -1519,6 +1716,11 @@ export default function AddCustomerContract() {
           background-position: left 0.875rem center;
           background-size: 1rem 1rem;
         }
+
+        /* Keep the selected value readable; the shared outline button defaults to white on hover. */
+        .rtl-contract-form button[role='combobox']:not([aria-invalid='true']):hover {
+          color: hsl(var(--foreground));
+        }
         /* Number spinners stay on the right and do not overlap RTL text. */
         .rtl-contract-form input[type='number'] {
           direction: ltr;
@@ -1526,7 +1728,18 @@ export default function AddCustomerContract() {
           padding-right: 0.75rem;
         }
       `}</style>
-      <form className="add-contract-form" onSubmit={handleSubmit(onSubmit, handleInvalidSubmit)}>
+      <form
+        className="add-contract-form"
+        onSubmit={(event) => {
+          if (activeStep === 2) {
+            event.preventDefault();
+            void handlePlanNext();
+            return;
+          }
+
+          handleSubmit(onSubmit, handleInvalidSubmit)(event);
+        }}
+      >
         <div className="mx-auto max-w-[1500px] space-y-6 p-4 md:p-6 lg:p-8">
           {/* =================================================
               HIDDEN FIELDS
@@ -1571,7 +1784,7 @@ export default function AddCustomerContract() {
 
           <Card className="border-border bg-card shadow-sm">
             <CardContent className="p-4 md:p-6">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 {[
                   {
                     id: 1,
@@ -1582,8 +1795,14 @@ export default function AddCustomerContract() {
                   {
                     id: 2,
                     title: 'العقد والخطة',
-                    description: 'الخطة، الدفع، التحصيل، المراجعة',
+                    description: 'الخطة، الاشتراك، وتحصل العقد',
                     icon: FileText,
+                  },
+                  {
+                    id: 3,
+                    title: 'الإضافات والأجهزة',
+                    description: 'وحدات إضافية، نسخ، أجهزة، وإيصال مستقل',
+                    icon: Wrench,
                   },
                 ].map((step: any) => {
                   const Icon = step.icon;
@@ -1902,49 +2121,24 @@ export default function AddCustomerContract() {
                     />
 
                     <div>
-                      <Label>
-                        كود العميل
-                        <span className="mr-1 text-red-500">*</span>
-                      </Label>
+                      <Label>كود العميل</Label>
 
                       <div className="relative mt-2">
                         <Input
-                          {...register('customerCode', {
-                            required: 'كود العميل مطلوب',
-                          })}
+                          {...register('customerCode')}
                           readOnly
-                          placeholder="PH-0098"
-                          variant={errors.customerCode ? 'failure' : 'default'}
-                          aria-invalid={Boolean(errors.customerCode)}
-                          className="h-11 cursor-not-allowed rounded-xl bg-muted pr-10"
+                          placeholder="سيتم توليده تلقائياً"
+                          className="h-11 cursor-not-allowed rounded-xl bg-muted"
                         />
-
-                        {customerMode === 'new' && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setValue('customerCode', generateCustomerCode(), {
-                                shouldDirty: true,
-                                shouldValidate: true,
-                              })
-                            }
-                            title="توليد كود جديد"
-                            className="absolute left-2 top-1/2 -translate-y-1/2 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
-                          >
-                            <RefreshCw className="h-4 w-4" />
-                          </button>
-                        )}
                       </div>
 
                       <p className="mt-1.5 text-xs text-muted-foreground">
                         {customerMode === 'new'
-                          ? 'يتم توليد الكود تلقائياً، ويمكنك إعادة توليده.'
+                          ? isCustomerCodePreviewLoading
+                            ? 'جارٍ تحميل الكود المتوقع…'
+                            : 'هذا هو الكود المتوقع؛ ويُثبت الكود النهائي تلقائياً عند الحفظ.'
                           : 'كود العميل المحدد محفوظ كما هو.'}
                       </p>
-
-                      {errors.customerCode?.message && (
-                        <ErrorText>{String(errors.customerCode.message)}</ErrorText>
-                      )}
                     </div>
 
                     <SelectField
@@ -2003,64 +2197,165 @@ export default function AddCustomerContract() {
                       error={errors.licenseNumber?.message}
                     />
 
-                    <div>
-                      <Label htmlFor="taxNumber">
-                        الرقم الضريبي
-                        <span className="mr-1 text-red-500">*</span>
+                    <div
+                      className="space-y-3"
+                      data-validation-anchor={
+                        errors.taxNumber ||
+                        errors.taxExemptionNationalId ||
+                        errors.taxExemptionComment
+                          ? 'true'
+                          : undefined
+                      }
+                    >
+                      <Label>
+                        الرقم الضريبي <span className="mr-1 text-red-500">*</span>
                       </Label>
 
-                      <Controller
-                        control={control}
-                        name="taxNumber"
-                        rules={{
-                          required: 'الرقم الضريبي مطلوب',
+                      <input
+                        type="hidden"
+                        {...register('taxRegistrationType', {
                           validate: (value) =>
-                            value.replace(/\D/g, '').length === 9 ||
-                            'أدخل الرقم الضريبي المكوّن من 9 أرقام',
-                        }}
-                        render={({ field, fieldState }) => (
-                          <InputOTP
-                            id="taxNumber"
-                            dir="ltr"
-                            maxLength={9}
-                            inputMode="numeric"
-                            pattern="[0-9]*"
-                            aria-label="الرقم الضريبي"
-                            value={String(field.value || '')
-                              .replace(/\D/g, '')
-                              .slice(0, 9)}
-                            onBlur={field.onBlur}
-                            onChange={(value) => {
-                              field.onChange(value.replace(/\D/g, '').slice(0, 9));
-                            }}
-                            onComplete={(value) => field.onChange(value.replace(/\D/g, ''))}
-                            containerClassName="mt-2 w-full justify-end"
-                          >
-                            <InputOTPGroup
-                              dir="ltr"
-                              className="grid w-full max-w-[28rem] grid-cols-9 gap-1.5 sm:gap-2"
-                            >
-                              {Array.from({ length: 9 }, (_, index) => (
-                                <InputOTPSlot
-                                  key={index}
-                                  index={index}
-                                  className={cn(
-                                    'h-10 w-full min-w-0 rounded-xl border border-input bg-background text-sm shadow-sm first:rounded-xl last:rounded-xl sm:h-11 sm:text-base',
-                                    fieldState.error && 'border-error bg-error/10 text-error',
-                                  )}
-                                />
-                              ))}
-                            </InputOTPGroup>
-                          </InputOTP>
-                        )}
+                            value === 'TAX_NUMBER' ||
+                            value === 'NATIONAL_ID' ||
+                            'اختر حالة الرقم الضريبي',
+                        })}
                       />
+                      <div
+                        className="flex flex-wrap gap-2"
+                        role="group"
+                        aria-label="حالة الرقم الضريبي"
+                      >
+                        {[
+                          { value: 'TAX_NUMBER', label: 'لديه رقم ضريبي' },
+                          { value: 'NATIONAL_ID', label: 'لا يوجد رقم ضريبي' },
+                        ].map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            aria-pressed={taxRegistrationType === option.value}
+                            onClick={() =>
+                              setValue('taxRegistrationType', option.value, {
+                                shouldDirty: true,
+                                shouldTouch: true,
+                                shouldValidate: true,
+                              })
+                            }
+                            className={cn(
+                              'rounded-lg border px-3 py-2 text-xs transition-colors',
+                              taxRegistrationType === option.value
+                                ? 'border-primary bg-primary/10 font-semibold text-primary'
+                                : 'border-border bg-background text-muted-foreground hover:text-foreground',
+                            )}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
 
-                      <p className="mt-1.5 text-xs text-muted-foreground">
-                        أدخل الرقم الضريبي المكوّن من 9 أرقام.
-                      </p>
-
-                      {errors.taxNumber?.message && (
-                        <ErrorText>{String(errors.taxNumber.message)}</ErrorText>
+                      {taxRegistrationType === 'TAX_NUMBER' ? (
+                        <>
+                          <Controller
+                            control={control}
+                            name="taxNumber"
+                            rules={{
+                              validate: (value) =>
+                                taxRegistrationType !== 'TAX_NUMBER' ||
+                                String(value || '').replace(/\D/g, '').length === 9 ||
+                                'أدخل الرقم الضريبي المكوّن من 9 أرقام',
+                            }}
+                            render={({ field, fieldState }) => (
+                              <InputOTP
+                                id="taxNumber"
+                                dir="ltr"
+                                maxLength={9}
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                aria-label="الرقم الضريبي"
+                                value={String(field.value || '')
+                                  .replace(/\D/g, '')
+                                  .slice(0, 9)}
+                                onBlur={field.onBlur}
+                                onChange={(value) =>
+                                  field.onChange(value.replace(/\D/g, '').slice(0, 9))
+                                }
+                                onComplete={(value) => field.onChange(value.replace(/\D/g, ''))}
+                                containerClassName="mt-2 w-full justify-end"
+                              >
+                                <InputOTPGroup
+                                  dir="ltr"
+                                  className="grid w-full max-w-[28rem] grid-cols-9 gap-1.5 sm:gap-2"
+                                >
+                                  {Array.from({ length: 9 }, (_, index) => (
+                                    <InputOTPSlot
+                                      key={index}
+                                      index={index}
+                                      className={cn(
+                                        'h-10 w-full min-w-0 rounded-xl border border-input bg-background text-sm shadow-sm first:rounded-xl last:rounded-xl sm:h-11 sm:text-base',
+                                        fieldState.error && 'border-error bg-error/10 text-error',
+                                      )}
+                                    />
+                                  ))}
+                                </InputOTPGroup>
+                              </InputOTP>
+                            )}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            أدخل الرقم الضريبي المكوّن من 9 أرقام.
+                          </p>
+                          {errors.taxNumber?.message && (
+                            <ErrorText>{String(errors.taxNumber.message)}</ErrorText>
+                          )}
+                        </>
+                      ) : (
+                        <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-900/60 dark:bg-amber-950/20">
+                          <FormField
+                            label={
+                              <>
+                                الرقم القومي لصاحب المنشأة
+                                <span className="mr-1 text-red-500">*</span>
+                              </>
+                            }
+                            registration={register('taxExemptionNationalId', {
+                              validate: (value) =>
+                                taxRegistrationType !== 'NATIONAL_ID' ||
+                                /^\d{14}$/.test(String(value || '')) ||
+                                'الرقم القومي يجب أن يكون 14 رقمًا',
+                            })}
+                            placeholder="14 رقمًا"
+                            inputMode="numeric"
+                            maxLength={14}
+                            onInput={(event: React.FormEvent<HTMLInputElement>) => {
+                              event.currentTarget.value = event.currentTarget.value
+                                .replace(/\D/g, '')
+                                .slice(0, 14);
+                            }}
+                            error={errors.taxExemptionNationalId?.message}
+                          />
+                          <div>
+                            <Label htmlFor="taxExemptionComment">
+                              سبب عدم وجود رقم ضريبي <span className="mr-1 text-red-500">*</span>
+                            </Label>
+                            <Textarea
+                              id="taxExemptionComment"
+                              {...register('taxExemptionComment', {
+                                validate: (value) =>
+                                  taxRegistrationType !== 'NATIONAL_ID' ||
+                                  String(value || '').trim().length >= 3 ||
+                                  'يرجى كتابة سبب عدم وجود رقم ضريبي',
+                              })}
+                              maxLength={1000}
+                              rows={3}
+                              placeholder="مثال: منشأة فردية لم تستخرج رقمًا ضريبيًا بعد"
+                              className="mt-2 resize-y"
+                            />
+                            <p className="mt-1.5 text-xs text-muted-foreground">
+                              يُحفظ هذا التعليق مع بيانات العميل للمراجعة.
+                            </p>
+                            {errors.taxExemptionComment?.message && (
+                              <ErrorText>{String(errors.taxExemptionComment.message)}</ErrorText>
+                            )}
+                          </div>
+                        </div>
                       )}
                     </div>
                     <FormField
@@ -2535,8 +2830,91 @@ export default function AddCustomerContract() {
                       error={errors.address?.glnCode?.message}
                     />
                   </div>
+                  <div className="md:col-span-2 lg:col-span-3 rounded-xl border border-border bg-muted/20 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                      <div>
+                        <Label>موقع المنشأة على خرائط Google</Label>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          افتح الخريطة، حدّد موقع المنشأة، ثم الصق رابط المشاركة هنا.
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="shrink-0 rounded-xl"
+                        onClick={openGoogleMaps}
+                      >
+                        <MapPinned className="ml-2 h-4 w-4" />
+                        فتح خرائط Google
+                        <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                      </Button>
+                    </div>
 
+                    <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+                      <FormField
+                        label="رابط موقع Google Maps"
+                        registration={register('address.googleMapsUrl', {
+                          validate: (value) => {
+                            if (!value) return true;
+                            if (String(value).length > 2048) {
+                              return 'رابط Google Maps يجب ألا يتجاوز 2048 حرفًا';
+                            }
+                            try {
+                              const hostname = new URL(String(value)).hostname.toLowerCase();
+                              return (
+                                hostname === 'maps.app.goo.gl' ||
+                                hostname === 'google.com' ||
+                                hostname.endsWith('.google.com') ||
+                                'يرجى إدخال رابط صالح من خرائط Google'
+                              );
+                            } catch {
+                              return 'يرجى إدخال رابط صالح من خرائط Google';
+                            }
+                          },
+                        })}
+                        placeholder="https://maps.app.goo.gl/..."
+                        error={errors.address?.googleMapsUrl?.message}
+                      />
 
+                      <FormField
+                        label="خط العرض (Latitude)"
+                        registration={register('address.latitude', {
+                          validate: (value) => {
+                            const longitude = getValues('address.longitude');
+                            if (!value && !longitude) return true;
+                            const latitude = Number(value);
+                            return (
+                              (Number.isFinite(latitude) && latitude >= -90 && latitude <= 90) ||
+                              'خط العرض يجب أن يكون بين -90 و 90'
+                            );
+                          },
+                        })}
+                        placeholder="30.044420"
+                        inputMode="decimal"
+                        error={errors.address?.latitude?.message}
+                      />
+
+                      <FormField
+                        label="خط الطول (Longitude)"
+                        registration={register('address.longitude', {
+                          validate: (value) => {
+                            const latitude = getValues('address.latitude');
+                            if (!value && !latitude) return true;
+                            const longitude = Number(value);
+                            return (
+                              (Number.isFinite(longitude) &&
+                                longitude >= -180 &&
+                                longitude <= 180) ||
+                              'خط الطول يجب أن يكون بين -180 و 180'
+                            );
+                          },
+                        })}
+                        placeholder="31.235712"
+                        inputMode="decimal"
+                        error={errors.address?.longitude?.message}
+                      />
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
               {/* Contacts */}
@@ -2730,39 +3108,41 @@ export default function AddCustomerContract() {
               STEP 2
           ================================================= */}
 
-          {activeStep === 2 && (
+          {(activeStep === 2 || activeStep === 3) && (
             <div className="space-y-6">
-              {/* Contract */}
+              {activeStep === 2 && (
+                <>
+                  {/* Contract */}
 
-              <Card className="border-border bg-card shadow-sm">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <FileText className="h-5 w-5 text-muted-foreground" />
-                    معلومات العقد والخطة
-                  </CardTitle>
-                </CardHeader>
+                  <Card className="border-border bg-card shadow-sm">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <FileText className="h-5 w-5 text-muted-foreground" />
+                        معلومات العقد والخطة
+                      </CardTitle>
+                    </CardHeader>
 
-                <CardContent className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
-                  {/* Contract Date */}
+                    <CardContent className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+                      {/* Contract Date */}
 
-                  <div>
-                    <Label>تاريخ العقد</Label>
+                      <div>
+                        <Label>تاريخ العقد</Label>
 
-                    <div className="relative mt-2">
-                      <CalendarDays className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <div className="relative mt-2">
+                          <CalendarDays className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 
-                      <Input
-                        type="date"
-                        {...register('contractDate')}
-                        readOnly
-                        className="h-11 rounded-xl pr-10"
-                      />
-                    </div>
-                  </div>
+                          <Input
+                            type="date"
+                            {...register('contractDate')}
+                            readOnly
+                            className="h-11 rounded-xl pr-10"
+                          />
+                        </div>
+                      </div>
 
-                  {/* Contract Number */}
+                      {/* Contract Number */}
 
-                  {/* <FormField
+                      {/* <FormField
                     label={
                       <>
                         رقم العقد
@@ -2775,9 +3155,9 @@ export default function AddCustomerContract() {
                     error={errors.contractNumber?.message}
                   /> */}
 
-                  {/* Branch */}
+                      {/* Branch */}
 
-                  {/* <SelectField
+                      {/* <SelectField
                     label={
                       <>
                         الفرع التابع للعميل
@@ -2805,211 +3185,211 @@ export default function AddCustomerContract() {
                     error={errors.branchId?.message}
                   /> */}
 
-                  <SelectField
-                    label={
-                      <>
-                        اسم البرنامج
-                        <span className="mr-1 text-red-500">*</span>
-                      </>
-                    }
-                    registration={register('programId', {
-                      required: 'يجب اختيار البرنامج',
-                      valueAsNumber: true,
-                    })}
-                    options={[
-                      ['', 'اختر البرنامج'],
-                      ...programs.map((program: any) => [String(program.id), program.name_en]),
-                    ]}
-                    control={control}
-                    error={errors.programId?.message}
-                  />
+                      <SelectField
+                        label={
+                          <>
+                            اسم البرنامج
+                            <span className="mr-1 text-red-500">*</span>
+                          </>
+                        }
+                        registration={register('programId', {
+                          required: 'يجب اختيار البرنامج',
+                          valueAsNumber: true,
+                        })}
+                        options={[
+                          ['', 'اختر البرنامج'],
+                          ...programs.map((program: any) => [String(program.id), program.name_en]),
+                        ]}
+                        control={control}
+                        error={errors.programId?.message}
+                      />
 
-                  {/* Plan */}
+                      {/* Plan */}
 
-                  <div>
-                    <Label>
-                      العرض
-                      <span className="mr-1 text-red-500">*</span>
-                    </Label>
-
-                    <Controller
-                      control={control}
-                      name="contractType"
-                      rules={{ required: 'نوع الخطة مطلوب' }}
-                      render={({ field }) => (
-                        <SearchableSelect
-                          value={field.value}
-                          onValueChange={(value: string) => {
-                            field.onChange(value);
-                            field.onBlur();
-                            handleContractTypeChange(value);
-                          }}
-                          error={Boolean(errors.contractType)}
-                          placeholder="اختر نوع الخطة"
-                          searchPlaceholder="ابحث عن نوع الخطة..."
-                          options={[
-                            ['', 'اختر نوع الخطة'],
-                            ['REGULAR', 'عادي — حتى 12 شهر بدون خصم'],
-                            ['SIX_MONTHS', '6 أشهر — خصم 50% اشتراك، 40% رسوم الانضمام'],
-                          ]}
-                        />
-                      )}
-                    />
-
-                    {errors.contractType && (
-                      <ErrorText>{String(errors.contractType.message)}</ErrorText>
-                    )}
-                  </div>
-
-                  <SelectField
-                    label="نوع التعاقد"
-                    registration={register('planId', {
-                      required: 'يجب اختيار نوع التعاقد',
-                      valueAsNumber: true,
-                    })}
-                    options={[
-                      ['', 'اختار نوع التعاقد'],
-                      ...plans.map((plan: any) => [
-                        String(plan.id),
-                        `${plan.name} — ${plan.subscription_fee} جنيه شهريًا`,
-                      ]),
-                    ]}
-                    control={control}
-                    error={errors.planId?.message}
-                  />
-
-                  {/* Responsible Representative */}
-                  <div className="rounded-xl border border-border bg-card p-4 md:col-span-2 lg:col-span-1">
-                    <Label className="text-sm font-medium">المندوب</Label>
-                    <Input
-                      value={currentUserName}
-                      readOnly
-                      className="mt-2 h-11 cursor-not-allowed bg-muted"
-                    />
-                    <input type="hidden" {...register('representativeId')} />
-                    {/* <p className="mt-2 text-xs text-muted-foreground">
-                      يتم تعيين المندوب المسؤول تلقائياً من المستخدم المسجل دخوله.
-                    </p> */}
-                  </div>
-                  {/* Participant */}
-
-                  <div className="rounded-xl border border-border bg-card p-4 md:col-span-2 lg:col-span-1">
-                    <div className="flex items-center justify-between gap-4">
                       <div>
-                        <Label className="text-sm font-medium">يوجد مشارك في العقد؟</Label>
+                        <Label>
+                          العرض
+                          <span className="mr-1 text-red-500">*</span>
+                        </Label>
 
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          يمكنك إضافة مستخدم آخر كمشارك في هذا العقد.
-                        </p>
-                      </div>
-
-                      <label className="flex cursor-pointer items-center gap-2">
-                        <input
-                          type="checkbox"
-                          {...register('hasParticipant', {
-                            onChange: (event) => {
-                              if (!event.target.checked) {
-                                setValue('participantId', '');
-                              }
-                            },
-                          })}
-                          className="h-4 w-4 rounded border-border"
+                        <Controller
+                          control={control}
+                          name="contractType"
+                          rules={{ required: 'نوع الخطة مطلوب' }}
+                          render={({ field }) => (
+                            <SearchableSelect
+                              value={field.value}
+                              onValueChange={(value: string) => {
+                                field.onChange(value);
+                                field.onBlur();
+                                handleContractTypeChange(value);
+                              }}
+                              error={Boolean(errors.contractType)}
+                              placeholder="اختر نوع الخطة"
+                              searchPlaceholder="ابحث عن نوع الخطة..."
+                              options={[
+                                ['', 'اختر نوع الخطة'],
+                                ['REGULAR', 'عادي — حتى 12 شهر بدون خصم'],
+                                ['SIX_MONTHS', '6 أشهر — خصم 50% اشتراك، 40% رسوم الانضمام'],
+                              ]}
+                            />
+                          )}
                         />
 
-                        <span className="text-sm">مشارك</span>
-                      </label>
-                    </div>
-
-                    {hasParticipant && (
-                      <div className="mt-4">
-                        <Label>المشارك</Label>
-
-                        <Popover open={participantOpen} onOpenChange={setParticipantOpen}>
-                          <PopoverTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              role="combobox"
-                              aria-expanded={participantOpen}
-                              className={cn(
-                                'mt-2 h-11 w-full justify-between rounded-xl font-normal',
-                                errors.participantId &&
-                                  'border-error text-error hover:bg-error/10 hover:text-error',
-                              )}
-                            >
-                              <div className="flex items-center gap-2">
-                                <UserRound className="h-4 w-4 text-muted-foreground" />
-
-                                <span
-                                  className={
-                                    selectedParticipant
-                                      ? 'text-foreground'
-                                      : 'text-muted-foreground'
-                                  }
-                                >
-                                  {selectedParticipant?.name || 'اختر المشارك'}
-                                </span>
-                              </div>
-
-                              <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
-                            </Button>
-                          </PopoverTrigger>
-
-                          <PopoverContent
-                            align="start"
-                            className="w-[--radix-popover-trigger-width] p-0"
-                          >
-                            <Command>
-                              <CommandInput placeholder="ابحث عن مستخدم..." />
-
-                              <CommandList>
-                                <CommandEmpty>لا يوجد مستخدم بهذا الاسم</CommandEmpty>
-
-                                <CommandGroup heading="المستخدمون">
-                                  {users.map((user) => (
-                                    <CommandItem
-                                      key={user.id}
-                                      value={`${user.name} ${user.nameAr}`}
-                                      onSelect={() => {
-                                        setValue('participantId', String(user.id), {
-                                          shouldValidate: true,
-                                          shouldDirty: true,
-                                        });
-
-                                        setParticipantOpen(false);
-                                      }}
-                                    >
-                                      <UserRound className="mr-2 h-4 w-4 text-muted-foreground" />
-
-                                      <span>
-                                        {user.nameAr} — {user.name}
-                                      </span>
-
-                                      <Check
-                                        className={`mr-auto h-4 w-4 ${
-                                          String(participantId) === String(user.id)
-                                            ? 'opacity-100'
-                                            : 'opacity-0'
-                                        }`}
-                                      />
-                                    </CommandItem>
-                                  ))}
-                                </CommandGroup>
-                              </CommandList>
-                            </Command>
-                          </PopoverContent>
-                        </Popover>
-
-                        {errors.participantId && (
-                          <ErrorText>{errors.participantId.message}</ErrorText>
+                        {errors.contractType && (
+                          <ErrorText>{String(errors.contractType.message)}</ErrorText>
                         )}
                       </div>
-                    )}
-                  </div>
 
-                  {/* Next Due Date */}
+                      <SelectField
+                        label="نوع التعاقد"
+                        registration={register('planId', {
+                          required: 'يجب اختيار نوع التعاقد',
+                          valueAsNumber: true,
+                        })}
+                        options={[
+                          ['', 'اختار نوع التعاقد'],
+                          ...plans.map((plan: any) => [
+                            String(plan.id),
+                            `${plan.name} — ${plan.subscription_fee} جنيه شهريًا`,
+                          ]),
+                        ]}
+                        control={control}
+                        error={errors.planId?.message}
+                      />
 
-                  {/* <div>
+                      {/* Responsible Representative */}
+                      <div className="rounded-xl border border-border bg-card p-4 md:col-span-2 lg:col-span-1">
+                        <Label className="text-sm font-medium">المندوب</Label>
+                        <Input
+                          value={currentUserName}
+                          readOnly
+                          className="mt-2 h-11 cursor-not-allowed bg-muted"
+                        />
+                        <input type="hidden" {...register('representativeId')} />
+                        {/* <p className="mt-2 text-xs text-muted-foreground">
+                      يتم تعيين المندوب المسؤول تلقائياً من المستخدم المسجل دخوله.
+                    </p> */}
+                      </div>
+                      {/* Participant */}
+
+                      <div className="rounded-xl border border-border bg-card p-4 md:col-span-2 lg:col-span-1">
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <Label className="text-sm font-medium">يوجد مشارك في العقد؟</Label>
+
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              يمكنك إضافة مستخدم آخر كمشارك في هذا العقد.
+                            </p>
+                          </div>
+
+                          <label className="flex cursor-pointer items-center gap-2">
+                            <input
+                              type="checkbox"
+                              {...register('hasParticipant', {
+                                onChange: (event) => {
+                                  if (!event.target.checked) {
+                                    setValue('participantId', '');
+                                  }
+                                },
+                              })}
+                              className="h-4 w-4 rounded border-border"
+                            />
+
+                            <span className="text-sm">مشارك</span>
+                          </label>
+                        </div>
+
+                        {hasParticipant && (
+                          <div className="mt-4">
+                            <Label>المشارك</Label>
+
+                            <Popover open={participantOpen} onOpenChange={setParticipantOpen}>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  role="combobox"
+                                  aria-expanded={participantOpen}
+                                  className={cn(
+                                    'mt-2 h-11 w-full justify-between rounded-xl font-normal',
+                                    errors.participantId &&
+                                      'border-error text-error hover:bg-error/10 hover:text-error',
+                                  )}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <UserRound className="h-4 w-4 text-muted-foreground" />
+
+                                    <span
+                                      className={
+                                        selectedParticipant
+                                          ? 'text-foreground'
+                                          : 'text-muted-foreground'
+                                      }
+                                    >
+                                      {selectedParticipant?.name || 'اختر المشارك'}
+                                    </span>
+                                  </div>
+
+                                  <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                              </PopoverTrigger>
+
+                              <PopoverContent
+                                align="start"
+                                className="w-[--radix-popover-trigger-width] p-0"
+                              >
+                                <Command>
+                                  <CommandInput placeholder="ابحث عن مستخدم..." />
+
+                                  <CommandList>
+                                    <CommandEmpty>لا يوجد مستخدم بهذا الاسم</CommandEmpty>
+
+                                    <CommandGroup heading="المستخدمون">
+                                      {users.map((user) => (
+                                        <CommandItem
+                                          key={user.id}
+                                          value={`${user.name} ${user.nameAr}`}
+                                          onSelect={() => {
+                                            setValue('participantId', String(user.id), {
+                                              shouldValidate: true,
+                                              shouldDirty: true,
+                                            });
+
+                                            setParticipantOpen(false);
+                                          }}
+                                        >
+                                          <UserRound className="mr-2 h-4 w-4 text-muted-foreground" />
+
+                                          <span>
+                                            {user.nameAr} — {user.name}
+                                          </span>
+
+                                          <Check
+                                            className={`mr-auto h-4 w-4 ${
+                                              String(participantId) === String(user.id)
+                                                ? 'opacity-100'
+                                                : 'opacity-0'
+                                            }`}
+                                          />
+                                        </CommandItem>
+                                      ))}
+                                    </CommandGroup>
+                                  </CommandList>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
+
+                            {errors.participantId && (
+                              <ErrorText>{errors.participantId.message}</ErrorText>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Next Due Date */}
+
+                      {/* <div>
                     <Label>تاريخ استحقاق الاشتراك القادم</Label>
 
                     <div className="relative mt-2">
@@ -3053,76 +3433,81 @@ export default function AddCustomerContract() {
                     {errors.nextDueDate && <ErrorText>{errors.nextDueDate.message}</ErrorText>}
                   </div> */}
 
-                  {/* Installation */}
+                      {/* Installation */}
 
-                  <div>
-                    <Label>تاريخ التركيب</Label>
+                      <div>
+                        <Label>تاريخ التركيب</Label>
 
-                    <div className="relative mt-2">
-                      <Wrench className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <div className="relative mt-2">
+                          <Wrench className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
 
-                      <Input
-                        type="date"
-                        min={installationDateMin}
-                        {...register('installationDate', {
-                          validate: (value) =>
-                            !value ||
-                            value >= installationDateMin ||
-                            'لا يمكن أن يكون تاريخ التركيب في الماضي',
-                        })}
-                        className="h-11 rounded-xl pr-10"
-                      />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                          <Input
+                            type="date"
+                            min={installationDateMin}
+                            {...register('installationDate', {
+                              validate: (value) =>
+                                !value ||
+                                value >= installationDateMin ||
+                                'لا يمكن أن يكون تاريخ التركيب في الماضي',
+                            })}
+                            className="h-11 rounded-xl pr-10"
+                          />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
 
-              {/* Additional units and replication services */}
-              <Card className="border-border bg-card shadow-sm">
-                <CardHeader>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <CardTitle className="flex items-center gap-2 text-base">
-                        <Wrench className="h-5 w-5 text-muted-foreground" />
-                        الوحدات الإضافية وخدمات النسخ والأجهزة
-                      </CardTitle>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        الأجهزة تُفوتر بشكل منفصل ولا تدخل في التحصيل الحالي.
-                      </p>
-                    </div>
-                    <Badge variant="secondary" className="w-fit rounded-full">
-                      {additionalServiceFields.length + hardwareDeviceFields.length} عناصر اختيارية
-                    </Badge>
-                  </div>
-                </CardHeader>
+              {activeStep === 3 && (
+                <>
+                  {/* Additional units and replication services */}
+                  <Card className="border-border bg-card shadow-sm">
+                    <CardHeader>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <CardTitle className="flex items-center gap-2 text-base">
+                            <Wrench className="h-5 w-5 text-muted-foreground" />
+                            الوحدات الإضافية وخدمات النسخ والأجهزة
+                          </CardTitle>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            تُنشأ للإضافات والأجهزة فاتورة وإيصال تحصيل مستقلان عن العقد والخطة.
+                          </p>
+                        </div>
+                        <Badge variant="secondary" className="w-fit rounded-full">
+                          {additionalServiceFields.length + hardwareDeviceFields.length} عناصر
+                          اختيارية
+                        </Badge>
+                      </div>
+                    </CardHeader>
 
-                <CardContent className="space-y-5">
-                  {isServicesLoading ? (
-                    <div className="rounded-xl border border-dashed border-border bg-muted/30 p-5 text-center text-sm text-muted-foreground">
-                      جارٍ تحميل كتالوج الخدمات...
-                    </div>
-                  ) : servicesError ? (
-                    <div className="flex flex-col items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive sm:flex-row">
-                      <span>{servicesError}</span>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setServicesRefresh((value) => value + 1)}
-                      >
-                        <RefreshCw className="ml-2 h-4 w-4" /> إعادة المحاولة
-                      </Button>
-                    </div>
-                  ) : (
-                    <Tabs defaultValue="additional-units" dir="rtl">
-                      <TabsList className="grid w-full grid-cols-3">
-                        <TabsTrigger value="additional-units">الوحدات الإضافية</TabsTrigger>
-                        <TabsTrigger value="replication">خدمات النسخ</TabsTrigger>
-                        {/* <TabsTrigger value="hardware">الأجهزة</TabsTrigger> */}
-                      </TabsList>
+                    <CardContent className="space-y-5">
+                      {isServicesLoading ? (
+                        <div className="rounded-xl border border-dashed border-border bg-muted/30 p-5 text-center text-sm text-muted-foreground">
+                          جارٍ تحميل كتالوج الخدمات...
+                        </div>
+                      ) : servicesError ? (
+                        <div className="flex flex-col items-center justify-between gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive sm:flex-row">
+                          <span>{servicesError}</span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setServicesRefresh((value) => value + 1)}
+                          >
+                            <RefreshCw className="ml-2 h-4 w-4" /> إعادة المحاولة
+                          </Button>
+                        </div>
+                      ) : (
+                        <Tabs defaultValue="additional-units" dir="rtl">
+                          <TabsList className="grid w-full grid-cols-3">
+                            <TabsTrigger value="additional-units">الوحدات الإضافية</TabsTrigger>
+                            <TabsTrigger value="replication">خدمات النسخ</TabsTrigger>
+                            <TabsTrigger value="hardware">الأجهزة</TabsTrigger>
+                          </TabsList>
 
-                      <TabsContent value="additional-units" className="space-y-4 pt-3">
-                        {/* <div className="flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm">
+                          <TabsContent value="additional-units" className="space-y-4 pt-3">
+                            {/* <div className="flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm">
                           <div>
                             <p className="font-semibold">اشتراك الوحدات الإضافية الشهري (إلزامي)</p>
                             <p className="mt-1 text-xs text-muted-foreground">
@@ -3133,163 +3518,63 @@ export default function AddCustomerContract() {
                             {additionalUnitSubscription.toLocaleString('ar-EG')} جنيه/شهر
                           </span>
                         </div> */}
-                        {additionalUnitService ? (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => addAdditionalService(additionalUnitService)}
-                            className={cn(
-                              'h-auto min-h-24 w-full justify-between rounded-xl border p-4 text-right hover:bg-accent',
-                              additionalServiceFields.some(
-                                (item: any) => Number(item.serviceId) === additionalUnitService.id,
-                              ) && 'border-primary bg-primary/5',
-                            )}
-                          >
-                            <span className="text-right">
-                              <span className="block font-semibold">
-                                {additionalUnitService.nameAr}
-                              </span>
-                              <span className="mt-1 block text-xs font-normal text-muted-foreground">
-                                سعر الوحدة{' '}
-                                {additionalUnitService.joining_fee.toLocaleString('ar-EG')} جنيه ·
-                                رسوم لمرة واحدة
-                              </span>
-                            </span>
-                            <Plus className="h-4 w-4 shrink-0" />
-                          </Button>
-                        ) : (
-                          <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-                            لا توجد خدمة وحدات إضافية مهيأة في الكتالوج.
-                          </p>
-                        )}
-                        {additionalServiceFields.map((field: any, index: number) => {
-                          const service = availableServices.find(
-                            (item) => item.id === Number(field.serviceId),
-                          );
-                          if (!service || service.code !== 'ADDITIONAL_UNIT') return null;
-                          const quantity = Math.max(
-                            Number(selectedAdditionalServices[index]?.quantity) || 1,
-                            1,
-                          );
-                          return (
-                            <div
-                              key={field.id}
-                              className="grid grid-cols-1 items-end gap-3 rounded-xl border border-border bg-muted/20 p-4 md:grid-cols-[minmax(0,1fr)_130px_150px_auto]"
-                            >
-                              <input
-                                type="hidden"
-                                {...register(`additionalServices.${index}.serviceId`, {
-                                  valueAsNumber: true,
-                                })}
-                              />
-                              <div>
-                                <p className="font-semibold">{service.nameAr}</p>
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                  سعر الوحدة {service.joining_fee.toLocaleString('ar-EG')} جنيه
-                                </p>
-                              </div>
-                              <div>
-                                <Label>الكمية</Label>
-                                <Input
-                                  type="number"
-                                  min="1"
-                                  step="1"
-                                  {...register(`additionalServices.${index}.quantity`, {
-                                    valueAsNumber: true,
-                                    min: { value: 1, message: 'الكمية يجب أن تكون 1 على الأقل' },
-                                  })}
-                                  className="mt-2 h-11 rounded-xl"
-                                />
-                              </div>
-                              <div>
-                                <Label>إجمالي</Label>
-                                <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-background px-3 text-sm font-semibold">
-                                  {(service.joining_fee * quantity).toLocaleString('ar-EG')} جنيه
-                                </div>
-                              </div>
+                            {additionalUnitService ? (
                               <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => removeAdditionalService(index)}
-                                className="h-11 w-11 rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                title="حذف الوحدة"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          );
-                        })}
-                      </TabsContent>
-
-                      <TabsContent value="replication" className="space-y-4 pt-3">
-                        {replicationServices.length === 0 ? (
-                          <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-                            لا توجد خدمات نسخ متاحة حالياً.
-                          </p>
-                        ) : (
-                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            {replicationServices.map((service) => (
-                              <Button
-                                key={service.id}
                                 type="button"
                                 variant="outline"
-                                onClick={() => addAdditionalService(service)}
+                                onClick={() => addAdditionalService(additionalUnitService)}
                                 className={cn(
-                                  'h-auto min-h-24 justify-between rounded-xl border p-4 text-right hover:bg-accent',
+                                  'h-auto min-h-24 w-full justify-between rounded-xl border p-4 text-right hover:bg-accent',
                                   additionalServiceFields.some(
-                                    (item: any) => Number(item.serviceId) === service.id,
+                                    (item: any) =>
+                                      Number(item.serviceId) === additionalUnitService.id,
                                   ) && 'border-primary bg-primary/5',
                                 )}
                               >
                                 <span className="text-right">
-                                  <span className="block font-semibold">{service.nameAr}</span>
-                                  <span className="mt-1 block text-xs font-normal text-muted-foreground">
-                                    {service.nameEn} ·{' '}
-                                    {service.isQuantityBased &&
-                                    service.code !== 'REPLICATION_SERVICE'
-                                      ? 'حسب الكمية'
-                                      : 'خدمة واحدة لمرة واحدة'}
+                                  <span className="block font-semibold">
+                                    {additionalUnitService.nameAr}
                                   </span>
-                                  <span className="mt-2 block font-bold">
-                                    {service.joining_fee.toLocaleString('ar-EG')} جنيه
+                                  <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                                    سعر الوحدة{' '}
+                                    {additionalUnitService.joining_fee.toLocaleString('ar-EG')} جنيه
+                                    · رسوم لمرة واحدة
                                   </span>
                                 </span>
                                 <Plus className="h-4 w-4 shrink-0" />
                               </Button>
-                            ))}
-                          </div>
-                        )}
-                        {additionalServiceFields.map((field: any, index: number) => {
-                          const service = availableServices.find(
-                            (item) => item.id === Number(field.serviceId),
-                          );
-                          if (!service || service.code === 'ADDITIONAL_UNIT') return null;
-                          const quantity = Math.max(
-                            Number(selectedAdditionalServices[index]?.quantity) || 1,
-                            1,
-                          );
-                          return (
-                            <div
-                              key={field.id}
-                              className="grid grid-cols-1 items-end gap-3 rounded-xl border border-border bg-muted/20 p-4 md:grid-cols-[minmax(0,1fr)_130px_150px_auto]"
-                            >
-                              <input
-                                type="hidden"
-                                {...register(`additionalServices.${index}.serviceId`, {
-                                  valueAsNumber: true,
-                                })}
-                              />
-                              <div>
-                                <p className="font-semibold">{service.nameAr}</p>
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                  {service.nameEn}
-                                </p>
-                              </div>
-                              <div>
-                                {service.isQuantityBased &&
-                                service.code !== 'REPLICATION_SERVICE' ? (
-                                  <>
+                            ) : (
+                              <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+                                لا توجد خدمة وحدات إضافية مهيأة في الكتالوج.
+                              </p>
+                            )}
+                            {additionalServiceFields.map((field: any, index: number) => {
+                              const service = availableServices.find(
+                                (item) => item.id === Number(field.serviceId),
+                              );
+                              if (!service || service.code !== 'ADDITIONAL_UNIT') return null;
+                              const quantity = Math.max(
+                                Number(selectedAdditionalServices[index]?.quantity) || 1,
+                                1,
+                              );
+                              return (
+                                <div
+                                  key={field.id}
+                                  className="grid grid-cols-1 items-end gap-3 rounded-xl border border-border bg-muted/20 p-4 md:grid-cols-[minmax(0,1fr)_130px_150px_auto]"
+                                >
+                                  <input
+                                    type="hidden"
+                                    {...register(`additionalServices.${index}.serviceId`, {
+                                      valueAsNumber: true,
+                                    })}
+                                  />
+                                  <div>
+                                    <p className="font-semibold">{service.nameAr}</p>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                      سعر الوحدة {service.joining_fee.toLocaleString('ar-EG')} جنيه
+                                    </p>
+                                  </div>
+                                  <div>
                                     <Label>الكمية</Label>
                                     <Input
                                       type="number"
@@ -3304,264 +3589,396 @@ export default function AddCustomerContract() {
                                       })}
                                       className="mt-2 h-11 rounded-xl"
                                     />
-                                  </>
-                                ) : (
-                                  <>
-                                    <Label>الكمية</Label>
-                                    <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-muted/40 px-3 text-sm">
-                                      خدمة واحدة
+                                  </div>
+                                  <div>
+                                    <Label>إجمالي</Label>
+                                    <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-background px-3 text-sm font-semibold">
+                                      {(service.joining_fee * quantity).toLocaleString('ar-EG')}{' '}
+                                      جنيه
                                     </div>
-                                  </>
-                                )}
-                              </div>
-                              <div>
-                                <Label>الإجمالي</Label>
-                                <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-background px-3 text-sm font-semibold">
-                                  {(service.joining_fee * quantity).toLocaleString('ar-EG')} جنيه
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => removeAdditionalService(index)}
+                                    className="h-11 w-11 rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                    title="حذف الوحدة"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
                                 </div>
-                              </div>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => removeAdditionalService(index)}
-                                className="h-11 w-11 rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                title="حذف الخدمة"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          );
-                        })}
-                      </TabsContent>
+                              );
+                            })}
+                          </TabsContent>
 
-                      <TabsContent value="hardware" className="space-y-4 pt-3">
-                        <div className="rounded-xl border border-amber-300/60 bg-amber-50 p-4 text-sm dark:border-amber-900 dark:bg-amber-950/20">
-                          <p className="font-semibold text-amber-900 dark:text-amber-200">
-                            فاتورة أجهزة مستقلة
+                          <TabsContent value="replication" className="space-y-4 pt-3">
+                            {replicationServices.length === 0 ? (
+                              <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+                                لا توجد خدمات نسخ متاحة حالياً.
+                              </p>
+                            ) : (
+                              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                {replicationServices.map((service) => (
+                                  <Button
+                                    key={service.id}
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => addAdditionalService(service)}
+                                    className={cn(
+                                      'h-auto min-h-24 justify-between rounded-xl border p-4 text-right hover:bg-accent',
+                                      additionalServiceFields.some(
+                                        (item: any) => Number(item.serviceId) === service.id,
+                                      ) && 'border-primary bg-primary/5',
+                                    )}
+                                  >
+                                    <span className="text-right">
+                                      <span className="block font-semibold">{service.nameAr}</span>
+                                      <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                                        {service.nameEn} ·{' '}
+                                        {service.isQuantityBased
+                                          ? 'حسب الكمية'
+                                          : 'خدمة واحدة لمرة واحدة'}
+                                      </span>
+                                      <span className="mt-2 block font-bold">
+                                        {service.joining_fee.toLocaleString('ar-EG')} جنيه
+                                      </span>
+                                    </span>
+                                    <Plus className="h-4 w-4 shrink-0" />
+                                  </Button>
+                                ))}
+                              </div>
+                            )}
+                            {additionalServiceFields.map((field: any, index: number) => {
+                              const service = availableServices.find(
+                                (item) => item.id === Number(field.serviceId),
+                              );
+                              if (!service || service.code === 'ADDITIONAL_UNIT') return null;
+                              const quantity = Math.max(
+                                Number(selectedAdditionalServices[index]?.quantity) || 1,
+                                1,
+                              );
+                              return (
+                                <div
+                                  key={field.id}
+                                  className="grid grid-cols-1 items-end gap-3 rounded-xl border border-border bg-muted/20 p-4 md:grid-cols-[minmax(0,1fr)_130px_150px_auto]"
+                                >
+                                  <input
+                                    type="hidden"
+                                    {...register(`additionalServices.${index}.serviceId`, {
+                                      valueAsNumber: true,
+                                    })}
+                                  />
+                                  <div>
+                                    <p className="font-semibold">{service.nameAr}</p>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                      {service.nameEn}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    {service.isQuantityBased ? (
+                                      <>
+                                        <Label>الكمية</Label>
+                                        <Input
+                                          type="number"
+                                          min="1"
+                                          step="1"
+                                          {...register(`additionalServices.${index}.quantity`, {
+                                            valueAsNumber: true,
+                                            min: {
+                                              value: 1,
+                                              message: 'الكمية يجب أن تكون 1 على الأقل',
+                                            },
+                                          })}
+                                          className="mt-2 h-11 rounded-xl"
+                                        />
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Label>الكمية</Label>
+                                        <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-muted/40 px-3 text-sm">
+                                          خدمة واحدة
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+                                  <div>
+                                    <Label>الإجمالي</Label>
+                                    <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-background px-3 text-sm font-semibold">
+                                      {(service.joining_fee * quantity).toLocaleString('ar-EG')}{' '}
+                                      جنيه
+                                    </div>
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => removeAdditionalService(index)}
+                                    className="h-11 w-11 rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                    title="حذف الخدمة"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              );
+                            })}
+                          </TabsContent>
+
+                          <TabsContent value="hardware" className="space-y-4 pt-3">
+                            <div className="rounded-xl border border-amber-300/60 bg-amber-50 p-4 text-sm dark:border-amber-900 dark:bg-amber-950/20">
+                              <p className="font-semibold text-amber-900 dark:text-amber-200">
+                                فاتورة أجهزة مستقلة
+                              </p>
+                              <p className="mt-1 text-xs leading-5 text-amber-800 dark:text-amber-300">
+                                الأجهزة المختارة ستُضاف إلى فاتورة الإضافات وتُحصّل في إيصال مستقل
+                                عن العقد.
+                              </p>
+                            </div>
+                            {hardwareDevices.length === 0 ? (
+                              <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+                                لا توجد أجهزة متاحة حالياً في الكتالوج.
+                              </p>
+                            ) : (
+                              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                {hardwareDevices.map((device) => (
+                                  <Button
+                                    key={device.id}
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => addHardwareDevice(device)}
+                                    className={cn(
+                                      'h-auto min-h-24 justify-between rounded-xl border p-4 text-right hover:bg-accent',
+                                      hardwareDeviceFields.some(
+                                        (item: any) => Number(item.serviceId) === device.id,
+                                      ) && 'border-amber-500 bg-amber-50 dark:bg-amber-950/20',
+                                    )}
+                                  >
+                                    <span className="text-right">
+                                      <span className="block font-semibold">{device.nameAr}</span>
+                                      <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                                        {device.nameEn} ·{' '}
+                                        {device.isQuantityBased ? 'حسب الكمية' : 'قطعة واحدة'}
+                                      </span>
+                                      <span className="mt-2 block font-bold">
+                                        {device.joining_fee.toLocaleString('ar-EG')} جنيه
+                                      </span>
+                                    </span>
+                                    <Plus className="h-4 w-4 shrink-0" />
+                                  </Button>
+                                ))}
+                              </div>
+                            )}
+                            {hardwareDeviceFields.map((field: any, index: number) => {
+                              const device = availableServices.find(
+                                (item) => item.id === Number(field.serviceId),
+                              );
+                              if (!device || device.type !== 'HARDWARE') return null;
+                              const quantity = Math.max(
+                                Number(selectedHardwareDevices[index]?.quantity) || 1,
+                                1,
+                              );
+                              return (
+                                <div
+                                  key={field.id}
+                                  className="grid grid-cols-1 items-end gap-3 rounded-xl border border-amber-200 bg-amber-50/40 p-4 md:grid-cols-[minmax(0,1fr)_130px_150px_auto] dark:border-amber-900 dark:bg-amber-950/10"
+                                >
+                                  <input
+                                    type="hidden"
+                                    {...register(`hardwareDevices.${index}.serviceId`, {
+                                      valueAsNumber: true,
+                                    })}
+                                  />
+                                  <div>
+                                    <p className="font-semibold">{device.nameAr}</p>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                      {device.nameEn}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    {device.isQuantityBased ? (
+                                      <>
+                                        <Label>الكمية</Label>
+                                        <Input
+                                          type="number"
+                                          min="1"
+                                          step="1"
+                                          {...register(`hardwareDevices.${index}.quantity`, {
+                                            valueAsNumber: true,
+                                            min: {
+                                              value: 1,
+                                              message: 'الكمية يجب أن تكون 1 على الأقل',
+                                            },
+                                          })}
+                                          className="mt-2 h-11 rounded-xl"
+                                        />
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Label>الكمية</Label>
+                                        <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-muted/40 px-3 text-sm">
+                                          قطعة واحدة
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
+                                  <div>
+                                    <Label>إجمالي الفاتورة</Label>
+                                    <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-background px-3 text-sm font-semibold">
+                                      {(device.joining_fee * quantity).toLocaleString('ar-EG')} جنيه
+                                    </div>
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => removeHardwareDevice(index)}
+                                    className="h-11 w-11 rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                    title="حذف الجهاز"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              );
+                            })}
+                          </TabsContent>
+                        </Tabs>
+                      )}
+
+                      <div className="flex items-center justify-between rounded-xl bg-muted/40 px-4 py-3 text-sm">
+                        <span className="text-muted-foreground">إجمالي الإضافات والخدمات</span>
+                        <span className="font-bold">
+                          {additionalServicesTotal.toLocaleString('ar-EG')} جنيه
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm dark:border-amber-900 dark:bg-amber-950/20">
+                        <span className="text-amber-900 dark:text-amber-200">
+                          إجمالي الأجهزة ضمن إيصال الإضافات
+                        </span>
+                        <span className="font-bold text-amber-900 dark:text-amber-200">
+                          {hardwareDevicesTotal.toLocaleString('ar-EG')} جنيه
+                        </span>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <AddOnReceiptSection
+                    total={addOnTotal}
+                    additionalUnits={selectedAdditionalUnitRows}
+                    replicationServices={selectedReplicationServiceRows}
+                    hardwareDevices={selectedHardwareDeviceRows}
+                    amount={addOnPaymentAmount}
+                    remainingAmount={addOnRemainingAmount}
+                    paidPercentage={addOnPaidPercentage}
+                    paymentMethodCode={addOnPaymentMethodCode}
+                    paymentMethodLabel={
+                      selectedAddOnPaymentMethod?.nameAr ??
+                      selectedAddOnPaymentMethod?.name_ar ??
+                      selectedAddOnPaymentMethod?.code ??
+                      '—'
+                    }
+                    paymentMethods={paymentMethods}
+                    banks={banks}
+                    isBanksLoading={isBanksLoading}
+                    register={register}
+                    control={control}
+                    errors={errors}
+                    onAmountInput={() => {
+                      hasManuallyEditedAddOnPaymentAmount.current = true;
+                    }}
+                  />
+                </>
+              )}
+
+              {activeStep === 2 && (
+                <>
+                  {/* Months */}
+
+                  <Card
+                    className={cn(
+                      'border-border bg-card shadow-sm',
+                      errors.selectedMonths && 'border-error',
+                    )}
+                    data-validation-anchor={errors.selectedMonths ? 'true' : undefined}
+                  >
+                    <CardHeader>
+                      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                          <CardTitle className="text-base">الشهور المطلوب سدادها</CardTitle>
+
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            اختر الشهور التي يريد العميل سدادها في التحصيل الحالي.
                           </p>
-                          <p className="mt-1 text-xs leading-5 text-amber-800 dark:text-amber-300">
-                            الأجهزة المختارة ستُضاف إلى فاتورة منفصلة مرتبطة بالعقد. لا تدخل في مبلغ
-                            التحصيل الحالي ولن يتم إنشاء تحصيل لها الآن.
-                          </p>
+
+                          {currentContractTypeRule.requiresSelectedMonths && (
+                            <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+                              اختيار شهر واحد على الأقل مطلوب للاستفادة من العرض.
+                            </p>
+                          )}
+
+                          {currentContractTypeRule.autoSelectConsecutive && (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              اختر شهر بداية العرض ليتم تحديد كامل فترة العرض (
+                              {currentContractTypeRule.maxMonths}
+                              أشهر متتالية) تلقائيًا من الشهر الذي اخترته. اضغط على أي شهر محدد
+                              لإلغاء الاختيار.
+                            </p>
+                          )}
+
+                          {contractType === 'REGULAR' && (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              يظهر الشهر الحالي والشهر التالي. مع كل اختيار يظهر الشهر التالي للحفاظ
+                              على تسلسل الاشتراك.
+                            </p>
+                          )}
+
+                          {contractType && (
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                              <Badge variant="outline" className="rounded-full">
+                                نوع العقد: {currentContractTypeRule.label}
+                              </Badge>
+
+                              <Badge variant="secondary" className="rounded-full">
+                                الحد الأقصى: {currentContractTypeRule.maxMonths} شهر
+                              </Badge>
+
+                              <Badge variant="secondary" className="rounded-full">
+                                خصم الاشتراك: {subscriptionDiscountPercentage}%
+                              </Badge>
+
+                              <Badge variant="secondary" className="rounded-full">
+                                خصم رسوم الانضمام: {joiningFeeDiscountPercentage}%
+                              </Badge>
+                            </div>
+                          )}
                         </div>
-                        {hardwareDevices.length === 0 ? (
-                          <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-                            لا توجد أجهزة متاحة حالياً في الكتالوج.
-                          </p>
-                        ) : (
-                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            {hardwareDevices.map((device) => (
-                              <Button
-                                key={device.id}
-                                type="button"
-                                variant="outline"
-                                onClick={() => addHardwareDevice(device)}
-                                className={cn(
-                                  'h-auto min-h-24 justify-between rounded-xl border p-4 text-right hover:bg-accent',
-                                  hardwareDeviceFields.some(
-                                    (item: any) => Number(item.serviceId) === device.id,
-                                  ) && 'border-amber-500 bg-amber-50 dark:bg-amber-950/20',
-                                )}
-                              >
-                                <span className="text-right">
-                                  <span className="block font-semibold">{device.nameAr}</span>
-                                  <span className="mt-1 block text-xs font-normal text-muted-foreground">
-                                    {device.nameEn} ·{' '}
-                                    {device.isQuantityBased ? 'حسب الكمية' : 'قطعة واحدة'}
-                                  </span>
-                                  <span className="mt-2 block font-bold">
-                                    {device.joining_fee.toLocaleString('ar-EG')} جنيه
-                                  </span>
-                                </span>
-                                <Plus className="h-4 w-4 shrink-0" />
-                              </Button>
-                            ))}
-                          </div>
-                        )}
-                        {hardwareDeviceFields.map((field: any, index: number) => {
-                          const device = availableServices.find(
-                            (item) => item.id === Number(field.serviceId),
-                          );
-                          if (!device || device.type !== 'HARDWARE') return null;
-                          const quantity = Math.max(
-                            Number(selectedHardwareDevices[index]?.quantity) || 1,
-                            1,
-                          );
-                          return (
-                            <div
-                              key={field.id}
-                              className="grid grid-cols-1 items-end gap-3 rounded-xl border border-amber-200 bg-amber-50/40 p-4 md:grid-cols-[minmax(0,1fr)_130px_150px_auto] dark:border-amber-900 dark:bg-amber-950/10"
-                            >
-                              <input
-                                type="hidden"
-                                {...register(`hardwareDevices.${index}.serviceId`, {
-                                  valueAsNumber: true,
-                                })}
-                              />
-                              <div>
-                                <p className="font-semibold">{device.nameAr}</p>
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                  {device.nameEn}
-                                </p>
-                              </div>
-                              <div>
-                                {device.isQuantityBased ? (
-                                  <>
-                                    <Label>الكمية</Label>
-                                    <Input
-                                      type="number"
-                                      min="1"
-                                      step="1"
-                                      {...register(`hardwareDevices.${index}.quantity`, {
-                                        valueAsNumber: true,
-                                        min: {
-                                          value: 1,
-                                          message: 'الكمية يجب أن تكون 1 على الأقل',
-                                        },
-                                      })}
-                                      className="mt-2 h-11 rounded-xl"
-                                    />
-                                  </>
-                                ) : (
-                                  <>
-                                    <Label>الكمية</Label>
-                                    <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-muted/40 px-3 text-sm">
-                                      قطعة واحدة
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-                              <div>
-                                <Label>إجمالي الفاتورة</Label>
-                                <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-background px-3 text-sm font-semibold">
-                                  {(device.joining_fee * quantity).toLocaleString('ar-EG')} جنيه
-                                </div>
-                              </div>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => removeHardwareDevice(index)}
-                                className="h-11 w-11 rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                title="حذف الجهاز"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          );
-                        })}
-                      </TabsContent>
-                    </Tabs>
-                  )}
 
-                  <div className="flex items-center justify-between rounded-xl bg-muted/40 px-4 py-3 text-sm">
-                    <span className="text-muted-foreground">إجمالي الخدمات ضمن العقد</span>
-                    <span className="font-bold">
-                      {additionalServicesTotal.toLocaleString('ar-EG')} جنيه
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm dark:border-amber-900 dark:bg-amber-950/20">
-                    <span className="text-amber-900 dark:text-amber-200">
-                      إجمالي فاتورة الأجهزة (غير محصلة)
-                    </span>
-                    <span className="font-bold text-amber-900 dark:text-amber-200">
-                      {hardwareDevicesTotal.toLocaleString('ar-EG')} جنيه
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
+                        <div className="flex gap-2">
+                          <Badge variant="secondary" className="rounded-full">
+                            {selectedMonths.length} / {currentContractTypeRule.maxMonths || 0} شهور
+                          </Badge>
 
-              {/* Months */}
-
-              <Card
-                className={cn(
-                  'border-border bg-card shadow-sm',
-                  errors.selectedMonths && 'border-error',
-                )}
-                data-validation-anchor={errors.selectedMonths ? 'true' : undefined}
-              >
-                <CardHeader>
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <CardTitle className="text-base">الشهور المطلوب سدادها</CardTitle>
-
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        اختر الشهور التي يريد العميل سدادها في التحصيل الحالي.
-                      </p>
-
-                      {currentContractTypeRule.requiresSelectedMonths && (
-                        <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-300">
-                          اختيار شهر واحد على الأقل مطلوب للاستفادة من العرض.
-                        </p>
-                      )}
-
-                      {currentContractTypeRule.autoSelectConsecutive && (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          اختر أحد أول شهرين ليتم تحديد كامل فترة العرض (
-                          {currentContractTypeRule.maxMonths}
-                          أشهر متتالية) تلقائيًا بدءًا من الشهر الحالي.
-                        </p>
-                      )}
-
-                      {contractType === 'REGULAR' && (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          يظهر الشهر الحالي والشهر التالي. مع كل اختيار يظهر الشهر التالي للحفاظ على
-                          تسلسل الاشتراك.
-                        </p>
-                      )}
-
-                      {contractType && (
-                        <div className="mt-3 flex flex-wrap items-center gap-2">
                           <Badge variant="outline" className="rounded-full">
-                            نوع العقد: {currentContractTypeRule.label}
-                          </Badge>
-
-                          <Badge variant="secondary" className="rounded-full">
-                            الحد الأقصى: {currentContractTypeRule.maxMonths} شهر
-                          </Badge>
-
-                          <Badge variant="secondary" className="rounded-full">
-                            خصم الاشتراك: {subscriptionDiscountPercentage}%
-                          </Badge>
-
-                          <Badge variant="secondary" className="rounded-full">
-                            خصم رسوم الانضمام: {joiningFeeDiscountPercentage}%
+                            {subscriptionPriceAfterDiscount.toLocaleString('ar-EG')} جنيه
                           </Badge>
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    </CardHeader>
 
-                    <div className="flex gap-2">
-                      <Badge variant="secondary" className="rounded-full">
-                        {selectedMonths.length} / {currentContractTypeRule.maxMonths || 0} شهور
-                      </Badge>
+                    <CardContent>
+                      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
+                        {visibleMonthOptions.map((month) => {
+                          const checked = selectedMonths.some(
+                            (item: any) => item.value === month.value,
+                          );
 
-                      <Badge variant="outline" className="rounded-full">
-                        {subscriptionPriceAfterDiscount.toLocaleString('ar-EG')} جنيه
-                      </Badge>
-                    </div>
-                  </div>
-                </CardHeader>
+                          const maxMonthsReached =
+                            selectedMonths.length >= currentContractTypeRule.maxMonths;
+                          const disabled = !contractType || (!checked && maxMonthsReached);
 
-                <CardContent>
-                  <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
-                    {visibleMonthOptions.map((month) => {
-                      const checked = selectedMonths.some(
-                        (item: any) => item.value === month.value,
-                      );
-
-                      const maxMonthsReached =
-                        selectedMonths.length >= currentContractTypeRule.maxMonths;
-                      const disabled =
-                        !contractType ||
-                        (currentContractTypeRule.autoSelectConsecutive && maxMonthsReached) ||
-                        (!checked && maxMonthsReached);
-
-                      return (
-                        <label
-                          key={month.value}
-                          className={`
+                          return (
+                            <label
+                              key={month.value}
+                              className={`
         flex items-center gap-3
         rounded-xl border p-3
         transition-all
@@ -3576,503 +3993,283 @@ export default function AddCustomerContract() {
               : 'cursor-pointer border-border bg-background hover:bg-accent'
         }
       `}
-                        >
-                          <Checkbox
-                            checked={checked}
-                            disabled={disabled}
-                            onCheckedChange={() => toggleMonth(month)}
-                          />
-
-                          <span className="text-sm font-medium">{month.label}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-
-                  {errors.selectedMonths && <ErrorText>{errors.selectedMonths.message}</ErrorText>}
-                </CardContent>
-              </Card>
-
-              {/* Payment + Review */}
-
-              <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.35fr_0.65fr]">
-                {/* Payment */}
-
-                <Card className="border-border bg-card shadow-sm">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <CreditCard className="h-5 w-5 text-muted-foreground" />
-                      الدفع والتحصيل
-                    </CardTitle>
-                  </CardHeader>
-
-                  <CardContent className="space-y-6">
-                    {/* Money Summary */}
-
-                    <div className="space-y-5">
-                      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-                        <FinancialSummaryCard
-                          title="رسوم الانضمام الأساسية"
-                          unitPrice={joiningFee}
-                          quantity={1}
-                          discountAmount={joiningFeeDiscount}
-                          discountPercentage={joiningFeeDiscountPercentage}
-                          totalBeforeDiscount={joiningFee}
-                          totalAfterDiscount={joiningFeeAfterDiscount}
-                        />
-
-                        <FinancialSummaryCard
-                          title="الوحدات الإضافية"
-                          unitPrice={Number(additionalUnitService?.joining_fee ?? 0)}
-                          quantity={additionalUnitsQuantity}
-                          discountAmount={0}
-                          discountPercentage={0}
-                          totalBeforeDiscount={additionalUnitsTotal}
-                          totalAfterDiscount={additionalUnitsTotal}
-                        />
-
-                        <FinancialSummaryCard
-                          title="الاشتراكات"
-                          description={`المحصل عند إنشاء العقد: الاشتراك الرئيسي ${mainMonthlySubscription.toLocaleString('ar-EG')} فقط.`}
-                          unitPrice={initialCollectedMonthlySubscription}
-                          quantity={selectedMonths.length}
-                          quantityLabel="عدد الشهور"
-                          discountAmount={subscriptionDiscount}
-                          discountPercentage={subscriptionDiscountPercentage}
-                          totalBeforeDiscount={monthlySubscription}
-                          totalAfterDiscount={subscriptionFeeAfterDiscount}
-                        />
-                      </div>
-
-                      <div className="rounded-2xl border border-border bg-muted/20 p-4">
-                        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-                          <div>
-                            <h3 className="text-sm font-bold">خدمات النسخ</h3>
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              لكل خدمة سعر وكمية وإجماليات مستقلة.
-                            </p>
-                          </div>
-
-                          <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
-                            {selectedReplicationServiceRows.length} عناصر
-                          </span>
-                        </div>
-
-                        {selectedReplicationServiceRows.length > 0 ? (
-                          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                            {selectedReplicationServiceRows.map((service) => (
-                              <FinancialSummaryCard
-                                key={service.id}
-                                title={service.nameAr || service.nameEn}
-                                unitPrice={Number(service.joining_fee ?? 0)}
-                                quantity={service.quantity}
-                                discountAmount={0}
-                                discountPercentage={0}
-                                totalBeforeDiscount={service.total}
-                                totalAfterDiscount={service.total}
+                            >
+                              <Checkbox
+                                checked={checked}
+                                disabled={disabled}
+                                onCheckedChange={() => toggleMonth(month)}
                               />
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="rounded-xl border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">
-                            لا توجد خدمات نسخ مختارة.
-                          </p>
-                        )}
+
+                              <span className="text-sm font-medium">{month.label}</span>
+                            </label>
+                          );
+                        })}
                       </div>
 
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                        <MoneyCard label="إجمالي العقد قبل الخصم" value={totalBeforeDiscount} />
+                      {errors.selectedMonths && (
+                        <ErrorText>{errors.selectedMonths.message}</ErrorText>
+                      )}
+                    </CardContent>
+                  </Card>
 
-                        <MoneyCard label="إجمالي الخصم" value={discountAmount} />
+                  {/* Payment + Review */}
 
-                        <MoneyCard label="إجمالي العقد بعد الخصم" value={totalContractValue} />
-                      </div>
-                    </div>
+                  <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.35fr_0.65fr]">
+                    {/* Payment */}
 
-                    {/* Collection */}
+                    <Card className="border-border bg-card shadow-sm">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <CreditCard className="h-5 w-5 text-muted-foreground" />
+                          الدفع والتحصيل
+                        </CardTitle>
+                      </CardHeader>
 
-                    <div>
-                      <div className="mb-4">
-                        <h3 className="text-sm font-bold">تسجيل مبلغ التحصيل</h3>
+                      <CardContent className="space-y-6">
+                        {/* Money Summary */}
 
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          أدخل المبلغ الذي تم تحصيله الآن وحدد وسيلة الدفع.
-                        </p>
-                      </div>
-
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                        <div>
-                          <Label>المبلغ المحصل الآن</Label>
-
-                          <div className="relative mt-2">
-                            <Input
-                              type="number"
-                              min="0.01"
-                              max={totalContractValue}
-                              step="0.01"
-                              {...register('paymentAmount', {
-                                valueAsNumber: true,
-                                required: 'المبلغ المحصل مطلوب',
-
-                                min: {
-                                  value: 0.01,
-                                  message: 'المبلغ المحصل يجب أن يكون أكبر من صفر',
-                                },
-
-                                validate: (value) =>
-                                  Number(value || 0) <= totalContractValue ||
-                                  'المبلغ المحصل لا يمكن أن يتجاوز إجمالي العقد',
-                              })}
-                              variant={errors.paymentAmount ? 'failure' : 'default'}
-                              aria-invalid={Boolean(errors.paymentAmount)}
-                              onInput={() => {
-                                hasManuallyEditedPaymentAmount.current = true;
-                              }}
-                              className="h-12 rounded-xl pl-16 text-lg font-semibold"
+                        <div className="space-y-5">
+                          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+                            <FinancialSummaryCard
+                              title="رسوم الانضمام الأساسية"
+                              unitPrice={joiningFee}
+                              quantity={1}
+                              discountAmount={joiningFeeDiscount}
+                              discountPercentage={joiningFeeDiscountPercentage}
+                              totalBeforeDiscount={joiningFee}
+                              totalAfterDiscount={joiningFeeAfterDiscount}
                             />
 
-                            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                              جنيه
-                            </div>
+                            <FinancialSummaryCard
+                              title="الاشتراكات"
+                              description={`المحصل عند إنشاء العقد: الاشتراك الرئيسي ${mainMonthlySubscription.toLocaleString('ar-EG')} فقط.`}
+                              unitPrice={initialCollectedMonthlySubscription}
+                              quantity={selectedMonths.length}
+                              quantityLabel="عدد الشهور"
+                              discountAmount={subscriptionDiscount}
+                              discountPercentage={subscriptionDiscountPercentage}
+                              totalBeforeDiscount={monthlySubscription}
+                              totalAfterDiscount={subscriptionFeeAfterDiscount}
+                            />
                           </div>
 
-                          {errors.paymentAmount && (
-                            <ErrorText>{errors.paymentAmount.message}</ErrorText>
-                          )}
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            <MoneyCard label="إجمالي العقد قبل الخصم" value={totalBeforeDiscount} />
+
+                            <MoneyCard label="إجمالي الخصم" value={discountAmount} />
+
+                            <MoneyCard label="إجمالي العقد بعد الخصم" value={totalContractValue} />
+                          </div>
                         </div>
 
-                        <SelectField
-                          label="طريقة الدفع"
-                          registration={register('paymentMethodId', {
-                            required: 'طريقة الدفع مطلوبة',
-                            valueAsNumber: true,
-                          })}
-                          options={paymentMethods.map((method) => [
-                            method.id,
-                            method.nameAr ?? method.name_ar ?? method.code,
-                          ])}
+                        {/* Collection */}
+                        <InitialPaymentsSection
+                          total={totalContractValue}
+                          paymentMethods={paymentMethods}
+                          banks={banks}
+                          isBanksLoading={isBanksLoading}
+                          register={register}
                           control={control}
-                          error={errors.paymentMethodId?.message}
+                          errors={errors}
+                          onAmountInput={() => {
+                            hasManuallyEditedInitialPayments.current = true;
+                          }}
                         />
-                       
-                      </div>
 
-                      {paymentMethodCode === 'BANKTRANSFER' && (
-                        <div className="grid grid-cols-1 gap-4 rounded-xl border border-border bg-muted/20 p-4 md:grid-cols-3">
-                          <TextField
-                            label="تاريخ الحوالة"
-                            type="date"
-                            registration={register('paymentDetails.transferDate', {
-                              required: 'تاريخ الحوالة مطلوب',
-                            })}
-                            error={errors.paymentDetails?.transferDate?.message}
-                          />
-                          <SelectField
-                            label="البنك"
-                            registration={register('paymentDetails.bankId', {
-                              required: 'البنك مطلوب',
-                              valueAsNumber: true,
-                            })}
-                            options={[
-                              ['', isBanksLoading ? 'جارٍ تحميل البنوك...' : 'اختر البنك'],
-                              ...banks.map((bank) => [
-                                bank.id,
-                                `${bank.nameAr ?? bank.name_ar ?? bank.nameEn ?? bank.name_en} — ${bank.nameEn ?? bank.name_en}`,
-                              ]),
-                            ]}
-                            control={control}
-                            disabled={isBanksLoading}
-                            error={errors.paymentDetails?.bankId?.message}
-                            placeholder={isBanksLoading ? 'جارٍ تحميل البنوك...' : 'اختر البنك'}
-                            searchPlaceholder="ابحث عن بنك..."
-                          />
-                          <TextField
-                            label="الرقم المرجعي"
-                            registration={register('paymentDetails.referenceNumber', {
-                              required: 'الرقم المرجعي مطلوب',
-                            })}
-                            error={errors.paymentDetails?.referenceNumber?.message}
-                            placeholder="الرقم المرجعي"
-                          />
-                        </div>
-                      )}
-                      {(paymentMethodCode === 'INSTAPAY' || paymentMethodCode === 'PAYSKY') && (
-                        <div className="rounded-xl border border-border bg-muted/20 p-4">
-                          <TextField
-                            label="الرقم المرجعي"
-                            registration={register('paymentDetails.referenceNumber', {
-                              required: 'الرقم المرجعي مطلوب',
-                            })}
-                            error={errors.paymentDetails?.referenceNumber?.message}
-                            placeholder="الرقم المرجعي"
-                          />
-                        </div>
-                      )}
-                      {paymentMethodCode === 'CHEQUE' && (
-                        <div className="grid grid-cols-1 gap-4 rounded-xl border border-border bg-muted/20 p-4 md:grid-cols-2">
-                          <SelectField
-                            label="البنك"
-                            registration={register('paymentDetails.bankId', {
-                              required: 'البنك مطلوب',
-                              valueAsNumber: true,
-                            })}
-                            options={[
-                              ['', isBanksLoading ? 'جارٍ تحميل البنوك...' : 'اختر البنك'],
-                              ...banks.map((bank) => [
-                                bank.id,
-                                `${bank.nameAr ?? bank.name_ar ?? bank.nameEn ?? bank.name_en} — ${bank.nameEn ?? bank.name_en}`,
-                              ]),
-                            ]}
-                            control={control}
-                            disabled={isBanksLoading}
-                            error={errors.paymentDetails?.bankId?.message}
-                            placeholder={isBanksLoading ? 'جارٍ تحميل البنوك...' : 'اختر البنك'}
-                            searchPlaceholder="ابحث عن بنك..."
-                          />
-                          <TextField
-                            label="رقم الشيك"
-                            registration={register('paymentDetails.chequeNumber', {
-                              required: 'رقم الشيك مطلوب',
-                            })}
-                            error={errors.paymentDetails?.chequeNumber?.message}
-                            placeholder="رقم الشيك"
-                          />
-                        </div>
-                      )}
-                      {paymentMethodCode === 'CASH' && (
-                        <div className="rounded-xl border border-border bg-muted/20 p-4">
-                          <TextField
-                            label="رقم الإيصال"
-                            registration={register('paymentDetails.receiptNumber', {
-                              required: 'رقم الإيصال مطلوب',
-                            })}
-                            error={errors.paymentDetails?.receiptNumber?.message}
-                            placeholder="رقم الإيصال"
-                          />
-                        </div>
-                      )}
-
-                      {/* Payment Progress */}
-
-                      <div className="mt-5 rounded-2xl bg-muted p-4">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-muted-foreground">نسبة السداد</span>
-
-                          <span className="font-bold">{paidPercentage.toFixed(0)}%</span>
-                        </div>
-
-                        <div className="mt-3 h-2 overflow-hidden rounded-full bg-background">
-                          <div
-                            className="h-full rounded-full bg-foreground transition-all"
-                            style={{
-                              width: `${paidPercentage}%`,
-                            }}
-                          />
-                        </div>
-
-                        <div className="mt-3 flex justify-between text-xs">
-                          <span className="text-muted-foreground">
-                            مدفوع:
-                            <span className="mr-1 font-semibold text-emerald-600 dark:text-emerald-400">
-                              {paymentAmount.toLocaleString('ar-EG')} جنيه
+                        <div className="rounded-2xl bg-muted p-4">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground">نسبة السداد</span>
+                            <span className="font-bold">{paidPercentage.toFixed(0)}%</span>
+                          </div>
+                          <div className="mt-3 h-2 overflow-hidden rounded-full bg-background">
+                            <div
+                              className="h-full rounded-full bg-foreground transition-all"
+                              style={{ width: `${paidPercentage}%` }}
+                            />
+                          </div>
+                          <div className="mt-3 flex justify-between text-xs">
+                            <span className="text-muted-foreground">
+                              مدفوع:{' '}
+                              <span className="mr-1 font-semibold text-emerald-600 dark:text-emerald-400">
+                                {paymentAmount.toLocaleString('ar-EG')} جنيه
+                              </span>
                             </span>
-                          </span>
-
-                          <span className="text-muted-foreground">
-                            متبقي:
-                            <span className="mr-1 font-semibold text-amber-600 dark:text-amber-400">
-                              {remainingAmount.toLocaleString('ar-EG')} جنيه
+                            <span className="text-muted-foreground">
+                              متبقي:{' '}
+                              <span className="mr-1 font-semibold text-amber-600 dark:text-amber-400">
+                                {remainingAmount.toLocaleString('ar-EG')} جنيه
+                              </span>
                             </span>
-                          </span>
+                          </div>
                         </div>
-                      </div>
-                    </div>
+                        <Separator />
 
-                    <Separator />
-
-                    {/* Notes */}
-
-                    <div>
-                      <Label>ملاحظات العقد</Label>
-
-                      <Textarea
-                        {...register('notes')}
-                        placeholder="أضف أي ملاحظات مرتبطة بالعقد أو العميل..."
-                        className="mt-2 min-h-[120px] resize-none rounded-xl"
-                      />
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Review */}
-
-                <Card className="border-border bg-card shadow-sm">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <Check className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-                      مراجعة قبل الإرسال
-                    </CardTitle>
-                  </CardHeader>
-
-                  <CardContent className="space-y-5">
-                    <div className="rounded-2xl bg-foreground p-5 text-background">
-                      <div className="text-xs opacity-70">نوع العملية</div>
-
-                      <div className="mt-2 text-lg font-bold">{customerStatus}</div>
-
-                      <div className="mt-4 flex items-center justify-between border-t border-background/10 pt-4">
-                        <span className="text-xs opacity-70">الخطة</span>
-
-                        <span className="text-sm font-semibold">{selectedPlan?.name || '—'}</span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <ReviewRow label="العميل" value={customerNameAr || '—'} />
-
-                      <ReviewRow label="الكود" value={customerCode || '—'} />
-
-                      <ReviewRow
-                        label="نوع العميل"
-                        value={
-                          customerTypeId === 1 ? 'صيدلي' : customerTypeId === 2 ? 'تجاري' : '—'
-                        }
-                      />
-
-                      <ReviewRow
-                        label="هيكل العميل"
-                        value={
-                          structure === 'CHAIN'
-                            ? 'سلسلة'
-                            : structure === 'SINGLE'
-                              ? 'فرع واحد'
-                              : '—'
-                        }
-                      />
-
-                      <ReviewRow
-                        label="الفرع"
-                        value={
-                          selectedZone
-                            ? `فرع ${selectedZone.name_ar || 'مدينة غير محددة'}`
-                            : 'لم يتم الاختيار'
-                        }
-                      />
-
-                      <ReviewRow label="المندوب المسؤول" value={currentUserName} />
-
-                      <ReviewRow
-                        label="المشارك"
-                        value={
-                          hasParticipant
-                            ? selectedParticipant?.nameAr || 'لم يتم الاختيار'
-                            : 'لا يوجد'
-                        }
-                      />
-
-                      <ReviewRow label="عدد جهات الاتصال" value={`${contactFields.length}`} />
-
-                      <ReviewRow label="المستندات" value={`${documentFields.length}`} />
-
-                      <ReviewRow label="الشهور المحددة" value={`${selectedMonths.length} شهور`} />
-
-                      <Separator />
-
-                      <ReviewRow
-                        label="رسوم الانضمام قبل الخصم"
-                        value={`${joiningFee.toLocaleString('ar-EG')} جنيه`}
-                      />
-
-                      <ReviewRow
-                        label="رسوم الانضمام بعد الخصم"
-                        value={`${joiningFeeAfterDiscount.toLocaleString('ar-EG')} جنيه`}
-                      />
-
-                      <ReviewRow
-                        label="الاشتراك قبل الخصم"
-                        value={`${monthlySubscription.toLocaleString('ar-EG')} جنيه`}
-                      />
-
-                      <ReviewRow
-                        label="الاشتراك بعد الخصم"
-                        value={`${subscriptionFeeAfterDiscount.toLocaleString('ar-EG')} جنيه`}
-                      />
-
-                      <ReviewRow
-                        label="الخدمات الإضافية"
-                        value={`${additionalServicesTotal.toLocaleString('ar-EG')} جنيه`}
-                      />
-
-                      <ReviewRow
-                        label="فاتورة الأجهزة غير المحصلة"
-                        value={`${hardwareDevicesTotal.toLocaleString('ar-EG')} جنيه`}
-                      />
-
-                      <ReviewRow
-                        label="الإجمالي قبل الخصم"
-                        value={`${totalBeforeDiscount.toLocaleString('ar-EG')} جنيه`}
-                      />
-
-                      <ReviewRow
-                        label="إجمالي خصومات العقد"
-                        value={`${discountAmount.toLocaleString('ar-EG')} جنيه`}
-                      />
-
-                      <ReviewRow
-                        label="الإجمالي بعد الخصم"
-                        value={`${totalContractValue.toLocaleString('ar-EG')} جنيه`}
-                      />
-
-                      <ReviewRow
-                        label="المحصل"
-                        value={`${paymentAmount.toLocaleString('ar-EG')} جنيه`}
-                      />
-
-                      <ReviewRow
-                        label="المتبقي"
-                        value={`${remainingAmount.toLocaleString('ar-EG')} جنيه`}
-                      />
-
-                      <ReviewRow
-                        label="طريقة الدفع"
-                        value={
-                          paymentMethodId
-                            ? (() => {
-                                const method = paymentMethods.find(
-                                  (item) => Number(item.id) === Number(paymentMethodId),
-                                );
-                                return (
-                                  method?.nameAr ?? method?.name_ar ?? method?.code ?? 'غير معروف'
-                                );
-                              })()
-                            : 'لا يوجد تحصيل'
-                        }
-                      />
-                     
-                    </div>
-
-                    <Separator />
-
-                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/30">
-                      <div className="flex items-start gap-3">
-                        <div className="rounded-xl bg-emerald-100 p-2 dark:bg-emerald-900">
-                          <Check className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />
-                        </div>
+                        {/* Notes */}
 
                         <div>
-                          <div className="text-sm font-bold text-emerald-900 dark:text-emerald-200">
-                            العقد جاهز للمراجعة
-                          </div>
+                          <Label>ملاحظات العقد</Label>
 
-                          <p className="mt-1 text-xs leading-5 text-emerald-700 dark:text-emerald-300">
-                            بعد الإرسال سيتم تحويل العقد إلى مدير الدعم الفني للمراجعة والموافقة.
-                          </p>
+                          <Textarea
+                            {...register('notes')}
+                            placeholder="أضف أي ملاحظات مرتبطة بالعقد أو العميل..."
+                            className="mt-2 min-h-[120px] resize-none rounded-xl"
+                          />
                         </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Review */}
+
+                    <Card className="border-border bg-card shadow-sm">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <Check className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                          مراجعة قبل الإرسال
+                        </CardTitle>
+                      </CardHeader>
+
+                      <CardContent className="space-y-5">
+                        <div className="rounded-2xl bg-foreground p-5 text-background">
+                          <div className="text-xs opacity-70">نوع العملية</div>
+
+                          <div className="mt-2 text-lg font-bold">{customerStatus}</div>
+
+                          <div className="mt-4 flex items-center justify-between border-t border-background/10 pt-4">
+                            <span className="text-xs opacity-70">الخطة</span>
+
+                            <span className="text-sm font-semibold">
+                              {selectedPlan?.name || '—'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-4">
+                          <ReviewRow label="العميل" value={customerNameAr || '—'} />
+
+                          <ReviewRow label="الكود" value={customerCode || '—'} />
+
+                          <ReviewRow
+                            label="نوع العميل"
+                            value={
+                              customerTypeId === 1 ? 'صيدلي' : customerTypeId === 2 ? 'تجاري' : '—'
+                            }
+                          />
+
+                          <ReviewRow
+                            label="هيكل العميل"
+                            value={
+                              structure === 'CHAIN'
+                                ? 'سلسلة'
+                                : structure === 'SINGLE'
+                                  ? 'فرع واحد'
+                                  : '—'
+                            }
+                          />
+
+                          <ReviewRow
+                            label="الفرع"
+                            value={
+                              selectedZone
+                                ? `فرع ${selectedZone.name_ar || 'مدينة غير محددة'}`
+                                : 'لم يتم الاختيار'
+                            }
+                          />
+
+                          <ReviewRow label="المندوب المسؤول" value={currentUserName} />
+
+                          <ReviewRow
+                            label="المشارك"
+                            value={
+                              hasParticipant
+                                ? selectedParticipant?.nameAr || 'لم يتم الاختيار'
+                                : 'لا يوجد'
+                            }
+                          />
+
+                          <ReviewRow label="عدد جهات الاتصال" value={`${contactFields.length}`} />
+
+                          <ReviewRow label="المستندات" value={`${documentFields.length}`} />
+
+                          <ReviewRow
+                            label="الشهور المحددة"
+                            value={`${selectedMonths.length} شهور`}
+                          />
+
+                          <Separator />
+
+                          <ReviewRow
+                            label="رسوم الانضمام قبل الخصم"
+                            value={`${joiningFee.toLocaleString('ar-EG')} جنيه`}
+                          />
+
+                          <ReviewRow
+                            label="رسوم الانضمام بعد الخصم"
+                            value={`${joiningFeeAfterDiscount.toLocaleString('ar-EG')} جنيه`}
+                          />
+
+                          <ReviewRow
+                            label="الاشتراك قبل الخصم"
+                            value={`${monthlySubscription.toLocaleString('ar-EG')} جنيه`}
+                          />
+
+                          <ReviewRow
+                            label="الاشتراك بعد الخصم"
+                            value={`${subscriptionFeeAfterDiscount.toLocaleString('ar-EG')} جنيه`}
+                          />
+
+                          <ReviewRow
+                            label="الإجمالي قبل الخصم"
+                            value={`${totalBeforeDiscount.toLocaleString('ar-EG')} جنيه`}
+                          />
+
+                          <ReviewRow
+                            label="إجمالي خصومات العقد"
+                            value={`${discountAmount.toLocaleString('ar-EG')} جنيه`}
+                          />
+
+                          <ReviewRow
+                            label="الإجمالي بعد الخصم"
+                            value={`${totalContractValue.toLocaleString('ar-EG')} جنيه`}
+                          />
+
+                          <ReviewRow
+                            label="المحصل"
+                            value={`${paymentAmount.toLocaleString('ar-EG')} جنيه`}
+                          />
+
+                          <ReviewRow
+                            label="المتبقي"
+                            value={`${remainingAmount.toLocaleString('ar-EG')} جنيه`}
+                          />
+
+                          <ReviewRow label="طرق الدفع" value={initialPaymentMethodLabel} />
+                        </div>
+
+                        <Separator />
+
+                        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/30">
+                          <div className="flex items-start gap-3">
+                            <div className="rounded-xl bg-emerald-100 p-2 dark:bg-emerald-900">
+                              <Check className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />
+                            </div>
+
+                            <div>
+                              <div className="text-sm font-bold text-emerald-900 dark:text-emerald-200">
+                                العقد جاهز للمراجعة
+                              </div>
+
+                              <p className="mt-1 text-xs leading-5 text-emerald-700 dark:text-emerald-300">
+                                بعد الإرسال سيتم تحويل العقد إلى مدير الدعم الفني للمراجعة
+                                والموافقة.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -4082,10 +4279,10 @@ export default function AddCustomerContract() {
 
           <Card className="sticky bottom-4 border-border bg-card shadow-lg">
             <CardContent className="flex flex-col-reverse gap-3 p-4 md:flex-row md:items-center md:justify-between">
-              <div className="text-xs text-muted-foreground">الخطوة {activeStep} من 2</div>
+              <div className="text-xs text-muted-foreground">الخطوة {activeStep} من 3</div>
 
               <div className="flex w-full items-center gap-3 md:w-auto">
-                {activeStep === 2 && (
+                {activeStep > 1 && (
                   <Button
                     type="button"
                     variant="outline"
@@ -4113,6 +4310,25 @@ export default function AddCustomerContract() {
                     "
                   >
                     التالي
+                    <ArrowLeft className="mr-2 h-4 w-4" />
+                  </Button>
+                ) : activeStep === 2 ? (
+                  <Button
+                    type="button"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      void handlePlanNext();
+                    }}
+                    className="
+                      h-11 flex-1 rounded-xl
+                      bg-foreground
+                      text-background
+                      hover:bg-foreground/90
+                      md:flex-none
+                    "
+                  >
+                    التالي: الإضافات والأجهزة
                     <ArrowLeft className="mr-2 h-4 w-4" />
                   </Button>
                 ) : (
@@ -4305,6 +4521,503 @@ function ContactPhones({ control, register, contactIndex, governorate, errors }:
           إضافة رقم واتساب اختياري
         </Button>
       )}
+    </div>
+  );
+}
+
+function InitialPaymentsSection({
+  total,
+  paymentMethods,
+  banks,
+  isBanksLoading,
+  register,
+  control,
+  errors,
+  onAmountInput,
+}: any) {
+  const { fields, append, remove } = useFieldArray({ control, name: 'initialPayments' });
+  const payments = useWatch({ control, name: 'initialPayments' }) || [];
+  const bankOptions = [
+    ['', isBanksLoading ? 'جارٍ تحميل البنوك...' : 'اختر البنك'],
+    ...banks.map((bank: any) => [
+      bank.id,
+      `${bank.nameAr ?? bank.name_ar ?? bank.nameEn ?? bank.name_en} — ${bank.nameEn ?? bank.name_en}`,
+    ]),
+  ];
+  const collectedAmount = payments.reduce(
+    (sum: number, payment: any) => sum + (Number(payment?.amount) || 0),
+    0,
+  );
+  const remainingAmount = Math.max(Number(total) - collectedAmount, 0);
+  const newPayment = () => {
+    if (remainingAmount <= 0.009) return;
+    append({
+      amount: Number(remainingAmount.toFixed(2)),
+      paymentMethodId: null,
+      paymentDetails: {
+        transferDate: '',
+        bankId: '',
+        bankName: '',
+        referenceNumber: '',
+        chequeNumber: '',
+        chequeDueDate: '',
+        transactionDate: '',
+        receiptNumber: '',
+      },
+    });
+  };
+
+  return (
+    <div>
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-bold">تسجيل مبلغ التحصيل</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            يمكن توزيع المبلغ المحصل على أكثر من وسيلة دفع. سيُنشأ إيصال مستقل لكل وسيلة.
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={newPayment}
+          disabled={remainingAmount <= 0.009}
+          className="rounded-xl"
+        >
+          <Plus className="ml-2 h-4 w-4" /> إضافة وسيلة دفع
+        </Button>
+      </div>
+
+      <div className="space-y-4">
+        {fields.map((field, index) => {
+          const payment = payments[index] || {};
+          const method = paymentMethods.find(
+            (item: any) => Number(item.id) === Number(payment.paymentMethodId),
+          );
+          const code = String(method?.code || '')
+            .toUpperCase()
+            .replace(/_/g, '');
+          const entryErrors = errors.initialPayments?.[index] || {};
+          const prefix = `initialPayments.${index}`;
+          const otherPaymentsTotal = payments.reduce(
+            (sum: number, item: any, itemIndex: number) =>
+              itemIndex === index ? sum : sum + (Number(item?.amount) || 0),
+            0,
+          );
+          const maximumForThisPayment = Math.max(Number(total) - otherPaymentsTotal, 0);
+          return (
+            <div key={field.id} className="rounded-2xl border border-border bg-muted/20 p-4">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <span className="text-sm font-semibold">دفعة {index + 1}</span>
+                {fields.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => remove(index)}
+                    className="text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="ml-1 h-4 w-4" /> حذف
+                  </Button>
+                )}
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <Label>المبلغ المحصل</Label>
+                  <div className="relative mt-2">
+                    <Input
+                      type="number"
+                      min="0.01"
+                      max={maximumForThisPayment}
+                      step="0.01"
+                      {...register(`${prefix}.amount`, {
+                        valueAsNumber: true,
+                        required: 'المبلغ المحصل مطلوب',
+                        min: { value: 0.01, message: 'المبلغ يجب أن يكون أكبر من صفر' },
+                        validate: (value: number) =>
+                          Number(value || 0) <= maximumForThisPayment ||
+                          'إجمالي وسائل الدفع لا يمكن أن يتجاوز إجمالي العقد',
+                      })}
+                      variant={entryErrors.amount ? 'failure' : 'default'}
+                      aria-invalid={Boolean(entryErrors.amount)}
+                      onInput={onAmountInput}
+                      className="h-12 rounded-xl pl-16 text-lg font-semibold"
+                    />
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                      جنيه
+                    </div>
+                  </div>
+                  {entryErrors.amount && <ErrorText>{entryErrors.amount.message}</ErrorText>}
+                </div>
+                <SelectField
+                  label="طريقة الدفع"
+                  registration={register(`${prefix}.paymentMethodId`, {
+                    required: 'طريقة الدفع مطلوبة',
+                    valueAsNumber: true,
+                  })}
+                  options={paymentMethods.map((item: any) => [
+                    item.id,
+                    item.nameAr ?? item.name_ar ?? item.code,
+                  ])}
+                  control={control}
+                  error={entryErrors.paymentMethodId?.message}
+                />
+              </div>
+              {code === 'BANKTRANSFER' && (
+                <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <TextField
+                    label="تاريخ الحوالة"
+                    type="date"
+                    registration={register(`${prefix}.paymentDetails.transferDate`, {
+                      required: 'تاريخ الحوالة مطلوب',
+                    })}
+                    error={entryErrors.paymentDetails?.transferDate?.message}
+                  />
+                  <SelectField
+                    label="البنك"
+                    registration={register(`${prefix}.paymentDetails.bankId`, {
+                      required: 'البنك مطلوب',
+                      valueAsNumber: true,
+                    })}
+                    options={bankOptions}
+                    control={control}
+                    disabled={isBanksLoading}
+                    error={entryErrors.paymentDetails?.bankId?.message}
+                  />
+                  <TextField
+                    label="الرقم المرجعي"
+                    registration={register(`${prefix}.paymentDetails.referenceNumber`, {
+                      required: 'الرقم المرجعي مطلوب',
+                    })}
+                    error={entryErrors.paymentDetails?.referenceNumber?.message}
+                  />
+                </div>
+              )}
+              {(code === 'INSTAPAY' || code === 'PAYSKY') && (
+                <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <TextField
+                    label="الرقم المرجعي"
+                    registration={register(`${prefix}.paymentDetails.referenceNumber`, {
+                      required: 'الرقم المرجعي مطلوب',
+                    })}
+                    error={entryErrors.paymentDetails?.referenceNumber?.message}
+                  />
+                  <TextField
+                    label="تاريخ العملية"
+                    type="date"
+                    registration={register(`${prefix}.paymentDetails.transactionDate`, {
+                      required: 'تاريخ العملية مطلوب',
+                    })}
+                    error={entryErrors.paymentDetails?.transactionDate?.message}
+                  />
+                </div>
+              )}
+              {code === 'CHEQUE' && (
+                <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <SelectField
+                    label="البنك"
+                    registration={register(`${prefix}.paymentDetails.bankId`, {
+                      required: 'البنك مطلوب',
+                      valueAsNumber: true,
+                    })}
+                    options={bankOptions}
+                    control={control}
+                    disabled={isBanksLoading}
+                    error={entryErrors.paymentDetails?.bankId?.message}
+                  />
+                  <TextField
+                    label="رقم الشيك"
+                    registration={register(`${prefix}.paymentDetails.chequeNumber`, {
+                      required: 'رقم الشيك مطلوب',
+                    })}
+                    error={entryErrors.paymentDetails?.chequeNumber?.message}
+                  />
+                  <TextField
+                    label="تاريخ استحقاق الشيك"
+                    type="date"
+                    registration={register(`${prefix}.paymentDetails.chequeDueDate`, {
+                      required: 'تاريخ الاستحقاق مطلوب',
+                    })}
+                    error={entryErrors.paymentDetails?.chequeDueDate?.message}
+                  />
+                </div>
+              )}
+              {code === 'CASH' && (
+                <div className="mt-4">
+                  <TextField
+                    label="رقم الإيصال"
+                    registration={register(`${prefix}.paymentDetails.receiptNumber`, {
+                      required: 'رقم الإيصال مطلوب',
+                      validate: (value: string) =>
+                        String(value || '').trim().length > 0 || 'رقم الإيصال مطلوب',
+                    })}
+                    error={entryErrors.paymentDetails?.receiptNumber?.message}
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+function AddOnReceiptSection({
+  total,
+  additionalUnits,
+  replicationServices,
+  hardwareDevices,
+  amount,
+  remainingAmount,
+  paidPercentage,
+  paymentMethodCode,
+  paymentMethodLabel,
+  paymentMethods,
+  banks,
+  isBanksLoading,
+  register,
+  control,
+  errors,
+  onAmountInput,
+}: any) {
+  if (total <= 0) {
+    return (
+      <Card className="border-dashed border-border bg-muted/20 shadow-sm">
+        <CardContent className="p-6 text-center text-sm text-muted-foreground">
+          لم يتم اختيار إضافات أو أجهزة. لن يتم إنشاء فاتورة أو إيصال إضافات.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const bankOptions = [
+    ['', isBanksLoading ? 'جارٍ تحميل البنوك...' : 'اختر البنك'],
+    ...banks.map((bank: any) => [
+      bank.id,
+      `${bank.nameAr ?? bank.name_ar ?? bank.nameEn ?? bank.name_en} — ${bank.nameEn ?? bank.name_en}`,
+    ]),
+  ];
+
+  return (
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.35fr_0.65fr]">
+      <Card className="border-amber-200 bg-card shadow-sm dark:border-amber-900">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Receipt className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+            تحصيل الإضافات وإيصال مستقل
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm dark:border-amber-900 dark:bg-amber-950/20">
+            تُحصّل الوحدات الإضافية وخدمات النسخ والأجهزة في إيصال منفصل عن إيصال العقد والخطة.
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <Label>مبلغ إيصال الإضافات</Label>
+              <div className="relative mt-2">
+                <Input
+                  type="number"
+                  min="0.01"
+                  max={total}
+                  step="0.01"
+                  {...register('addOnPayment.amount', {
+                    valueAsNumber: true,
+                    required: 'مبلغ إيصال الإضافات مطلوب',
+                    validate: (value: number) =>
+                      Math.abs(Number(value || 0) - total) < 0.01 ||
+                      'يجب تحصيل إجمالي الإضافات كاملًا في إيصال منفصل',
+                  })}
+                  variant={errors.addOnPayment?.amount ? 'failure' : 'default'}
+                  aria-invalid={Boolean(errors.addOnPayment?.amount)}
+                  onInput={onAmountInput}
+                  className="h-12 rounded-xl pl-16 text-lg font-semibold"
+                />
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                  جنيه
+                </div>
+              </div>
+              {errors.addOnPayment?.amount && (
+                <ErrorText>{String(errors.addOnPayment.amount.message)}</ErrorText>
+              )}
+            </div>
+
+            <SelectField
+              label="طريقة دفع الإضافات"
+              registration={register('addOnPayment.paymentMethodId', {
+                required: 'طريقة دفع الإضافات مطلوبة',
+                valueAsNumber: true,
+              })}
+              options={paymentMethods.map((method: any) => [
+                method.id,
+                method.nameAr ?? method.name_ar ?? method.code,
+              ])}
+              control={control}
+              error={errors.addOnPayment?.paymentMethodId?.message}
+            />
+          </div>
+
+          {paymentMethodCode === 'BANKTRANSFER' && (
+            <div className="grid grid-cols-1 gap-4 rounded-xl border border-border bg-muted/20 p-4 md:grid-cols-3">
+              <TextField
+                label="تاريخ الحوالة"
+                type="date"
+                registration={register('addOnPayment.paymentDetails.transferDate', {
+                  required: 'تاريخ الحوالة مطلوب',
+                })}
+                error={errors.addOnPayment?.paymentDetails?.transferDate?.message}
+              />
+              <SelectField
+                label="البنك"
+                registration={register('addOnPayment.paymentDetails.bankId', {
+                  required: 'البنك مطلوب',
+                  valueAsNumber: true,
+                })}
+                options={bankOptions}
+                control={control}
+                disabled={isBanksLoading}
+                error={errors.addOnPayment?.paymentDetails?.bankId?.message}
+                placeholder={isBanksLoading ? 'جارٍ تحميل البنوك...' : 'اختر البنك'}
+                searchPlaceholder="ابحث عن بنك..."
+              />
+              <TextField
+                label="الرقم المرجعي"
+                registration={register('addOnPayment.paymentDetails.referenceNumber', {
+                  required: 'الرقم المرجعي مطلوب',
+                })}
+                error={errors.addOnPayment?.paymentDetails?.referenceNumber?.message}
+                placeholder="الرقم المرجعي"
+              />
+            </div>
+          )}
+
+          {(paymentMethodCode === 'INSTAPAY' || paymentMethodCode === 'PAYSKY') && (
+            <div className="grid grid-cols-1 gap-4 rounded-xl border border-border bg-muted/20 p-4 md:grid-cols-2">
+              <TextField
+                label="الرقم المرجعي"
+                registration={register('addOnPayment.paymentDetails.referenceNumber', {
+                  required: 'الرقم المرجعي مطلوب',
+                })}
+                error={errors.addOnPayment?.paymentDetails?.referenceNumber?.message}
+                placeholder="الرقم المرجعي"
+              />
+              <TextField
+                label="تاريخ العملية"
+                type="date"
+                registration={register('addOnPayment.paymentDetails.transactionDate', {
+                  required: 'تاريخ العملية مطلوب',
+                })}
+                error={errors.addOnPayment?.paymentDetails?.transactionDate?.message}
+              />
+            </div>
+          )}
+
+          {paymentMethodCode === 'CHEQUE' && (
+            <div className="grid grid-cols-1 gap-4 rounded-xl border border-border bg-muted/20 p-4 md:grid-cols-3">
+              <SelectField
+                label="البنك"
+                registration={register('addOnPayment.paymentDetails.bankId', {
+                  required: 'البنك مطلوب',
+                  valueAsNumber: true,
+                })}
+                options={bankOptions}
+                control={control}
+                disabled={isBanksLoading}
+                error={errors.addOnPayment?.paymentDetails?.bankId?.message}
+                placeholder={isBanksLoading ? 'جارٍ تحميل البنوك...' : 'اختر البنك'}
+                searchPlaceholder="ابحث عن بنك..."
+              />
+              <TextField
+                label="رقم الشيك"
+                registration={register('addOnPayment.paymentDetails.chequeNumber', {
+                  required: 'رقم الشيك مطلوب',
+                })}
+                error={errors.addOnPayment?.paymentDetails?.chequeNumber?.message}
+                placeholder="رقم الشيك"
+              />
+              <TextField
+                label="تاريخ استحقاق الشيك"
+                type="date"
+                registration={register('addOnPayment.paymentDetails.chequeDueDate', {
+                  required: 'تاريخ استحقاق الشيك مطلوب',
+                })}
+                error={errors.addOnPayment?.paymentDetails?.chequeDueDate?.message}
+              />
+            </div>
+          )}
+
+          {paymentMethodCode === 'CASH' && (
+            <div className="rounded-xl border border-border bg-muted/20 p-4">
+              <TextField
+                label="رقم إيصال الإضافات"
+                registration={register('addOnPayment.paymentDetails.receiptNumber', {
+                  required: 'رقم إيصال الإضافات مطلوب',
+                  validate: (value) =>
+                    String(value ?? '').trim().length > 0 || 'رقم إيصال الإضافات مطلوب',
+                })}
+                error={errors.addOnPayment?.paymentDetails?.receiptNumber?.message}
+                placeholder="رقم الإيصال"
+              />
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <TextField
+              label="سبب تحصيل الإضافات"
+              registration={register('addOnPayment.collectionReason', {
+                required: 'سبب تحصيل الإضافات مطلوب',
+              })}
+              error={errors.addOnPayment?.collectionReason?.message}
+              placeholder="إضافات العقد"
+            />
+            <TextField
+              label="ملاحظات إيصال الإضافات"
+              registration={register('addOnPayment.notes')}
+              error={errors.addOnPayment?.notes?.message}
+              placeholder="ملاحظات اختيارية"
+            />
+          </div>
+
+          <div className="rounded-2xl bg-muted p-4">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">نسبة سداد الإضافات</span>
+              <span className="font-bold">{paidPercentage.toFixed(0)}%</span>
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-background">
+              <div
+                className="h-full rounded-full bg-amber-500 transition-all"
+                style={{ width: `${paidPercentage}%` }}
+              />
+            </div>
+            <div className="mt-3 flex justify-between text-xs">
+              <span>المحصل: {amount.toLocaleString('ar-EG')} جنيه</span>
+              <span>المتبقي: {remainingAmount.toLocaleString('ar-EG')} جنيه</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border bg-card shadow-sm">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Check className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+            مراجعة إيصال الإضافات
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <ReviewRow label="الوحدات الإضافية" value={`${additionalUnits.length} عناصر`} />
+          <ReviewRow label="خدمات النسخ" value={`${replicationServices.length} عناصر`} />
+          <ReviewRow label="الأجهزة" value={`${hardwareDevices.length} عناصر`} />
+          <Separator />
+          <ReviewRow
+            label="إجمالي إيصال الإضافات"
+            value={`${total.toLocaleString('ar-EG')} جنيه`}
+          />
+          <ReviewRow label="المحصل" value={`${amount.toLocaleString('ar-EG')} جنيه`} />
+          <ReviewRow label="المتبقي" value={`${remainingAmount.toLocaleString('ar-EG')} جنيه`} />
+          <ReviewRow label="طريقة الدفع" value={paymentMethodLabel} />
+        </CardContent>
+      </Card>
     </div>
   );
 }
