@@ -6,20 +6,18 @@ import Loadable from '../layouts/full/shared/loadable/Loadable';
 import ProtectedRoute from '../shared/components/ProtectedRoute'; // Adjust the path if needed
 import AddNewContract from 'src/features/crm/contracts/pages/AddContract';
 import { element } from 'prop-types';
-import ViewUsers from '../features/users/pages/ViewUsers';
+import ViewUsers from '../features/users/pages/UserManagementPage';
 import AddNewCollection from 'src/features/crm/collections/pages/AddCollection';
 import NewContact from '../features/contacts/pages/AddContact';
-import EditUser from 'src/features/users/pages/EditUser';
 import ViewZones from '../features/zones/pages/ViewZones';
 import NewZone from 'src/features/zones/pages/NewZone';
 import EditZone from 'src/features/zones/pages/EditZone';
-import EditRole from 'src/features/roles/pages/EditRole';
-import ViewRoles from 'src/features/roles/pages/ViewRoles';
-import NewRole from 'src/features/roles/pages/NewRole';
+import RoleManagementPage from 'src/features/roles/pages/RoleManagementPage';
 import EditJob from 'src/features/jobs/pages/EditJob';
 import Unauthorized from 'src/shared/pages/Unauthorized';
 import ViewJobs from '../features/jobs/pages/ViewJobs';
-import AddNewRequest from 'src/features/crm/requests/pages/AddRequest';
+import AdditionalServiceRequestPage from 'src/features/crm/requests/pages/AdditionalServiceRequestPage';
+import AdditionalServiceApprovalsPage from 'src/features/crm/requests/pages/AdditionalServiceApprovalsPage';
 import ViewEmployees from '../features/employees/pages/ViewEmployees';
 import ViewCustomers from '../features/customers/pages/ViewCustomers';
 import NewCustomer from 'src/features/customers/pages/NewCustomer';
@@ -35,7 +33,9 @@ import OutstandingReport from 'src/features/crm/collections/pages/OutstandingRec
 
 import OperationalReports from 'src/features/crm/reports/pages/OperationalReports';
 import ActionHistoryReport from 'src/features/crm/reports/pages/ActionHistoryReport';
+import RejectedContractsReport from 'src/features/crm/reports/pages/RejectedContractsReport';
 import MasterfileReport from 'src/features/crm/reports/pages/MasterfileReport';
+import ContractContactsReport from 'src/features/crm/reports/pages/ContractContactsReport';
 import TicketingPage from 'src/features/crm/tickets/pages/TicketingPage';
 import AddTargetPlan from 'src/features/crm/targets/pages/AddTargetPlan';
 import OutstandingMonthlySubscriptions from 'src/features/crm/collections/pages/OutstandingMonthlySubscriptions';
@@ -46,7 +46,9 @@ import ManagerOfAll from 'src/features/crm/management/pages/ManagerOfAll';
 import CollectAdditionalUnits from 'src/features/crm/collections/pages/CollectAdditionalUnits';
 import SubscriptionCollectionPage from 'src/features/crm/targets/pages/Targets';
 import UserZoneAssignments from 'src/features/administration/user-zones/pages/UserZoneAssignments';
+import BankManagementPage from 'src/features/administration/banks/pages/BankManagementPage';
 import ContractFollowUp from 'src/features/crm/contracts/pages/ContractFollowUp';
+import ContractTypesManagementPage from 'src/features/contract-types/pages/ContractTypesManagementPage';
 /* ***Layouts**** */
 const FullLayout = Loadable(lazy(() => import('../layouts/full/FullLayout')));
 const BlankLayout = Loadable(lazy(() => import('../layouts/blank/BlankLayout')));
@@ -68,7 +70,6 @@ const Jobs = Loadable(lazy(() => import('../features/jobs/pages/ViewJobs')));
 const NewEmployee = Loadable(lazy(() => import('../features/employees/pages/NewEmployee')));
 const EditEmployee = Loadable(lazy(() => import('../features/employees/pages/EditEmployee')));
 const LauncherPage = Loadable(lazy(() => import('../features/launcher/pages/LauncherPage')));
-const NewUser = Loadable(lazy(() => import('../features/users/pages/NewUser')));
 const NewJob = Loadable(lazy(() => import('../features/jobs/pages/NewJob')));
 // Apps
 const Notes = Loadable(lazy(() => import('../views/apps/notes/Notes')));
@@ -107,30 +108,6 @@ const Router = [
       { path: 'user-profile', element: <UserProfile /> },
       { path: 'icons/iconify', element: <SolarIcon /> },
       {
-        path: 'employees',
-        element: (
-          <ProtectedRoute route="/employees" action_code="READ">
-            <ViewEmployees />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'employees/new-employee',
-        element: (
-          <ProtectedRoute route="/employees" action_code="CREATE">
-            <NewEmployee />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'employees/edit',
-        element: (
-          <ProtectedRoute route="/employees" action_code="WRITE">
-            <EditEmployee />
-          </ProtectedRoute>
-        ),
-      },
-      {
         path: 'users',
         element: (
           <ProtectedRoute route="/users" action_code="READ">
@@ -142,7 +119,7 @@ const Router = [
         path: 'users/new-user',
         element: (
           <ProtectedRoute route="/users" action_code="CREATE">
-            <NewUser />
+            <ViewUsers />
           </ProtectedRoute>
         ),
       },
@@ -150,31 +127,15 @@ const Router = [
         path: 'users/edit',
         element: (
           <ProtectedRoute route="/users" action_code="WRITE">
-            <EditUser />
+            <ViewUsers />
           </ProtectedRoute>
         ),
       },
       {
-        path: 'contacts/new-contact',
+        path: 'contract-types',
         element: (
-          <ProtectedRoute route="/contacts" action_code="CREATE">
-            <NewContact />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'jobs',
-        element: (
-          <ProtectedRoute route="/jobs" action_code="READ">
-            <ViewJobs />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'jobs/new-job',
-        element: (
-          <ProtectedRoute route="/jobs" action_code="CREATE">
-            <NewJob />
+          <ProtectedRoute route="/contract-types" action_code="READ">
+            <ContractTypesManagementPage />
           </ProtectedRoute>
         ),
       },
@@ -212,18 +173,18 @@ const Router = [
         ),
       },
       {
-        path: 'roles/edit',
+        path: 'banks',
         element: (
-          <ProtectedRoute route="/roles" action_code="WRITE">
-            <EditRole />
+          <ProtectedRoute route="/banks" action_code="READ">
+            <BankManagementPage />
           </ProtectedRoute>
         ),
       },
       {
-        path: 'jobs/edit',
+        path: 'roles/edit',
         element: (
-          <ProtectedRoute route="/jobs" action_code="WRITE">
-            <EditJob />
+          <ProtectedRoute route="/roles" action_code="WRITE">
+            <RoleManagementPage />
           </ProtectedRoute>
         ),
       },
@@ -231,7 +192,7 @@ const Router = [
         path: 'roles',
         element: (
           <ProtectedRoute route="/roles" action_code="READ">
-            <ViewRoles />
+            <RoleManagementPage />
           </ProtectedRoute>
         ),
       },
@@ -239,37 +200,13 @@ const Router = [
         path: 'roles/new-role',
         element: (
           <ProtectedRoute route="/roles" action_code="CREATE">
-            <NewRole />
+            <RoleManagementPage />
           </ProtectedRoute>
         ),
       },
       { path: '/unauthorized', element: <Unauthorized /> },
       { path: '/announcements', element: <Announcements /> },
       { path: '*', element: <Navigate to="/auth/404" replace /> },
-      {
-        path: 'customers',
-        element: (
-          <ProtectedRoute route="/customers" action_code="READ">
-            <ViewCustomers />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'add-new-customer',
-        element: (
-          <ProtectedRoute route="/customers" action_code="CREATE">
-            <NewCustomer />
-          </ProtectedRoute>
-        ),
-      },
-       {
-        path: 'customers/edit',
-        element: (
-          <ProtectedRoute route="/customers" action_code="WRITE">
-            <EditCustomer />
-          </ProtectedRoute>
-        ),
-      },
       {
          path: 'programs',
         element: (
@@ -294,30 +231,6 @@ const Router = [
           </ProtectedRoute>
         ),
       },
-       {
-         path: 'pricings',
-        element: (
-          <ProtectedRoute route="/pricings" action_code="READ">
-            <ViewPricings />
-          </ProtectedRoute>
-        ),
-      },
-      {
-         path: 'pricings/new-pricing',
-        element: (
-          <ProtectedRoute route="/pricings" action_code="CREATE">
-            <NewPricing />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'uncollected-targets',
-        element: (
-          // <ProtectedRoute route="/uncollected-targets" action_code="READ">
-            <ViewUncollectedTargets />
-          // </ProtectedRoute>
-        ),
-      },
       {
         path:'add-new-collection',
         element: (
@@ -337,16 +250,18 @@ const Router = [
       {
         path: '/add-new-request',
         element: (
-          // <ProtectedRoute route="/requests" action_code="CREATE">
-            <AddNewRequest />
-          // </ProtectedRoute>
+          <ProtectedRoute route="/add-new-request" action_code="CREATE">
+            <AdditionalServiceRequestPage />
+          </ProtectedRoute>
         ),
       },
       {
-        path: '/outstanding-recivables-reports',
-        element:(
-          <OutstandingReport />
-        )
+        path: '/additional-service-requests',
+        element: (
+          <ProtectedRoute route="/additional-service-requests" action_code="READ">
+            <AdditionalServiceApprovalsPage />
+          </ProtectedRoute>
+        ),
       },
       {
         path: '/contract-follow-up',
@@ -360,48 +275,23 @@ const Router = [
         path: '/action-history-report',
         element: <ActionHistoryReport />,
       },      {
+        path: '/rejected-contracts-report',
+        element: <RejectedContractsReport />,
+      },      {
         path: '/masterfile-report',
         element: <MasterfileReport />,
       },
       {
+        path: '/contract-contacts-report',
+        element: (
+          <ProtectedRoute route="/contract-contacts-report" action_code="READ">
+            <ContractContactsReport />
+          </ProtectedRoute>
+        ),
+      },
+      {
         path: '/customer-tickets',
         element: <TicketingPage />,
-      },
-      {
-        path:'/add-new-target-plan',
-        element:(
-          <AddTargetPlan />
-        )
-      },
-      {
-         path:'/to-do-list',
-         element:(
-          <ToDoList />
-        )
-      },
-      {
-         path:'/task-details',
-         element:(
-          <TaskDetails />
-        )
-      },
-      {
-        path:'assign-installation',
-        element:(
-          <InstallationAssignment />
-        )
-      },
-      {
-        path:'/outstanding-monthly-subscriptions',
-        element:(
-          <OutstandingMonthlySubscriptions />
-        )
-      },
-      {
-        path:'/manager-of-all',
-        element:(
-          <ManagerOfAll />
-        )
       },
       {
         path:'/collect-additional-units',

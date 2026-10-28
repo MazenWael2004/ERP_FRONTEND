@@ -39,6 +39,7 @@ import {
 
 import { Textarea } from 'src/components/ui/textarea';
 import { Checkbox } from 'src/components/ui/checkbox';
+import { masterfileColumns } from '../../reports/pages/MasterfileReport';
 import { createCollectionSchema, mapZodErrors } from '../validation';
 import {
   fetchPaidMonths,
@@ -47,7 +48,24 @@ import {
   type ScopedContract,
 } from '../api/targetService';
 
-type TargetContractRow = {
+// These sales aggregates belong to the masterfile report. Target rows are
+// scoped contract records and do not include invoice-line aggregates.
+const targetMasterfileColumns = masterfileColumns.filter(
+  (column) => ![
+    'additionalServicesQuantity',
+    'additionalServicesTotal',
+    'additionalUnitsQuantity',
+    'additionalUnitsTotal',
+    'replicationServiceQuantity',
+    'replicationServiceTotal',
+    'hardDiskReplacementQuantity',
+    'hardDiskReplacementTotal',
+    'inventoryCountServiceQuantity',
+    'inventoryCountServiceTotal',
+  ].includes(column.key),
+);
+
+type TargetContractRow = ScopedContract & {
   id: number;
   customerName: string;
   zoneName: string;
@@ -77,8 +95,12 @@ function formatContractDate(value?: string | null) {
 function mapScopedContractToTargetRow(contract: ScopedContract): TargetContractRow {
   const subscriptionPrice = Number(contract.subscription_price || 0);
   const discountPercentage = Number(contract.discount_percentage || 0);
+  const monthlyAmount = Number(
+    (subscriptionPrice * (1 - discountPercentage / 100)).toFixed(2),
+  );
 
   return {
+    ...contract,
     id: contract.id,
     customerName: contract.customer_name_ar || 'عميل بدون اسم',
     zoneName: contract.zone_name_ar || '—',
@@ -86,7 +108,7 @@ function mapScopedContractToTargetRow(contract: ScopedContract): TargetContractR
     contractNumber: contract.contract_number || String(contract.id),
     representativeName: contract.representative_name_ar || '—',
     subscriptionPrice,
-    monthlyAmount: subscriptionPrice * (1 - discountPercentage / 100),
+    monthlyAmount,
     nextDueDate: formatContractDate(contract.next_subscription_due_date),
     lastPaidMonth: formatContractDate(contract.last_paid_month),
     paidMonths: [],
@@ -455,10 +477,10 @@ export default function SubscriptionCollectionPage() {
         {/* Header */}
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight md:text-3xl">تحصيل الاشتراكات</h1>
+            <h1 className="text-2xl font-bold tracking-tight md:text-3xl">أهدافي</h1>
 
             <p className="mt-1 text-sm text-muted-foreground">
-              تسجيل تحصيل الاشتراكات الشهرية للعملاء وتحديد قيمة التحصيل لكل شهر
+              تعرض كل العقود اللي تم تفعيلها اللتي في مناطق المندوب
             </p>
           </div>
 
@@ -553,34 +575,25 @@ export default function SubscriptionCollectionPage() {
 
           <CardContent className="p-0">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px]">
+              <table className="w-full min-w-[8400px] text-sm">
                 <thead className="border-b bg-muted/50">
                   <tr>
-                    <th className="px-5 py-4 text-right text-xs font-semibold text-muted-foreground">
-                      العميل
-                    </th>
-                    <th className="px-5 py-4 text-right text-xs font-semibold text-muted-foreground">
-                      الفرع
-                    </th>
-                    <th className="px-5 py-4 text-center text-xs font-semibold text-muted-foreground">
-                      سعر الاشتراك
-                    </th>
-                    <th className="px-5 py-4 text-center text-xs font-semibold text-muted-foreground">
-                      تاريخ الاستحقاق القادم
-                    </th>
-                    <th className="px-5 py-4 text-center text-xs font-semibold text-muted-foreground">
-                      آخر شهر مسدد
-                    </th>
-                    <th className="px-5 py-4 text-center text-xs font-semibold text-muted-foreground">
-                      الإجراء
-                    </th>
+                    {targetMasterfileColumns.map((column) => (
+                      <th
+                        key={column.key}
+                        className="whitespace-nowrap px-4 py-3 text-right text-xs font-semibold text-muted-foreground"
+                      >
+                        {column.header}
+                      </th>
+                    ))}
+                    <th className="whitespace-nowrap px-4 py-3 text-center text-xs font-semibold text-muted-foreground">الإجراء</th>
                   </tr>
                 </thead>
 
                 <tbody>
                   {isContractsLoading && (
                     <tr>
-                      <td colSpan={6} className="px-5 py-14 text-center">
+                      <td colSpan={targetMasterfileColumns.length + 1} className="px-5 py-14 text-center">
                         <RefreshCw className="mx-auto mb-3 h-9 w-9 animate-spin text-primary" />
                         <p className="font-medium">جارٍ تحميل العقود...</p>
                       </td>
@@ -589,7 +602,7 @@ export default function SubscriptionCollectionPage() {
 
                   {contractsLoadError && (
                     <tr>
-                      <td colSpan={6} className="px-5 py-14 text-center">
+                      <td colSpan={targetMasterfileColumns.length + 1} className="px-5 py-14 text-center">
                         <AlertCircle className="mx-auto mb-3 h-9 w-9 text-destructive" />
                         <p className="font-medium">{contractsLoadError}</p>
                         <Button
@@ -610,39 +623,12 @@ export default function SubscriptionCollectionPage() {
                         key={customer.id}
                         className="border-b transition-colors last:border-0 hover:bg-muted/30"
                       >
-                        <td className="px-5 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                              <Building2 className="h-5 w-5" />
-                            </div>
-
-                            <div>
-                              <p className="font-semibold">{customer.customerName}</p>
-
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {customer.customerCode}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-
-                        <td className="px-5 py-4">
-                          <span className="text-sm">{customer.zoneName}</span>
-                        </td>
-
-                        <td className="px-5 py-4 text-center">
-                          <span className="font-semibold">{money(customer.subscriptionPrice)}</span>
-                        </td>
-
-                        <td className="px-5 py-4 text-center">
-                          <span className="text-sm">{customer.nextDueDate}</span>
-                        </td>
-
-                        <td className="px-5 py-4 text-center">
-                          <span className="text-sm">{customer.lastPaidMonth}</span>
-                        </td>
-
-                        <td className="px-5 py-4 text-center">
+                        {targetMasterfileColumns.map((column) => (
+                          <td key={column.key} className="max-w-xs whitespace-nowrap px-4 py-3 text-right">
+                            {column.value(customer)}
+                          </td>
+                        ))}
+                        <td className="whitespace-nowrap px-4 py-3 text-center">
                           <Button size="sm" onClick={() => openCollection(customer)}>
                             <Banknote className="ml-2 h-4 w-4" />
                             تسجيل تحصيل
@@ -653,7 +639,7 @@ export default function SubscriptionCollectionPage() {
 
                   {!isContractsLoading && !contractsLoadError && filteredCustomers.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-5 py-14 text-center">
+                    <td colSpan={targetMasterfileColumns.length + 1} className="px-5 py-14 text-center">
                         <Search className="mx-auto mb-3 h-9 w-9 text-muted-foreground/50" />
 
                         <p className="font-medium">لا توجد نتائج</p>
@@ -810,11 +796,16 @@ export default function SubscriptionCollectionPage() {
                         <Input
                           value={paymentDetails.chequeNumber}
                           onChange={(event) => {
-                            setPaymentDetails((current) => ({ ...current, chequeNumber: event.target.value }));
+                            setPaymentDetails((current) => ({
+                              ...current,
+                              chequeNumber: event.target.value.replace(/\D/g, ''),
+                            }));
                             clearValidationError('paymentDetails');
                           }}
                           placeholder="رقم الشيك"
                           className="h-11"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
                         />
                         <Input
                           type="date"

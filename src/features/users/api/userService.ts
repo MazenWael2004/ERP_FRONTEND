@@ -21,8 +21,9 @@ export const fetchUsers = async (filters = {}) => {
 export const createUser = async(userData:any)=>{
     const response = await api.post("/users",{
         userName: userData.userName,
+        nameEn: userData.nameEn,
+        nameAr: userData.nameAr,
         password: userData.password,
-        employeeId: userData.employeeId,
         roles: userData.roles,
     });
     return response.data;
@@ -37,9 +38,16 @@ export const getUserById = async(id:any)=>{
 export const updateUser = async (userId:any, userData:any) => {
   const response = await api.patch(`/users/${userId}`, {
     userName: userData.userName,
-    employeeId: userData.employeeId,
+    nameEn: userData.nameEn,
+    nameAr: userData.nameAr,
+    ...(userData.password ? { password: userData.password } : {}),
     roles: userData.roles,
   });
+  return response.data;
+};
+
+export const setUserStatus = async (userId: number, enabled: boolean) => {
+  const response = await api.patch(`/users/${userId}/status`, { enabled });
   return response.data;
 };
 

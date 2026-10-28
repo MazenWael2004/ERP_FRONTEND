@@ -286,6 +286,8 @@ function EmployeeForm({ formId, defaultValues, onSubmit }) {
         <input
           id="birthDate"
           type="date"
+          lang="en-GB"
+          dir="ltr"
           {...register("birthDate")}
           placeholder={t("ENTER_BIRTH_DATE")}
           style={{ textAlign: isArabic ? "right" : "left" }}

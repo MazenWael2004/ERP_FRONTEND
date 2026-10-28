@@ -128,14 +128,6 @@ function NewCustomer() {
 
         console.log('Backend message:', message);
 
-        if (t(message) === t('CUSTOMER_NAME_EN_EXISTS')) {
-          setError('nameEn', {
-            type: 'server',
-            message: 'CUSTOMER_NAME_EN_EXISTS',
-          });
-          return;
-        }
-
         if (t(message) === t('CUSTOMER_NAME_AR_EXISTS')) {
           setError('nameAr', {
             type: 'server',
@@ -212,7 +204,6 @@ const goToPreviousTab = (e?: React.MouseEvent) => {
     defaultValues: { code: 'سيتم توليده تلقائياً' },
   });
 
-  const name_en = watch('nameEn');
   const name_ar = watch('nameAr');
   const tax_number = watch('taxNumber');
   const registration_number = watch('registrationNumber');
@@ -242,7 +233,6 @@ const goToPreviousTab = (e?: React.MouseEvent) => {
   const checkFieldExists = async (
     field:
       | 'code'
-      | 'name_en'
       | 'name_ar'
       | 'tax_number'
       | 'registration_number'
@@ -250,7 +240,6 @@ const goToPreviousTab = (e?: React.MouseEvent) => {
     value: string,
     formField:
       | 'code'
-      | 'nameEn'
       | 'nameAr'
       | 'taxNumber'
       | 'registrationNumber'
@@ -275,19 +264,6 @@ const goToPreviousTab = (e?: React.MouseEvent) => {
     }
   };
 
-
-  useEffect(() => {
-    if (!name_en || name_en.trim() === '') {
-      clearErrors('nameEn');
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      checkFieldExists('name_en', name_en, 'nameEn', 'CUSTOMER_NAME_EN_EXISTS');
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [name_en]);
 
   useEffect(() => {
     if (!name_ar || name_ar.trim() === '') {
@@ -404,16 +380,6 @@ const goToPreviousTab = (e?: React.MouseEvent) => {
           </div>
 
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <div>
-              <Label htmlFor="customerNameEn">
-                {t('CUSTOMER_NAME_EN')} <span className="text-red-500">*</span>
-              </Label>
-              <Input id="customerNameEn" className="mt-2 w-full" {...register('nameEn')} />
-              {errors.nameEn && (
-                <span className="error-message">{t(errors.nameEn.message!)}</span>
-              )}
-            </div>
-
             <div>
               <Label htmlFor="customerNameAr">
                 {t('CUSTOMER_NAME_AR')} <span className="text-red-500">*</span>

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import { Popover, PopoverContent, PopoverTrigger } from 'src/components/ui/popover';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 
 import {
   Command,
@@ -53,7 +53,12 @@ import { Separator } from 'src/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from 'src/components/ui/tabs';
 import { useAuth } from 'src/features/auth/hooks/useAuth';
 import { api } from 'src/shared/api/axios';
-import { fetchBanks, fetchNextCustomerCode, fetchPaymentMethods } from '../api/contractService';
+import {
+  fetchBanks,
+  fetchContractTypes,
+  fetchNextCustomerCode,
+  fetchPaymentMethods,
+} from '../api/contractService';
 
 function generateMonthOptions() {
   const now = new Date();
@@ -201,15 +206,28 @@ function getLandlineTelephoneCode(governorate = '') {
 
 type SellableService = {
   id: number;
-  type: 'SERVICE' | 'HARDWARE' | 'SUBSCRIPTION';
+  type: 'SERVICE' | 'ADDITIONAL_SERVICE' | 'HARDWARE' | 'SUBSCRIPTION';
   code: string;
   nameEn: string;
   nameAr: string;
   joining_fee: number;
   subscription_fee: number;
   isSubscriptionBased: boolean;
+  subscriptionClass: 'MAIN' | 'ADDITIONAL' | null;
   billingType: 'MONTHLY' | 'ONE_TIME';
   isQuantityBased: boolean;
+};
+
+type ContractTypeOffer = {
+  id: number;
+  code: string;
+  name_ar: string;
+  name_en: string;
+  max_months: number;
+  subscription_discount_percentage: number;
+  joining_fee_discount_percentage: number;
+  requires_selected_months: boolean | number;
+  auto_select_consecutive: boolean | number;
 };
 export default function AddCustomerContract() {
   const isRtl = true;
@@ -220,6 +238,9 @@ export default function AddCustomerContract() {
   const [activeStep, setActiveStep] = useState(1);
   const [participantOpen, setParticipantOpen] = useState(false);
   const nav = useNavigate();
+  const location = useLocation();
+  const workflowCustomerEdit = location.state?.workflowCustomerEdit === true;
+  const workflowContract = location.state?.contract;
   const [openBranch, setOpenBranch] = useState(false);
   const [governorates, setGovernorates] = useState<EgyptAdministrativeDivision[]>([]);
   const [districts, setDistricts] = useState<EgyptAdministrativeDivision[]>([]);
@@ -231,6 +252,10 @@ export default function AddCustomerContract() {
   const [isServicesLoading, setIsServicesLoading] = useState(true);
   const [servicesError, setServicesError] = useState('');
   const [servicesRefresh, setServicesRefresh] = useState(0);
+  const [selectedAdditionalServiceId, setSelectedAdditionalServiceId] = useState('');
+  const [contractTypes, setContractTypes] = useState<ContractTypeOffer[]>([]);
+  const [isContractTypesLoading, setIsContractTypesLoading] = useState(true);
+  const [contractTypesError, setContractTypesError] = useState('');
   const [zones, setZones] = useState<any[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
   const [banks, setBanks] = useState<any[]>([]);
@@ -364,20 +389,21 @@ export default function AddCustomerContract() {
     setValue,
     getValues,
     trigger,
+    reset,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm({
     mode: 'onBlur',
 
     defaultValues: {
-      customerMode: 'new',
+      customerMode: '',
 
       customerId: '',
-      customerNameEn: '',
       customerNameAr: '',
       customerCode: 'سيتم توليده تلقائياً',
       customerTypeId: null,
       structure: '',
+      parentCustomerId: '',
       zoneId: '',
       licenseNumber: '',
       taxRegistrationType: 'TAX_NUMBER',
@@ -390,7 +416,7 @@ export default function AddCustomerContract() {
       branchId: '',
       contractNumber: '',
       programId: null,
-      planId: null,
+      mainSubscriptionServiceId: null,
       contractType: '',
 
       hasParticipant: false,
@@ -638,8 +664,40 @@ export default function AddCustomerContract() {
   const customerTypeId = watch('customerTypeId');
   const taxRegistrationType = watch('taxRegistrationType');
   const structure = watch('structure');
+  const parentCustomerId = watch('parentCustomerId');
 
-  const planId = watch('planId');
+  const [parentCustomers, setParentCustomers] = useState<any[]>([]);
+  const [isParentCustomersLoading, setIsParentCustomersLoading] = useState(false);
+
+  useEffect(() => {
+    let isActive = true;
+    const loadParentCustomers = async () => {
+      setIsParentCustomersLoading(true);
+      try {
+        const response = await api.get('/customers', { params: { options: 'parent' } });
+        if (isActive)
+          setParentCustomers(Array.isArray(response.data?.data) ? response.data.data : []);
+      } catch {
+        if (isActive) setParentCustomers([]);
+      } finally {
+        if (isActive) setIsParentCustomersLoading(false);
+      }
+    };
+    void loadParentCustomers();
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (structure !== 'CHAIN' && parentCustomerId) {
+      setValue('parentCustomerId', '', { shouldDirty: true, shouldValidate: true });
+    }
+  }, [parentCustomerId, setValue, structure]);
+
+  const parentCustomerOptions = parentCustomers;
+
+  const mainSubscriptionServiceId = watch('mainSubscriptionServiceId');
   const contractType = watch('contractType');
 
   const participantId = watch('participantId');
@@ -681,6 +739,49 @@ export default function AddCustomerContract() {
     const abortController = new AbortController();
 
     const loadDivisions = async () => {
+      const fetchDivisions = async (url: string) => {
+        const response = await api.get(url, { signal: abortController.signal });
+        const divisions = response.data?.data;
+
+        if (!Array.isArray(divisions)) {
+          throw new Error('Invalid geography response.');
+        }
+
+        return divisions as EgyptAdministrativeDivision[];
+      };
+
+      // An edited workflow contract already has its full address. Fetch each
+      // level so the saved governorate, district, and shiyakha can be shown.
+      if (workflowCustomerEdit) {
+        setIsGeographyLoading(true);
+        setGeographyError('');
+
+        try {
+          const [loadedGovernorates, loadedDistricts, loadedShiyakhas] = await Promise.all([
+            fetchDivisions('/geography/governorates'),
+            governorateId
+              ? fetchDivisions(`/geography/${governorateId}/children`)
+              : Promise.resolve([]),
+            districtId ? fetchDivisions(`/geography/${districtId}/children`) : Promise.resolve([]),
+          ]);
+
+          if (isActive) {
+            setGovernorates(loadedGovernorates);
+            setDistricts(loadedDistricts);
+            setShiyakhas(loadedShiyakhas);
+          }
+        } catch (error) {
+          if (!abortController.signal.aborted && isActive) {
+            setGeographyError('تعذر تحميل التقسيمات الجغرافية. تحقق من الاتصال ثم أعد المحاولة.');
+          }
+        } finally {
+          if (isActive) {
+            setIsGeographyLoading(false);
+          }
+        }
+        return;
+      }
+
       const request = districtId
         ? { url: `/geography/${districtId}/children`, setDivisions: setShiyakhas }
         : governorateId
@@ -725,7 +826,7 @@ export default function AddCustomerContract() {
       isActive = false;
       abortController.abort();
     };
-  }, [districtId, geographyRefresh, governorateId]);
+  }, [districtId, geographyRefresh, governorateId, workflowCustomerEdit]);
 
   useEffect(() => {
     let isActive = true;
@@ -747,6 +848,10 @@ export default function AddCustomerContract() {
               joining_fee: Number(service.joining_fee ?? 0),
               subscription_fee: Number(service.subscription_fee ?? 0),
               isSubscriptionBased: Boolean(service.isSubscriptionBased),
+              subscriptionClass:
+                service.subscriptionClass === 'MAIN' || service.subscriptionClass === 'ADDITIONAL'
+                  ? service.subscriptionClass
+                  : null,
               billingType: service.billingType === 'MONTHLY' ? 'MONTHLY' : 'ONE_TIME',
               isQuantityBased: Boolean(service.isQuantityBased),
             })),
@@ -767,6 +872,46 @@ export default function AddCustomerContract() {
       abortController.abort();
     };
   }, [servicesRefresh]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadContractTypes = async () => {
+      setIsContractTypesLoading(true);
+      setContractTypesError('');
+      try {
+        const records = await fetchContractTypes();
+        if (!Array.isArray(records)) throw new Error('Invalid contract types response.');
+        if (isActive) {
+          setContractTypes(
+            records.map((contractType: any) => ({
+              ...contractType,
+              id: Number(contractType.id),
+              max_months: Number(contractType.max_months),
+              subscription_discount_percentage: Number(
+                contractType.subscription_discount_percentage ?? 0,
+              ),
+              joining_fee_discount_percentage: Number(
+                contractType.joining_fee_discount_percentage ?? 0,
+              ),
+              requires_selected_months: Boolean(contractType.requires_selected_months),
+              auto_select_consecutive: Boolean(contractType.auto_select_consecutive),
+            })),
+          );
+        }
+      } catch (error) {
+        if (isActive)
+          setContractTypesError('تعذر تحميل عروض التعاقد. تحقق من الاتصال ثم أعد المحاولة.');
+      } finally {
+        if (isActive) setIsContractTypesLoading(false);
+      }
+    };
+
+    void loadContractTypes();
+    return () => {
+      isActive = false;
+    };
+  }, []);
   const addOnPaymentMethodId = watch('addOnPayment.paymentMethodId');
 
   const selectedMonths = watch('selectedMonths') || [];
@@ -780,6 +925,7 @@ export default function AddCustomerContract() {
       control,
       name: 'hardwareDevices',
     }) || [];
+  const contactValues = useWatch({ control, name: 'contacts' }) || [];
 
   const initialPayments = useWatch({ control, name: 'initialPayments' }) || [];
   const paymentAmount = initialPayments.reduce(
@@ -832,35 +978,62 @@ export default function AddCustomerContract() {
     },
   ];
 
+  const inactiveCustomersForSelectedType = inactiveCustomers.filter((customer) =>
+    customerTypeId === 1
+      ? customer.type === 'PHARMACEUTICAL'
+      : customerTypeId === 2
+        ? customer.type === 'COMMERCIAL'
+        : false,
+  );
+
   const monthOptions = useMemo(() => generateMonthOptions(), []);
 
-  const plans = [
-    { id: 1, code: 'SILVER', name: 'Silver' },
-    { id: 2, code: 'GOLD', name: 'Gold' },
-  ].map((plan) => ({
-    ...plan,
-    subscription_fee: Number(
-      availableServices.find(
-        (service) =>
-          service.type === 'SUBSCRIPTION' &&
-          service.isSubscriptionBased &&
-          service.billingType === 'MONTHLY' &&
-          service.code === plan.code,
-      )?.subscription_fee ?? 0,
-    ),
-  }));
+  const mainSubscriptionServices = availableServices.filter(
+    (service) =>
+      service.type === 'SUBSCRIPTION' &&
+      service.isSubscriptionBased &&
+      service.billingType === 'MONTHLY' &&
+      service.subscriptionClass === 'MAIN',
+  );
 
   const joiningFeeService = availableServices.find((service) => service.code === 'JOINING_FEE');
-  const additionalUnitService = availableServices.find(
+  // At contract creation, only these two add-ons are selectable. Other
+  // ADDITIONAL_SERVICE catalog items remain available for their dedicated
+  // request/workflow screens and must not appear in this picker.
+  const contractAdditionalServiceCodes = new Set(['ADDITIONAL_UNIT', 'REPLICATION_SERVICE']);
+  const additionalServicesCatalog = availableServices.filter(
+    (service) =>
+      service.type === 'ADDITIONAL_SERVICE' &&
+      service.billingType === 'ONE_TIME' &&
+      !service.isSubscriptionBased &&
+      contractAdditionalServiceCodes.has(service.code),
+  );
+  // Retained for the legacy markup below while the catalog-driven selector is active.
+  const additionalUnitService = additionalServicesCatalog.find(
     (service) => service.code === 'ADDITIONAL_UNIT',
   );
-  // One-time service catalog entries are retained as replication services.
-  const replicationServices = availableServices.filter(
-    (service) =>
-      service.code === 'REPLICATION_SERVICE' &&
-      service.type === 'SERVICE' &&
-      service.billingType === 'ONE_TIME',
+  const additionalServiceOptions = additionalServicesCatalog.filter(
+    (service) => service.code !== 'ADDITIONAL_UNIT',
   );
+  const selectedAdditionalServiceIds = new Set(
+    additionalServiceFields.map((item: any) => Number(item.serviceId)),
+  );
+  const additionalServicePickerOptions = additionalServicesCatalog
+    .filter((service) => service.isQuantityBased || !selectedAdditionalServiceIds.has(service.id))
+    .map((service) => [
+      service.id,
+      `${service.nameAr} — ${Number(service.joining_fee).toLocaleString('ar-EG')} جنيه${
+        service.isQuantityBased ? ' · حسب الكمية' : ''
+      }`,
+    ]);
+  const addSelectedAdditionalService = () => {
+    const service = additionalServicesCatalog.find(
+      (candidate) => candidate.id === Number(selectedAdditionalServiceId),
+    );
+    if (!service) return;
+    addAdditionalService(service);
+    setSelectedAdditionalServiceId('');
+  };
   const hardwareDevices = availableServices.filter(
     (service) =>
       service.type === 'HARDWARE' &&
@@ -868,25 +1041,23 @@ export default function AddCustomerContract() {
       !service.isSubscriptionBased,
   );
 
-  const contractTypeRules: any = {
-    REGULAR: {
-      label: 'عادي — بدون خصم',
-      maxMonths: 12,
-      subscriptionDiscountPercentage: 0,
-      joiningFeeDiscountPercentage: 0,
-      requiresSelectedMonths: false,
-      autoSelectConsecutive: false,
-    },
-
-    SIX_MONTHS: {
-      label: '6 أشهر — خصم 50% اشتراك، 40% رسوم الانضمام',
-      maxMonths: 6,
-      subscriptionDiscountPercentage: 50,
-      joiningFeeDiscountPercentage: 40,
-      requiresSelectedMonths: true,
-      autoSelectConsecutive: true,
-    },
-  };
+  const contractTypeRules = useMemo(
+    () =>
+      Object.fromEntries(
+        contractTypes.map((offer) => [
+          offer.code,
+          {
+            label: offer.name_ar || offer.name_en,
+            maxMonths: offer.max_months,
+            subscriptionDiscountPercentage: offer.subscription_discount_percentage,
+            joiningFeeDiscountPercentage: offer.joining_fee_discount_percentage,
+            requiresSelectedMonths: Boolean(offer.requires_selected_months),
+            autoSelectConsecutive: Boolean(offer.auto_select_consecutive),
+          },
+        ]),
+      ),
+    [contractTypes],
+  ) as Record<string, any>;
 
   const currentContractTypeRule = contractTypeRules[contractType] || {
     label: '',
@@ -894,6 +1065,7 @@ export default function AddCustomerContract() {
     subscriptionDiscountPercentage: 0,
     joiningFeeDiscountPercentage: 0,
     requiresSelectedMonths: false,
+    autoSelectConsecutive: false,
   };
 
   const visibleMonthOptions = useMemo(() => {
@@ -944,11 +1116,13 @@ export default function AddCustomerContract() {
 
   ========================================================= */
 
-  const selectedPlan = plans.find((p: any) => p.id === Number(planId));
+  const selectedMainSubscriptionService = mainSubscriptionServices.find(
+    (service) => service.id === Number(mainSubscriptionServiceId),
+  );
 
   const joiningFee = Number(joiningFeeService?.joining_fee ?? 0);
 
-  const mainMonthlySubscription = selectedPlan?.subscription_fee || 0;
+  const mainMonthlySubscription = selectedMainSubscriptionService?.subscription_fee || 0;
 
   // The chosen months at contract creation collect the main plan only.
   const initialCollectedMonthlySubscription = mainMonthlySubscription;
@@ -967,18 +1141,30 @@ export default function AddCustomerContract() {
   const subscriptionDiscountPercentage = currentContractTypeRule.subscriptionDiscountPercentage;
   const joiningFeeDiscountPercentage = currentContractTypeRule.joiningFeeDiscountPercentage;
 
-  const subscriptionDiscount = monthlySubscription * (subscriptionDiscountPercentage / 100);
-  const joiningFeeDiscount = joiningFee * (joiningFeeDiscountPercentage / 100);
-
-  const subscriptionPriceAfterDiscount = monthlySubscription - subscriptionDiscount;
-  const joiningFeeAfterContractTypeDiscount = joiningFee - joiningFeeDiscount;
+  const monthlySubscriptionAfterDiscount = Number(
+    (initialCollectedMonthlySubscription * (1 - subscriptionDiscountPercentage / 100)).toFixed(2),
+  );
+  const subscriptionPriceAfterDiscount = Number(
+    (monthlySubscriptionAfterDiscount * selectedMonths.length).toFixed(2),
+  );
+  const subscriptionDiscount = monthlySubscription - subscriptionPriceAfterDiscount;
+  const joiningFeeAfterContractTypeDiscount = Number(
+    (joiningFee * (1 - joiningFeeDiscountPercentage / 100)).toFixed(2),
+  );
+  const joiningFeeDiscount = joiningFee - joiningFeeAfterContractTypeDiscount;
 
   const selectedAdditionalServiceRows = selectedAdditionalServices
     .map((item: any) => {
       const service = availableServices.find(
         (candidate) => candidate.id === Number(item.serviceId),
       );
-      if (!service) return null;
+      if (
+        !service ||
+        service.type !== 'ADDITIONAL_SERVICE' ||
+        service.billingType !== 'ONE_TIME' ||
+        service.isSubscriptionBased
+      )
+        return null;
       const quantity = Math.max(Number(item.quantity) || 1, 1);
       return { ...service, quantity, total: service.joining_fee * quantity };
     })
@@ -999,17 +1185,10 @@ export default function AddCustomerContract() {
     (total, device) => total + device.total,
     0,
   );
-  const selectedAdditionalUnitRows = selectedAdditionalServiceRows.filter(
-    (service) => service.code === 'ADDITIONAL_UNIT',
-  );
-  const selectedReplicationServiceRows = selectedAdditionalServiceRows.filter(
-    (service) => service.code !== 'ADDITIONAL_UNIT',
-  );
-
-  const addOnTotal = additionalServicesTotal + hardwareDevicesTotal;
+  const addOnTotal = additionalServicesTotal;
   const grossContractValue = joiningFeeAfterContractTypeDiscount + subscriptionPriceAfterDiscount;
+  const totalContractValue = Number(grossContractValue.toFixed(2));
   const discountAmount = subscriptionDiscount + joiningFeeDiscount;
-  const totalContractValue = grossContractValue;
 
   const totalBeforeDiscount = joiningFee + monthlySubscription;
   const joiningFeeAfterDiscount = joiningFeeAfterContractTypeDiscount;
@@ -1044,7 +1223,8 @@ export default function AddCustomerContract() {
   const selectedBranch = branchId !== '' ? (branches[Number(branchId)] ?? null) : null;
   const selectedZone = zoneId !== '' ? (zones[Number(zoneId)] ?? null) : null;
 
-  const customerStatus = customerMode === 'reactivate' ? 'إعادة تفعيل' : 'عميل جديد';
+  const customerStatus =
+    customerMode === 'reactivate' ? 'إعادة تفعيل' : customerMode === 'new' ? 'عميل جديد' : '—';
   const selectedAddOnPaymentMethod = paymentMethods.find(
     (method) => Number(method.id) === Number(addOnPaymentMethodId),
   );
@@ -1184,11 +1364,6 @@ export default function AddCustomerContract() {
       shouldValidate: true,
     });
 
-    setValue('customerNameEn', customer.nameEn, {
-      shouldDirty: true,
-      shouldValidate: true,
-    });
-
     setValue('customerNameAr', customer.nameAr, {
       shouldDirty: true,
       shouldValidate: true,
@@ -1199,7 +1374,7 @@ export default function AddCustomerContract() {
       shouldValidate: true,
     });
 
-    setValue('customerTypeId', customer.typeId, {
+    setValue('customerTypeId', customer.type === 'PHARMACEUTICAL' ? 1 : 2, {
       shouldDirty: true,
       shouldValidate: true,
     });
@@ -1346,12 +1521,20 @@ export default function AddCustomerContract() {
   };
 
   const handleInvalidSubmit = (submitErrors: Record<string, unknown>) => {
+    // Add-on fields are entered on the final step. Give them priority over stale
+    // errors from an earlier step so submitting an additional unit/replication
+    // receipt never hides the field the user needs to correct.
+    const hasAddOnError = ['addOnPayment', 'additionalServices', 'hardwareDevices'].some((field) =>
+      Boolean(submitErrors[field]),
+    );
+
     const hasStepOneError = [
+      'customerMode',
       'customerId',
       'customerNameAr',
-      'customerNameEn',
       'customerTypeId',
       'structure',
+      'parentCustomerId',
       'zoneId',
       'licenseNumber',
       'taxNumber',
@@ -1362,21 +1545,34 @@ export default function AddCustomerContract() {
       'address',
     ].some((field) => Boolean(submitErrors[field]));
 
-    const hasAddOnError = ['addOnPayment', 'additionalServices', 'hardwareDevices'].some((field) =>
-      Boolean(submitErrors[field]),
-    );
+    const hasSubscriptionError = [
+      'contractDate',
+      'programId',
+      'mainSubscriptionServiceId',
+      'contractType',
+      'selectedMonths',
+      'initialPayments',
+      'installationDate',
+      'nextDueDate',
+    ].some((field) => Boolean(submitErrors[field]));
 
-    setActiveStep(hasStepOneError ? 1 : hasAddOnError ? 3 : 2);
+    setActiveStep((currentStep) => {
+      if (hasAddOnError) return 3;
+      if (hasStepOneError) return 1;
+      if (hasSubscriptionError) return 2;
+      return currentStep;
+    });
     scrollToFirstValidationError();
   };
   const handleNext = async () => {
     const valid = await trigger([
+      'customerMode',
       'customerId',
 
       'customerNameAr',
-      'customerNameEn',
       'customerTypeId',
       'structure',
+      'parentCustomerId',
       'zoneId',
       'licenseNumber',
       'registrationNumber',
@@ -1384,23 +1580,11 @@ export default function AddCustomerContract() {
         ? ['taxNumber']
         : ['taxExemptionNationalId', 'taxExemptionComment']),
 
-      'contacts.0.type',
-      'contacts.0.nameAr',
-      'contacts.0.nameEn',
-      'contacts.0.nationalId',
-      'contacts.0.email',
-      'contacts.0.phones.0.number',
-      'contacts.0.phones.1.number',
-
-      'address.governorateId',
-      'address.districtId',
-      'address.shiyakhaId',
-      'address.street',
-      'address.buildingNumber',
-      'address.googleMapsUrl',
-      'address.latitude',
-      'address.longitude',
-      'address.glnCode',
+      // Validate the full nested groups, rather than only the first contact and
+      // address inputs. Otherwise a later final submit discovers a missed error
+      // and appears to send the user backwards from the Add-ons step.
+      'contacts',
+      'address',
     ]);
 
     if (!valid) {
@@ -1430,6 +1614,18 @@ export default function AddCustomerContract() {
   };
 
   const handlePlanNext = async () => {
+    // These are all step-2 fields. Validate them here so final Send is reserved
+    // for submitting the contract, not for redirecting to a missed plan error.
+    const subscriptionFields = [
+      'contractDate',
+      'programId',
+      'mainSubscriptionServiceId',
+      'contractType',
+      'selectedMonths',
+      'initialPayments',
+      'installationDate',
+      'nextDueDate',
+    ];
     const paymentFields = initialPayments.flatMap((payment: any, index: number) => {
       const prefix = `initialPayments.${index}`;
       const method = paymentMethods.find(
@@ -1459,7 +1655,7 @@ export default function AddCustomerContract() {
         );
       return fields;
     });
-    const valid = await trigger(paymentFields as any);
+    const valid = await trigger([...subscriptionFields, ...paymentFields] as any);
     if (!valid || paymentAmount <= 0 || paymentAmount > totalContractValue + 0.01) {
       scrollToFirstValidationError();
       return;
@@ -1480,7 +1676,102 @@ export default function AddCustomerContract() {
      FINAL SUBMIT
   ========================================================= */
 
+  useEffect(() => {
+    if (!workflowCustomerEdit || !workflowContract) return;
+    const landlineCode =
+      getLandlineTelephoneCode(workflowContract.governorate_name_ar || '')?.code || '';
+    const savedLandline = String(workflowContract.landline_phone || '').replace(/\D/g, '');
+    const landlineSubscriber =
+      landlineCode && savedLandline.startsWith(landlineCode)
+        ? savedLandline.slice(landlineCode.length)
+        : savedLandline;
+    reset((current) => ({
+      ...current,
+      customerMode: 'new',
+      customerNameAr: workflowContract.customer_name_ar || '',
+      customerCode: workflowContract.customer_code || '',
+      customerTypeId: workflowContract.customer_type_id || null,
+      structure: workflowContract.structure || '',
+      parentCustomerId: workflowContract.parent_customer_id || '',
+      zoneId: workflowContract.zone_id || '',
+      licenseNumber: workflowContract.license_number || '',
+      taxNumber: workflowContract.tax_number || '',
+      registrationNumber: workflowContract.registration_number || '',
+      address: {
+        governorateId: workflowContract.geographic_governorate_id || '',
+        districtId: workflowContract.geographic_district_id || '',
+        shiyakhaId: workflowContract.geographic_shiyakha_id || '',
+        street: workflowContract.street || '',
+        buildingNumber: workflowContract.building_number || '',
+        glnCode: workflowContract.gln_code || '',
+        googleMapsUrl: workflowContract.google_maps_url || '',
+        latitude: workflowContract.latitude || '',
+        longitude: workflowContract.longitude || '',
+      },
+      contacts: [
+        {
+          type: 'OWNER',
+          nameEn: workflowContract.contact_name_en || '',
+          nameAr: workflowContract.contact_name_ar || '',
+          nationalId: workflowContract.contact_national_id || '',
+          email: workflowContract.contact_email || '',
+          phones: [
+            {
+              number: workflowContract.mobile_phone || workflowContract.customer_phone || '',
+              type: 'محمول',
+            },
+            { number: landlineSubscriber, type: 'هاتف أرضي' },
+          ],
+        },
+      ],
+    }));
+    setActiveStep(1);
+  }, [workflowCustomerEdit, workflowContract, reset]);
+
+  const saveWorkflowCustomer = async () => {
+    if (!workflowCustomerEdit || !workflowContract) return;
+    const data = getValues();
+    const landlineCode = getLandlineTelephoneCode(selectedGovernorate?.nameAr || '')?.code || '';
+    const landlineSubscriber = String(data.contacts?.[0]?.phones?.[1]?.number || '').replace(
+      /\D/g,
+      '',
+    );
+    try {
+      await api.patch(`/contract-workflow/${workflowContract.id}/customer`, {
+        nameAr: data.customerNameAr,
+        taxNumber: data.taxNumber,
+        registrationNumber: data.registrationNumber,
+        licenseNumber: data.licenseNumber,
+        structure: data.structure,
+        parentCustomerId: data.structure === 'CHAIN' ? Number(data.parentCustomerId) : null,
+        customerTypeId: data.customerTypeId,
+        zoneId: data.zoneId,
+        address: data.address,
+        contact: {
+          nameEn: data.contacts?.[0]?.nameEn,
+          nameAr: data.contacts?.[0]?.nameAr,
+          nationalId: data.contacts?.[0]?.nationalId,
+          email: data.contacts?.[0]?.email,
+          mobilePhone: data.contacts?.[0]?.phones?.[0]?.number,
+          landlinePhone: landlineSubscriber ? `${landlineCode}${landlineSubscriber}` : '',
+        },
+      });
+      await Swal.fire({ icon: 'success', title: 'تم حفظ بيانات العميل' });
+      nav('/contract-follow-up');
+    } catch (error: any) {
+      await Swal.fire({
+        icon: 'error',
+        title: 'تعذر حفظ بيانات العميل',
+        text: error?.response?.data?.message || 'حاول مرة أخرى.',
+      });
+    }
+  };
+
   const onSubmit = async (data: any) => {
+    if (workflowCustomerEdit) {
+      await saveWorkflowCustomer();
+      return;
+    }
     // Only the final Add-ons step may open the creation confirmation.
     // This also protects against an Enter-key form submit from the plan step.
     if (activeStep !== 3 || isAdvancingToAddOnsRef.current) {
@@ -1502,22 +1793,26 @@ export default function AddCustomerContract() {
     if (
       isServicesLoading ||
       servicesError ||
+      isContractTypesLoading ||
+      contractTypesError ||
+      !contractTypeRules[data.contractType] ||
       !joiningFeeService ||
-      !selectedPlan?.subscription_fee
+      !selectedMainSubscriptionService?.subscription_fee
     ) {
       await Swal.fire({
         icon: 'error',
         title: 'تعذر إنشاء العقد',
-        text: 'تعذر التحقق من أسعار الاشتراك ورسوم الانضمام من كتالوج الخدمات. أعد المحاولة بعد تحميل الخدمات.',
+        text:
+          contractTypesError || isContractTypesLoading
+            ? 'تعذر التحقق من عروض التعاقد. أعد المحاولة بعد تحميل العروض.'
+            : 'تعذر التحقق من أسعار الاشتراك ورسوم الانضمام من كتالوج الخدمات. أعد المحاولة بعد تحميل الخدمات.',
         confirmButtonText: 'حسناً',
       });
       return;
     }
 
     const selectedMonthsPayload = data.selectedMonths.map((month: any) => month.value.slice(0, 7));
-    const discountedMonthlyAmount = Number(
-      (initialCollectedMonthlySubscription * (1 - subscriptionDiscountPercentage / 100)).toFixed(2),
-    );
+    const discountedMonthlyAmount = monthlySubscriptionAfterDiscount;
 
     const contactsPayload = (data.contacts || []).map((contact: any) => ({
       ...contact,
@@ -1536,10 +1831,10 @@ export default function AddCustomerContract() {
     }));
 
     const payload = {
-      customerNameEn: data.customerNameEn,
       customerNameAr: data.customerNameAr,
       customerTypeId: data.customerTypeId,
       structure: data.structure,
+      parentCustomerId: data.structure === 'CHAIN' ? Number(data.parentCustomerId) : null,
       taxRegistrationType: data.taxRegistrationType,
       taxNumber: data.taxRegistrationType === 'TAX_NUMBER' ? data.taxNumber : null,
       taxExemptionNationalId:
@@ -1561,8 +1856,9 @@ export default function AddCustomerContract() {
         longitude: data.address.longitude || null,
         glnCode: data.address.glnCode || null,
       },
-      planId: data.planId,
+      mainSubscriptionServiceId: Number(data.mainSubscriptionServiceId),
       programId: data.programId,
+      contractType: data.contractType,
       contractNumber: data.contractNumber,
       contractDate: data.contractDate,
       selectedMonths: selectedMonthsPayload,
@@ -1599,11 +1895,18 @@ export default function AddCustomerContract() {
           quantity: Math.max(Number(service.quantity) || 0, 0),
         }))
         .filter(
-          (service: any) =>
-            Number.isInteger(service.serviceId) &&
-            service.serviceId > 0 &&
-            service.quantity > 0 &&
-            availableServices.find((item) => item.id === service.serviceId)?.type === 'SERVICE',
+          (service: any) => {
+            const catalogService = availableServices.find((item) => item.id === service.serviceId);
+            return Boolean(
+              Number.isInteger(service.serviceId) &&
+                service.serviceId > 0 &&
+                service.quantity > 0 &&
+                catalogService?.type === 'ADDITIONAL_SERVICE' &&
+                catalogService.billingType === 'ONE_TIME' &&
+                !catalogService.isSubscriptionBased &&
+                contractAdditionalServiceCodes.has(catalogService.code),
+            );
+          },
         ),
       hardwareDevices: (data.hardwareDevices || [])
         .map((device: any) => ({
@@ -1619,6 +1922,9 @@ export default function AddCustomerContract() {
         ),
       installationDate: data.installationDate,
       notes: data.notes,
+      // Keep files visible in the submit payload log. They are appended to
+      // FormData separately below and are never JSON-serialized.
+      documents: data.documents || [],
     };
 
     console.log(payload);
@@ -1745,12 +2051,18 @@ export default function AddCustomerContract() {
               HIDDEN FIELDS
           ================================================= */}
 
-          <input type="hidden" {...register('customerMode')} />
+          <input
+            type="hidden"
+            {...register('customerMode', {
+              required: 'اختر نوع العملية',
+            })}
+          />
 
           <input
             type="hidden"
             {...register('customerId', {
-              validate: (value) => customerMode === 'new' || value || 'يجب اختيار العميل غير النشط',
+              validate: (value) =>
+                customerMode !== 'reactivate' || value || 'يجب اختيار العميل غير النشط',
             })}
           />
 
@@ -1774,7 +2086,7 @@ export default function AddCustomerContract() {
             <h1 className="text-2xl font-bold tracking-tight">إنشاء عميل وعقد جديد</h1>
 
             <p className="mt-1 text-sm text-muted-foreground">
-              قم بإدخال بيانات العميل ثم تفاصيل العقد والخطة والتحصيل.
+              قم بإدخال بيانات العميل ثم تفاصيل العقد والاشتراك والتحصيل.
             </p>
           </div>
 
@@ -1794,8 +2106,8 @@ export default function AddCustomerContract() {
                   },
                   {
                     id: 2,
-                    title: 'العقد والخطة',
-                    description: 'الخطة، الاشتراك، وتحصل العقد',
+                    title: 'العقد والاشتراك',
+                    description: 'التعاقد، الاشتراك، وتحصيل العقد',
                     icon: FileText,
                   },
                   {
@@ -1888,13 +2200,107 @@ export default function AddCustomerContract() {
 
           {activeStep === 1 && (
             <div className="space-y-6">
-              {/* Customer Mode */}
+              {/* Customer type must be selected before choosing the operation. */}
+              <Card
+                className="border-border bg-card shadow-sm"
+                data-validation-anchor={errors.customerTypeId ? 'true' : undefined}
+              >
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Building2 className="h-5 w-5 text-muted-foreground" />
+                    نوع العميل
+                    <span className="text-red-500">*</span>
+                  </CardTitle>
+                </CardHeader>
 
-              <Card className="border-border bg-card shadow-sm">
+                <CardContent>
+                  <input
+                    type="hidden"
+                    {...register('customerTypeId', {
+                      required: 'نوع العميل مطلوب',
+                      validate: (value) => value === 1 || value === 2 || 'نوع العميل مطلوب',
+                    })}
+                  />
+
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    {[
+                      { value: 1, label: 'صيدلي', description: 'صيدليات وسلاسل الصيدليات' },
+                      { value: 2, label: 'تجاري', description: 'المنشآت والأنشطة التجارية' },
+                    ].map((item) => {
+                      const isSelected = customerTypeId === item.value;
+
+                      return (
+                        <button
+                          key={item.value}
+                          type="button"
+                          aria-pressed={isSelected}
+                          onClick={() => {
+                            setValue('customerTypeId', item.value, {
+                              shouldDirty: true,
+                              shouldTouch: true,
+                              shouldValidate: true,
+                            });
+                            setValue('customerMode', '', {
+                              shouldDirty: true,
+                              shouldValidate: false,
+                            });
+                            setValue('customerId', '', {
+                              shouldDirty: true,
+                              shouldValidate: false,
+                            });
+                          }}
+                          className={cn(
+                            'rounded-2xl border p-5 text-right transition-all',
+                            isSelected
+                              ? 'border-foreground bg-foreground text-background shadow-md'
+                              : 'border-border bg-card hover:bg-accent',
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <div className="text-sm font-bold">{item.label}</div>
+                              <p
+                                className={cn(
+                                  'mt-2 text-xs leading-5',
+                                  isSelected ? 'text-background/70' : 'text-muted-foreground',
+                                )}
+                              >
+                                {item.description}
+                              </p>
+                            </div>
+                            <div
+                              className={cn(
+                                'rounded-xl p-3',
+                                isSelected ? 'bg-background/10' : 'bg-muted',
+                              )}
+                            >
+                              <Building2 className="h-5 w-5" />
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {errors.customerTypeId?.message && (
+                    <div className="mt-3">
+                      <ErrorText>{String(errors.customerTypeId.message)}</ErrorText>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Customer operation */}
+
+              <Card
+                className="border-border bg-card shadow-sm"
+                data-validation-anchor={errors.customerMode ? 'true' : undefined}
+              >
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
                     <UserRound className="h-5 w-5 text-muted-foreground" />
                     نوع العملية
+                    <span className="text-red-500">*</span>
                   </CardTitle>
                 </CardHeader>
 
@@ -1904,9 +2310,11 @@ export default function AddCustomerContract() {
 
                     <button
                       type="button"
+                      disabled={!customerTypeId}
                       onClick={() => {
                         setValue('customerMode', 'new', {
                           shouldDirty: true,
+                          shouldValidate: true,
                         });
 
                         setValue('customerId', '');
@@ -1918,7 +2326,9 @@ export default function AddCustomerContract() {
                         ${
                           customerMode === 'new'
                             ? 'border-foreground bg-foreground text-background shadow-md'
-                            : 'border-border bg-card hover:bg-accent'
+                            : customerTypeId
+                              ? 'border-border bg-card hover:bg-accent'
+                              : 'cursor-not-allowed border-border bg-muted/50 text-muted-foreground opacity-60'
                         }
                       `}
                     >
@@ -1956,9 +2366,11 @@ export default function AddCustomerContract() {
 
                     <button
                       type="button"
+                      disabled={!customerTypeId}
                       onClick={() =>
                         setValue('customerMode', 'reactivate', {
                           shouldDirty: true,
+                          shouldValidate: true,
                         })
                       }
                       className={`
@@ -1968,7 +2380,9 @@ export default function AddCustomerContract() {
                         ${
                           customerMode === 'reactivate'
                             ? 'border-amber-500 bg-amber-50 shadow-md dark:border-amber-700 dark:bg-amber-950/40'
-                            : 'border-border bg-card hover:bg-accent'
+                            : customerTypeId
+                              ? 'border-border bg-card hover:bg-accent'
+                              : 'cursor-not-allowed border-border bg-muted/50 text-muted-foreground opacity-60'
                         }
                       `}
                     >
@@ -1988,6 +2402,16 @@ export default function AddCustomerContract() {
                     </button>
                   </div>
 
+                  {!customerTypeId && (
+                    <p className="rounded-xl bg-muted px-3 py-2 text-xs text-muted-foreground">
+                      اختر نوع العميل أولاً ثم حدد نوع العملية.
+                    </p>
+                  )}
+
+                  {errors.customerMode?.message && (
+                    <ErrorText>{String(errors.customerMode.message)}</ErrorText>
+                  )}
+
                   {customerMode === 'reactivate' && (
                     <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
                       <Label>اختر العميل غير النشط</Label>
@@ -1999,7 +2423,7 @@ export default function AddCustomerContract() {
                           onValueChange={handleInactiveCustomer}
                           options={[
                             ['', 'اختر العميل...'],
-                            ...inactiveCustomers.map((customer) => [
+                            ...inactiveCustomersForSelectedType.map((customer) => [
                               customer.id,
                               `${customer.nameAr} — ${customer.code}`,
                             ]),
@@ -2034,63 +2458,11 @@ export default function AddCustomerContract() {
                 </CardHeader>
 
                 <CardContent className="space-y-5">
-                  {/* Compact customer type selector */}
-                  <div
-                    className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4"
-                    data-validation-anchor={errors.customerTypeId ? 'true' : undefined}
-                  >
-                    <Label>
-                      نوع العميل <span className="mr-1 text-red-500">*</span>
-                    </Label>
-                    <input
-                      type="hidden"
-                      {...register('customerTypeId', {
-                        required: 'نوع العميل مطلوب',
-                        validate: (value) => value === 1 || value === 2 || 'نوع العميل مطلوب',
-                      })}
-                    />
-                    <div
-                      className="flex rounded-lg border border-border bg-muted/40 p-0.5 text-xs"
-                      role="group"
-                      aria-label="نوع العميل"
-                    >
-                      {[
-                        { value: 1, label: 'صيدلي' },
-                        { value: 2, label: 'تجاري' },
-                      ].map((item) => (
-                        <button
-                          key={item.value}
-                          type="button"
-                          aria-pressed={customerTypeId === item.value}
-                          onClick={() =>
-                            setValue('customerTypeId', item.value, {
-                              shouldDirty: true,
-                              shouldTouch: true,
-                              shouldValidate: true,
-                            })
-                          }
-                          className={cn(
-                            'rounded-md px-3 py-1.5 transition-colors',
-                            customerTypeId === item.value
-                              ? 'bg-background font-semibold text-foreground shadow-sm'
-                              : 'text-muted-foreground hover:text-foreground',
-                          )}
-                        >
-                          {item.label}
-                        </button>
-                      ))}
-                    </div>
-                    {errors.customerTypeId?.message && (
-                      <div className="w-full">
-                        <ErrorText>{String(errors.customerTypeId.message)}</ErrorText>
-                      </div>
-                    )}
-                  </div>
                   <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
                     <FormField
                       label={
                         <>
-                          اسم العميل بالعربية
+                          اسم العميل
                           <span className="mr-1 text-red-500">*</span>
                         </>
                       }
@@ -2114,12 +2486,6 @@ export default function AddCustomerContract() {
                       error={errors.customerNameAr?.message}
                     />
 
-                    <FormField
-                      label="اسم العميل بالإنجليزية"
-                      registration={register('customerNameEn')}
-                      placeholder="Example: Al Aml Pharmacy"
-                    />
-
                     <div>
                       <Label>كود العميل</Label>
 
@@ -2137,14 +2503,16 @@ export default function AddCustomerContract() {
                           ? isCustomerCodePreviewLoading
                             ? 'جارٍ تحميل الكود المتوقع…'
                             : 'هذا هو الكود المتوقع؛ ويُثبت الكود النهائي تلقائياً عند الحفظ.'
-                          : 'كود العميل المحدد محفوظ كما هو.'}
+                          : customerMode === 'reactivate'
+                            ? 'كود العميل المحدد محفوظ كما هو.'
+                            : 'اختر نوع العملية أولاً لتحديد طريقة إنشاء الكود.'}
                       </p>
                     </div>
 
                     <SelectField
                       label={
                         <>
-                          هيكل العميل
+                          نوع الصيدلية
                           <span className="mr-1 text-red-500">*</span>
                         </>
                       }
@@ -2152,12 +2520,61 @@ export default function AddCustomerContract() {
                         required: 'هيكل العميل مطلوب',
                       })}
                       options={[
-                        ['SINGLE', 'فرع واحد'],
-                        ['CHAIN', 'سلسلة'],
+                        ['SINGLE', 'فردي'],
+                        ['CHAIN', 'سلاسل'],
                       ]}
                       control={control}
                       error={errors.structure?.message}
                     />
+
+                    {structure === 'CHAIN' && (
+                      <div data-validation-anchor={errors.parentCustomerId ? 'true' : undefined}>
+                        <Label>
+                          تابع لأي صيدلية / عميل؟ <span className="mr-1 text-red-500">*</span>
+                        </Label>
+                        <input
+                          type="hidden"
+                          {...register('parentCustomerId', {
+                            validate: (value) =>
+                              structure !== 'CHAIN' ||
+                              Number(value) > 0 ||
+                              'اختر الصيدلية أو العميل الرئيسي',
+                          })}
+                        />
+                        <SearchableSelect
+                          value={parentCustomerId}
+                          onValueChange={(value: string) =>
+                            setValue('parentCustomerId', value, {
+                              shouldDirty: true,
+                              shouldTouch: true,
+                              shouldValidate: true,
+                            })
+                          }
+                          disabled={isParentCustomersLoading || !customerTypeId}
+                          error={Boolean(errors.parentCustomerId)}
+                          placeholder={
+                            isParentCustomersLoading
+                              ? 'جارٍ تحميل العملاء...'
+                              : 'اختر الصيدلية أو العميل الرئيسي'
+                          }
+                          searchPlaceholder="ابحث بالاسم أو كود العميل..."
+                          emptyMessage="لا يوجد عملاء متاحون"
+                          options={[
+                            ['', 'اختر الصيدلية أو العميل الرئيسي'],
+                            ...parentCustomerOptions.map((customer) => [
+                              customer.id,
+                              customer.name || 'عميل',
+                            ]),
+                          ]}
+                        />
+                        <p className="mt-1.5 text-xs text-muted-foreground">
+                          ستظهر الصيدلية/العميل الرئيسي في التقارير لتسهيل متابعة فروع السلاسل.
+                        </p>
+                        {errors.parentCustomerId?.message && (
+                          <ErrorText>{String(errors.parentCustomerId.message)}</ErrorText>
+                        )}
+                      </div>
+                    )}
 
                     <SelectField
                       label={
@@ -2924,7 +3341,7 @@ export default function AddCustomerContract() {
                   <div className="flex items-center justify-between">
                     <CardTitle className="flex items-center gap-2 text-base">
                       <Users className="h-5 w-5 text-muted-foreground" />
-                      جهات الاتصال
+                      بيانات المتعاقد
                     </CardTitle>
 
                     <Button
@@ -2933,7 +3350,7 @@ export default function AddCustomerContract() {
                       className="rounded-xl"
                       onClick={() =>
                         appendContact({
-                          type: 'EMPLOYEE',
+                          type: 'MANAGER',
                           nameEn: '',
                           nameAr: '',
                           nationalId: '',
@@ -2960,6 +3377,10 @@ export default function AddCustomerContract() {
                 <CardContent className="space-y-5">
                   {contactFields.map((contact: any, contactIndex: number) => {
                     const contactError = (errors as any).contacts?.[contactIndex];
+                    const isPrimaryContact = contactIndex === 0;
+                    const contactType =
+                      contactValues[contactIndex]?.type || contact.type || 'OWNER';
+                    const primaryRoleLabel = contactType === 'Tenant' ? 'مستأجر' : 'صاحب';
 
                     return (
                       <div
@@ -2981,7 +3402,7 @@ export default function AddCustomerContract() {
                               </div>
 
                               <div className="mt-1 text-xs text-muted-foreground">
-                                بيانات المسؤول أو الموظف
+                                {isPrimaryContact ? 'بيانات المتعاقد' : 'بيانات المسؤول أو الموظف'}
                               </div>
                             </div>
                           </div>
@@ -3001,24 +3422,79 @@ export default function AddCustomerContract() {
                         </div>
 
                         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                          <SelectField
-                            label={
-                              <>
-                                نوع جهات الاتصال
-                                <span className="mr-1 text-red-500">*</span>
-                              </>
-                            }
-                            registration={register(`contacts.${contactIndex}.type`, {
-                              required: 'نوع جهة الاتصال مطلوب',
-                            })}
-                            options={[
-                              ['OWNER', 'مالك'],
-                              ['MANAGER', 'مدير'],
-                              ['EMPLOYEE', 'موظف'],
-                            ]}
-                            control={control}
-                            error={contactError?.type?.message}
-                          />
+                          {isPrimaryContact ? (
+                            <>
+                              <div>
+                                <Label>
+                                  نوع المتعاقد
+                                  <span className="mr-1 text-red-500">*</span>
+                                </Label>
+                                <input
+                                  type="hidden"
+                                  {...register(`contacts.${contactIndex}.type`, {
+                                    required: 'نوع جهة الاتصال مطلوب',
+                                  })}
+                                />
+                                <div className="mt-2 grid grid-cols-2 rounded-xl border bg-muted/40 p-1">
+                                  {[
+                                    ['OWNER', 'صاحب'],
+                                    ['Tenant', 'مستأجر'],
+                                  ].map(([value, label]) => (
+                                    <button
+                                      key={value}
+                                      type="button"
+                                      aria-pressed={contactType === value}
+                                      onClick={() =>
+                                        setValue(`contacts.${contactIndex}.type`, value, {
+                                          shouldDirty: true,
+                                          shouldTouch: true,
+                                          shouldValidate: true,
+                                        })
+                                      }
+                                      className={cn(
+                                        'rounded-lg px-3 py-2 text-sm transition-colors',
+                                        contactType === value
+                                          ? 'bg-background font-semibold text-foreground shadow-sm'
+                                          : 'text-muted-foreground hover:text-foreground',
+                                      )}
+                                    >
+                                      {label}
+                                    </button>
+                                  ))}
+                                </div>
+                                {contactError?.type?.message && (
+                                  <ErrorText>{contactError.type.message}</ErrorText>
+                                )}
+                              </div>
+
+                              <div>
+                                <Label>صفة</Label>
+                                <Input
+                                  value={primaryRoleLabel}
+                                  readOnly
+                                  className="mt-2 h-11 cursor-default rounded-xl bg-muted"
+                                />
+                              </div>
+                            </>
+                          ) : (
+                            <SelectField
+                              label={
+                                <>
+                                  صفة
+                                  <span className="mr-1 text-red-500">*</span>
+                                </>
+                              }
+                              registration={register(`contacts.${contactIndex}.type`, {
+                                required: 'نوع جهة الاتصال مطلوب',
+                              })}
+                              options={[
+                                ['MANAGER', 'مدير'],
+                                ['EMPLOYEE', 'موظف'],
+                              ]}
+                              control={control}
+                              error={contactError?.type?.message}
+                            />
+                          )}
 
                           <FormField
                             label={
@@ -3044,11 +3520,11 @@ export default function AddCustomerContract() {
                             error={contactError?.nameAr?.message}
                           />
 
-                          <FormField
+                          {/* <FormField
                             label="الاسم بالإنجليزية"
                             registration={register(`contacts.${contactIndex}.nameEn`)}
                             placeholder="English name"
-                          />
+                          /> */}
 
                           <FormField
                             label={
@@ -3118,7 +3594,7 @@ export default function AddCustomerContract() {
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2 text-base">
                         <FileText className="h-5 w-5 text-muted-foreground" />
-                        معلومات العقد والخطة
+                        معلومات العقد والاشتراك
                       </CardTitle>
                     </CardHeader>
 
@@ -3204,7 +3680,7 @@ export default function AddCustomerContract() {
                         error={errors.programId?.message}
                       />
 
-                      {/* Plan */}
+                      {/* Contract offer */}
 
                       <div>
                         <Label>
@@ -3215,7 +3691,7 @@ export default function AddCustomerContract() {
                         <Controller
                           control={control}
                           name="contractType"
-                          rules={{ required: 'نوع الخطة مطلوب' }}
+                          rules={{ required: 'نوع التعاقد مطلوب' }}
                           render={({ field }) => (
                             <SearchableSelect
                               value={field.value}
@@ -3225,12 +3701,19 @@ export default function AddCustomerContract() {
                                 handleContractTypeChange(value);
                               }}
                               error={Boolean(errors.contractType)}
-                              placeholder="اختر نوع الخطة"
-                              searchPlaceholder="ابحث عن نوع الخطة..."
+                              placeholder="اختر نوع التعاقد"
+                              searchPlaceholder="ابحث عن نوع التعاقد..."
                               options={[
-                                ['', 'اختر نوع الخطة'],
-                                ['REGULAR', 'عادي — حتى 12 شهر بدون خصم'],
-                                ['SIX_MONTHS', '6 أشهر — خصم 50% اشتراك، 40% رسوم الانضمام'],
+                                [
+                                  '',
+                                  isContractTypesLoading
+                                    ? 'جارٍ تحميل العروض...'
+                                    : 'اختر نوع التعاقد',
+                                ],
+                                ...contractTypes.map((offer) => [
+                                  offer.code,
+                                  offer.name_ar || offer.name_en,
+                                ]),
                               ]}
                             />
                           )}
@@ -3243,19 +3726,19 @@ export default function AddCustomerContract() {
 
                       <SelectField
                         label="نوع التعاقد"
-                        registration={register('planId', {
-                          required: 'يجب اختيار نوع التعاقد',
+                        registration={register('mainSubscriptionServiceId', {
+                          required: 'يجب اختيار خدمة الاشتراك الأساسية',
                           valueAsNumber: true,
                         })}
                         options={[
-                          ['', 'اختار نوع التعاقد'],
-                          ...plans.map((plan: any) => [
-                            String(plan.id),
-                            `${plan.name} — ${plan.subscription_fee} جنيه شهريًا`,
+                          ['', 'اختر خدمة الاشتراك الأساسية'],
+                          ...mainSubscriptionServices.map((service) => [
+                            String(service.id),
+                            `${service.nameAr} — ${service.subscription_fee.toLocaleString('ar-EG')} جنيه شهريًا`,
                           ]),
                         ]}
                         control={control}
-                        error={errors.planId?.message}
+                        error={errors.mainSubscriptionServiceId?.message}
                       />
 
                       {/* Responsible Representative */}
@@ -3468,10 +3951,11 @@ export default function AddCustomerContract() {
                         <div>
                           <CardTitle className="flex items-center gap-2 text-base">
                             <Wrench className="h-5 w-5 text-muted-foreground" />
-                            الوحدات الإضافية وخدمات النسخ والأجهزة
+                            الخدمات الإضافية والأجهزة
                           </CardTitle>
                           <p className="mt-1 text-xs text-muted-foreground">
-                            تُنشأ للإضافات والأجهزة فاتورة وإيصال تحصيل مستقلان عن العقد والخطة.
+                            الخدمات الإضافية تُفوتر وتُحصّل عند اعتماد العقد، بينما الأجهزة تُفوتر
+                            فقط دون تحصيل مبدئي.
                           </p>
                         </div>
                         <Badge variant="secondary" className="w-fit rounded-full">
@@ -3499,15 +3983,160 @@ export default function AddCustomerContract() {
                           </Button>
                         </div>
                       ) : (
-                        <Tabs defaultValue="additional-units" dir="rtl">
-                          <TabsList className="grid w-full grid-cols-3">
-                            <TabsTrigger value="additional-units">الوحدات الإضافية</TabsTrigger>
-                            <TabsTrigger value="replication">خدمات النسخ</TabsTrigger>
+                        <Tabs defaultValue="additional-services" dir="rtl">
+                          <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="additional-services">الخدمات الإضافية</TabsTrigger>
                             <TabsTrigger value="hardware">الأجهزة</TabsTrigger>
                           </TabsList>
 
-                          <TabsContent value="additional-units" className="space-y-4 pt-3">
-                            {/* <div className="flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm">
+                          <TabsContent value="additional-services" className="space-y-4 pt-3">
+                            <div className="rounded-2xl border border-primary/15 bg-primary/[0.03] p-4">
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                  <h4 className="font-semibold">أضف خدمة من الكتالوج</h4>
+                                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                                    اختر الوحدة الإضافية أو خدمة النسخ. الخدمات حسب الكمية يمكن
+                                    إضافتها أكثر من مرة.
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="secondary" className="rounded-full">
+                                    {additionalServiceFields.length} خدمات مختارة
+                                  </Badge>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setServicesRefresh((value) => value + 1)}
+                                    disabled={isServicesLoading}
+                                    className="h-8 rounded-lg px-2.5 text-xs"
+                                  >
+                                    <RefreshCw
+                                      className={cn(
+                                        'ml-1.5 h-3.5 w-3.5',
+                                        isServicesLoading && 'animate-spin',
+                                      )}
+                                    />
+                                    تحديث الكتالوج
+                                  </Button>
+                                </div>
+                              </div>
+
+                              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+                                <div>
+                                  <Label>الخدمة الإضافية</Label>
+                                  <SearchableSelect
+                                    value={selectedAdditionalServiceId}
+                                    options={additionalServicePickerOptions}
+                                    onValueChange={setSelectedAdditionalServiceId}
+                                    placeholder={
+                                      additionalServicePickerOptions.length
+                                        ? 'اختر خدمة إضافية'
+                                        : 'لا توجد خدمات إضافية متاحة'
+                                    }
+                                    searchPlaceholder="ابحث بالاسم أو السعر..."
+                                    emptyMessage="لا توجد خدمات مطابقة"
+                                    disabled={!additionalServicePickerOptions.length}
+                                  />
+                                </div>
+                                <Button
+                                  type="button"
+                                  onClick={addSelectedAdditionalService}
+                                  disabled={!selectedAdditionalServiceId}
+                                  className="h-11 rounded-xl sm:min-w-32"
+                                >
+                                  <Plus className="ml-2 h-4 w-4" /> إضافة الخدمة
+                                </Button>
+                              </div>
+                            </div>
+
+                            {additionalServiceFields.length === 0 ? (
+                              <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-5 py-8 text-center text-sm text-muted-foreground">
+                                لم يتم اختيار خدمات إضافية بعد.
+                              </div>
+                            ) : (
+                              <div className="space-y-3">
+                                {additionalServiceFields.map((field: any, index: number) => {
+                                  const service = availableServices.find(
+                                    (item) => item.id === Number(field.serviceId),
+                                  );
+                                  if (
+                                    !service ||
+                                    service.type !== 'ADDITIONAL_SERVICE' ||
+                                    service.billingType !== 'ONE_TIME' ||
+                                    service.isSubscriptionBased
+                                  )
+                                    return null;
+                                  const quantity = Math.max(
+                                    Number(selectedAdditionalServices[index]?.quantity) || 1,
+                                    1,
+                                  );
+                                  return (
+                                    <div
+                                      key={field.id}
+                                      className="grid grid-cols-1 items-end gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm md:grid-cols-[minmax(0,1fr)_130px_150px_auto]"
+                                    >
+                                      <input
+                                        type="hidden"
+                                        {...register(`additionalServices.${index}.serviceId`, {
+                                          valueAsNumber: true,
+                                        })}
+                                      />
+                                      <div className="min-w-0">
+                                        <p className="truncate font-semibold">{service.nameAr}</p>
+                                        <p className="mt-1 truncate text-xs text-muted-foreground">
+                                          {service.nameEn} ·{' '}
+                                          {service.joining_fee.toLocaleString('ar-EG')} جنيه
+                                        </p>
+                                      </div>
+                                      <div>
+                                        <Label>عدد الوحدات</Label>
+                                        {service.isQuantityBased ? (
+                                          <Input
+                                            type="number"
+                                            min="1"
+                                            step="1"
+                                            {...register(`additionalServices.${index}.quantity`, {
+                                              valueAsNumber: true,
+                                              min: {
+                                                value: 1,
+                                                message: 'الكمية يجب أن تكون 1 على الأقل',
+                                              },
+                                            })}
+                                            className="mt-2 h-11 rounded-xl"
+                                          />
+                                        ) : (
+                                          <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-muted/40 px-3 text-sm">
+                                            خدمة واحدة
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div>
+                                        <Label>السعر</Label>
+                                        <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-muted/20 px-3 text-sm font-semibold">
+                                          {(service.joining_fee * quantity).toLocaleString('ar-EG')}{' '}
+                                          جنيه
+                                        </div>
+                                      </div>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => removeAdditionalService(index)}
+                                        className="h-11 w-11 rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                        title="حذف الخدمة"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {false && (
+                              <>
+                                {/* <div className="flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm">
                           <div>
                             <p className="font-semibold">اشتراك الوحدات الإضافية الشهري (إلزامي)</p>
                             <p className="mt-1 text-xs text-muted-foreground">
@@ -3518,166 +4147,64 @@ export default function AddCustomerContract() {
                             {additionalUnitSubscription.toLocaleString('ar-EG')} جنيه/شهر
                           </span>
                         </div> */}
-                            {additionalUnitService ? (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => addAdditionalService(additionalUnitService)}
-                                className={cn(
-                                  'h-auto min-h-24 w-full justify-between rounded-xl border p-4 text-right hover:bg-accent',
-                                  additionalServiceFields.some(
-                                    (item: any) =>
-                                      Number(item.serviceId) === additionalUnitService.id,
-                                  ) && 'border-primary bg-primary/5',
-                                )}
-                              >
-                                <span className="text-right">
-                                  <span className="block font-semibold">
-                                    {additionalUnitService.nameAr}
-                                  </span>
-                                  <span className="mt-1 block text-xs font-normal text-muted-foreground">
-                                    سعر الوحدة{' '}
-                                    {additionalUnitService.joining_fee.toLocaleString('ar-EG')} جنيه
-                                    · رسوم لمرة واحدة
-                                  </span>
-                                </span>
-                                <Plus className="h-4 w-4 shrink-0" />
-                              </Button>
-                            ) : (
-                              <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-                                لا توجد خدمة وحدات إضافية مهيأة في الكتالوج.
-                              </p>
-                            )}
-                            {additionalServiceFields.map((field: any, index: number) => {
-                              const service = availableServices.find(
-                                (item) => item.id === Number(field.serviceId),
-                              );
-                              if (!service || service.code !== 'ADDITIONAL_UNIT') return null;
-                              const quantity = Math.max(
-                                Number(selectedAdditionalServices[index]?.quantity) || 1,
-                                1,
-                              );
-                              return (
-                                <div
-                                  key={field.id}
-                                  className="grid grid-cols-1 items-end gap-3 rounded-xl border border-border bg-muted/20 p-4 md:grid-cols-[minmax(0,1fr)_130px_150px_auto]"
-                                >
-                                  <input
-                                    type="hidden"
-                                    {...register(`additionalServices.${index}.serviceId`, {
-                                      valueAsNumber: true,
-                                    })}
-                                  />
-                                  <div>
-                                    <p className="font-semibold">{service.nameAr}</p>
-                                    <p className="mt-1 text-xs text-muted-foreground">
-                                      سعر الوحدة {service.joining_fee.toLocaleString('ar-EG')} جنيه
-                                    </p>
-                                  </div>
-                                  <div>
-                                    <Label>الكمية</Label>
-                                    <Input
-                                      type="number"
-                                      min="1"
-                                      step="1"
-                                      {...register(`additionalServices.${index}.quantity`, {
-                                        valueAsNumber: true,
-                                        min: {
-                                          value: 1,
-                                          message: 'الكمية يجب أن تكون 1 على الأقل',
-                                        },
-                                      })}
-                                      className="mt-2 h-11 rounded-xl"
-                                    />
-                                  </div>
-                                  <div>
-                                    <Label>إجمالي</Label>
-                                    <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-background px-3 text-sm font-semibold">
-                                      {(service.joining_fee * quantity).toLocaleString('ar-EG')}{' '}
-                                      جنيه
-                                    </div>
-                                  </div>
+                                {additionalUnitService ? (
                                   <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => removeAdditionalService(index)}
-                                    className="h-11 w-11 rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                    title="حذف الوحدة"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              );
-                            })}
-                          </TabsContent>
-
-                          <TabsContent value="replication" className="space-y-4 pt-3">
-                            {replicationServices.length === 0 ? (
-                              <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
-                                لا توجد خدمات نسخ متاحة حالياً.
-                              </p>
-                            ) : (
-                              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                {replicationServices.map((service) => (
-                                  <Button
-                                    key={service.id}
                                     type="button"
                                     variant="outline"
-                                    onClick={() => addAdditionalService(service)}
+                                    onClick={() => addAdditionalService(additionalUnitService)}
                                     className={cn(
-                                      'h-auto min-h-24 justify-between rounded-xl border p-4 text-right hover:bg-accent',
+                                      'h-auto min-h-24 w-full justify-between rounded-xl border p-4 text-right hover:bg-accent',
                                       additionalServiceFields.some(
-                                        (item: any) => Number(item.serviceId) === service.id,
+                                        (item: any) =>
+                                          Number(item.serviceId) === additionalUnitService.id,
                                       ) && 'border-primary bg-primary/5',
                                     )}
                                   >
                                     <span className="text-right">
-                                      <span className="block font-semibold">{service.nameAr}</span>
-                                      <span className="mt-1 block text-xs font-normal text-muted-foreground">
-                                        {service.nameEn} ·{' '}
-                                        {service.isQuantityBased
-                                          ? 'حسب الكمية'
-                                          : 'خدمة واحدة لمرة واحدة'}
+                                      <span className="block font-semibold">
+                                        {additionalUnitService.nameAr}
                                       </span>
-                                      <span className="mt-2 block font-bold">
-                                        {service.joining_fee.toLocaleString('ar-EG')} جنيه
+                                      <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                                        سعر الوحدة{' '}
+                                        {additionalUnitService.joining_fee.toLocaleString('ar-EG')}{' '}
+                                        جنيه · رسوم
                                       </span>
                                     </span>
                                     <Plus className="h-4 w-4 shrink-0" />
                                   </Button>
-                                ))}
-                              </div>
-                            )}
-                            {additionalServiceFields.map((field: any, index: number) => {
-                              const service = availableServices.find(
-                                (item) => item.id === Number(field.serviceId),
-                              );
-                              if (!service || service.code === 'ADDITIONAL_UNIT') return null;
-                              const quantity = Math.max(
-                                Number(selectedAdditionalServices[index]?.quantity) || 1,
-                                1,
-                              );
-                              return (
-                                <div
-                                  key={field.id}
-                                  className="grid grid-cols-1 items-end gap-3 rounded-xl border border-border bg-muted/20 p-4 md:grid-cols-[minmax(0,1fr)_130px_150px_auto]"
-                                >
-                                  <input
-                                    type="hidden"
-                                    {...register(`additionalServices.${index}.serviceId`, {
-                                      valueAsNumber: true,
-                                    })}
-                                  />
-                                  <div>
-                                    <p className="font-semibold">{service.nameAr}</p>
-                                    <p className="mt-1 text-xs text-muted-foreground">
-                                      {service.nameEn}
-                                    </p>
-                                  </div>
-                                  <div>
-                                    {service.isQuantityBased ? (
-                                      <>
+                                ) : (
+                                  <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+                                    لا توجد خدمة وحدات إضافية مهيأة في الكتالوج.
+                                  </p>
+                                )}
+                                {additionalServiceFields.map((field: any, index: number) => {
+                                  const service = availableServices.find(
+                                    (item) => item.id === Number(field.serviceId),
+                                  );
+                                  if (!service || service.code !== 'ADDITIONAL_UNIT') return null;
+                                  const quantity = Math.max(
+                                    Number(selectedAdditionalServices[index]?.quantity) || 1,
+                                    1,
+                                  );
+                                  return (
+                                    <div
+                                      key={field.id}
+                                      className="grid grid-cols-1 items-end gap-3 rounded-xl border border-border bg-muted/20 p-4 md:grid-cols-[minmax(0,1fr)_130px_150px_auto]"
+                                    >
+                                      <input
+                                        type="hidden"
+                                        {...register(`additionalServices.${index}.serviceId`, {
+                                          valueAsNumber: true,
+                                        })}
+                                      />
+                                      <div>
+                                        <p className="font-semibold">{service.nameAr}</p>
+                                        <p className="mt-1 text-xs text-muted-foreground">
+                                          سعر الوحدة {service.joining_fee.toLocaleString('ar-EG')}{' '}
+                                          جنيه
+                                        </p>
+                                      </div>
+                                      <div>
                                         <Label>الكمية</Label>
                                         <Input
                                           type="number"
@@ -3692,36 +4219,153 @@ export default function AddCustomerContract() {
                                           })}
                                           className="mt-2 h-11 rounded-xl"
                                         />
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Label>الكمية</Label>
-                                        <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-muted/40 px-3 text-sm">
-                                          خدمة واحدة
+                                      </div>
+                                      <div>
+                                        <Label>إجمالي</Label>
+                                        <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-background px-3 text-sm font-semibold">
+                                          {(service.joining_fee * quantity).toLocaleString('ar-EG')}{' '}
+                                          جنيه
                                         </div>
-                                      </>
-                                    )}
-                                  </div>
-                                  <div>
-                                    <Label>الإجمالي</Label>
-                                    <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-background px-3 text-sm font-semibold">
-                                      {(service.joining_fee * quantity).toLocaleString('ar-EG')}{' '}
-                                      جنيه
+                                      </div>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => removeAdditionalService(index)}
+                                        className="h-11 w-11 rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                        title="حذف الوحدة"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
                                     </div>
-                                  </div>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => removeAdditionalService(index)}
-                                    className="h-11 w-11 rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                    title="حذف الخدمة"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
+                                  );
+                                })}
+                                <div className="space-y-4 border-t border-border pt-5">
+                                  <h4 className="text-sm font-semibold">خدمات إضافية متاحة</h4>
+                                  {additionalServiceOptions.length === 0 ? (
+                                    <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
+                                      لا توجد خدمات إضافية أخرى متاحة حالياً في الكتالوج.
+                                    </p>
+                                  ) : (
+                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                      {additionalServiceOptions.map((service) => (
+                                        <Button
+                                          key={service.id}
+                                          type="button"
+                                          variant="outline"
+                                          onClick={() => addAdditionalService(service)}
+                                          className={cn(
+                                            'h-auto min-h-24 justify-between rounded-xl border p-4 text-right hover:bg-accent',
+                                            additionalServiceFields.some(
+                                              (item: any) => Number(item.serviceId) === service.id,
+                                            ) && 'border-primary bg-primary/5',
+                                          )}
+                                        >
+                                          <span className="text-right">
+                                            <span className="block font-semibold">
+                                              {service.nameAr}
+                                            </span>
+                                            <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                                              {service.nameEn} ·{' '}
+                                              {service.isQuantityBased
+                                                ? 'حسب الكمية'
+                                                : 'خدمة واحدة لمرة واحدة'}
+                                            </span>
+                                            <span className="mt-2 block font-bold">
+                                              {service.joining_fee.toLocaleString('ar-EG')} جنيه
+                                            </span>
+                                          </span>
+                                          <Plus className="h-4 w-4 shrink-0" />
+                                        </Button>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {additionalServiceFields.map((field: any, index: number) => {
+                                    const service = availableServices.find(
+                                      (item) => item.id === Number(field.serviceId),
+                                    );
+                                    if (
+                                      !service ||
+                                      service.type !== 'ADDITIONAL_SERVICE' ||
+                                      service.code === 'ADDITIONAL_UNIT'
+                                    )
+                                      return null;
+                                    const quantity = Math.max(
+                                      Number(selectedAdditionalServices[index]?.quantity) || 1,
+                                      1,
+                                    );
+                                    return (
+                                      <div
+                                        key={field.id}
+                                        className="grid grid-cols-1 items-end gap-3 rounded-xl border border-border bg-muted/20 p-4 md:grid-cols-[minmax(0,1fr)_130px_150px_auto]"
+                                      >
+                                        <input
+                                          type="hidden"
+                                          {...register(`additionalServices.${index}.serviceId`, {
+                                            valueAsNumber: true,
+                                          })}
+                                        />
+                                        <div>
+                                          <p className="font-semibold">{service.nameAr}</p>
+                                          <p className="mt-1 text-xs text-muted-foreground">
+                                            {service.nameEn}
+                                          </p>
+                                        </div>
+                                        <div>
+                                          {service.isQuantityBased ? (
+                                            <>
+                                              <Label>الكمية</Label>
+                                              <Input
+                                                type="number"
+                                                min="1"
+                                                step="1"
+                                                {...register(
+                                                  `additionalServices.${index}.quantity`,
+                                                  {
+                                                    valueAsNumber: true,
+                                                    min: {
+                                                      value: 1,
+                                                      message: 'الكمية يجب أن تكون 1 على الأقل',
+                                                    },
+                                                  },
+                                                )}
+                                                className="mt-2 h-11 rounded-xl"
+                                              />
+                                            </>
+                                          ) : (
+                                            <>
+                                              <Label>الكمية</Label>
+                                              <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-muted/40 px-3 text-sm">
+                                                خدمة واحدة
+                                              </div>
+                                            </>
+                                          )}
+                                        </div>
+                                        <div>
+                                          <Label>الإجمالي</Label>
+                                          <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-background px-3 text-sm font-semibold">
+                                            {(service.joining_fee * quantity).toLocaleString(
+                                              'ar-EG',
+                                            )}{' '}
+                                            جنيه
+                                          </div>
+                                        </div>
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="icon"
+                                          onClick={() => removeAdditionalService(index)}
+                                          className="h-11 w-11 rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                          title="حذف الخدمة"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
-                              );
-                            })}
+                              </>
+                            )}
                           </TabsContent>
 
                           <TabsContent value="hardware" className="space-y-4 pt-3">
@@ -3730,8 +4374,9 @@ export default function AddCustomerContract() {
                                 فاتورة أجهزة مستقلة
                               </p>
                               <p className="mt-1 text-xs leading-5 text-amber-800 dark:text-amber-300">
-                                الأجهزة المختارة ستُضاف إلى فاتورة الإضافات وتُحصّل في إيصال مستقل
-                                عن العقد.
+                                {' '}
+                                الأجهزة المختارة ستُنشأ لها فاتورة أجهزة مستقلة عند اعتماد العقد،
+                                دون إنشاء إيصال تحصيل في هذه المرحلة.
                               </p>
                             </div>
                             {hardwareDevices.length === 0 ? (
@@ -3850,22 +4495,20 @@ export default function AddCustomerContract() {
                           {additionalServicesTotal.toLocaleString('ar-EG')} جنيه
                         </span>
                       </div>
-                      <div className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm dark:border-amber-900 dark:bg-amber-950/20">
+                      {/* <div className="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm dark:border-amber-900 dark:bg-amber-950/20">
                         <span className="text-amber-900 dark:text-amber-200">
-                          إجمالي الأجهزة ضمن إيصال الإضافات
+                          إجمالي الأجهزة — فاتورة فقط
                         </span>
                         <span className="font-bold text-amber-900 dark:text-amber-200">
                           {hardwareDevicesTotal.toLocaleString('ar-EG')} جنيه
                         </span>
-                      </div>
+                      </div> */}
                     </CardContent>
                   </Card>
 
                   <AddOnReceiptSection
                     total={addOnTotal}
-                    additionalUnits={selectedAdditionalUnitRows}
-                    replicationServices={selectedReplicationServiceRows}
-                    hardwareDevices={selectedHardwareDeviceRows}
+                    additionalServices={selectedAdditionalServiceRows}
                     amount={addOnPaymentAmount}
                     remainingAmount={addOnRemainingAmount}
                     paidPercentage={addOnPaidPercentage}
@@ -3924,7 +4567,7 @@ export default function AddCustomerContract() {
                             </p>
                           )}
 
-                          {contractType === 'REGULAR' && (
+                          {contractType && !currentContractTypeRule.autoSelectConsecutive && (
                             <p className="mt-1 text-xs text-muted-foreground">
                               يظهر الشهر الحالي والشهر التالي. مع كل اختيار يظهر الشهر التالي للحفاظ
                               على تسلسل الاشتراك.
@@ -4053,12 +4696,12 @@ export default function AddCustomerContract() {
                             />
                           </div>
 
-                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
                             <MoneyCard label="إجمالي العقد قبل الخصم" value={totalBeforeDiscount} />
 
                             <MoneyCard label="إجمالي الخصم" value={discountAmount} />
 
-                            <MoneyCard label="إجمالي العقد بعد الخصم" value={totalContractValue} />
+                            <MoneyCard label="الإجمالي بعد الخصم" value={grossContractValue} />
                           </div>
                         </div>
 
@@ -4135,10 +4778,10 @@ export default function AddCustomerContract() {
                           <div className="mt-2 text-lg font-bold">{customerStatus}</div>
 
                           <div className="mt-4 flex items-center justify-between border-t border-background/10 pt-4">
-                            <span className="text-xs opacity-70">الخطة</span>
+                            <span className="text-xs opacity-70">خدمة الاشتراك</span>
 
                             <span className="text-sm font-semibold">
-                              {selectedPlan?.name || '—'}
+                              {selectedMainSubscriptionService?.nameAr || '—'}
                             </span>
                           </div>
                         </div>
@@ -4156,7 +4799,7 @@ export default function AddCustomerContract() {
                           />
 
                           <ReviewRow
-                            label="هيكل العميل"
+                            label="نوع الصيدلية"
                             value={
                               structure === 'CHAIN'
                                 ? 'سلسلة'
@@ -4229,7 +4872,7 @@ export default function AddCustomerContract() {
 
                           <ReviewRow
                             label="الإجمالي بعد الخصم"
-                            value={`${totalContractValue.toLocaleString('ar-EG')} جنيه`}
+                            value={`${grossContractValue.toLocaleString('ar-EG')} جنيه`}
                           />
 
                           <ReviewRow
@@ -4294,7 +4937,15 @@ export default function AddCustomerContract() {
                   </Button>
                 )}
 
-                {activeStep === 1 ? (
+                {workflowCustomerEdit ? (
+                  <Button
+                    type="button"
+                    onClick={() => void saveWorkflowCustomer()}
+                    className="h-11 flex-1 rounded-xl bg-foreground text-background hover:bg-foreground/90 md:flex-none"
+                  >
+                    حفظ بيانات العميل
+                  </Button>
+                ) : activeStep === 1 ? (
                   <Button
                     type="button"
                     onClick={(e) => {
@@ -4400,114 +5051,118 @@ function ContactPhones({ control, register, contactIndex, governorate, errors }:
         رقم الهاتف المحمول والهاتف الأرضي مطلوبان. يمكنك إضافة رقم واتساب عند الحاجة.
       </div>
 
-      {phoneFields.map((phone: any, phoneIndex: number) => {
-        const phoneType = phoneValues[phoneIndex]?.type || phone.type || 'محمول';
-        const isLandline = phoneType === 'هاتف أرضي';
-        const isWhatsApp = phoneType === 'واتساب';
-        const landlineCode = getLandlineTelephoneCode(governorate);
-        const landlineNumberLength = landlineCode ? 10 - landlineCode.code.length : 8;
-        const inputName = `contacts.${contactIndex}.phones.${phoneIndex}.number`;
-        const fieldError = errors?.contacts?.[contactIndex]?.phones?.[phoneIndex]?.number;
-        const phoneLabel = isLandline
-          ? 'رقم الهاتف الأرضي'
-          : isWhatsApp
-            ? 'رقم واتساب'
-            : 'رقم الهاتف المحمول';
-        const validationLabel = isWhatsApp ? 'رقم واتساب' : phoneLabel;
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        {phoneFields.map((phone: any, phoneIndex: number) => {
+          const phoneType = phoneValues[phoneIndex]?.type || phone.type || 'محمول';
+          const isLandline = phoneType === 'هاتف أرضي';
+          const isWhatsApp = phoneType === 'واتساب';
+          const landlineCode = getLandlineTelephoneCode(governorate);
+          const landlineNumberLength = landlineCode ? 10 - landlineCode.code.length : 8;
+          const inputName = `contacts.${contactIndex}.phones.${phoneIndex}.number`;
+          const fieldError = errors?.contacts?.[contactIndex]?.phones?.[phoneIndex]?.number;
+          const phoneLabel = isLandline
+            ? 'رقم الهاتف الأرضي'
+            : isWhatsApp
+              ? 'رقم واتساب'
+              : 'رقم الهاتف المحمول';
+          const validationLabel = isWhatsApp ? 'رقم واتساب' : phoneLabel;
 
-        return (
-          <div
-            key={phone.id}
-            className="rounded-xl border border-border bg-muted/20 p-3.5 shadow-sm"
-          >
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-              <div>
-                <Label className="text-xs text-muted-foreground">{phoneLabel} *</Label>
+          return (
+            <div
+              key={phone.id}
+              className={`rounded-xl border border-border bg-muted/20 p-3 shadow-sm ${
+                isWhatsApp ? 'md:col-span-2' : ''
+              }`}
+            >
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+                <div>
+                  <Label className="text-xs text-muted-foreground">{phoneLabel} *</Label>
 
-                <div
-                  className={isLandline ? 'mt-1 flex items-center gap-2' : 'mt-1'}
-                  dir={isLandline ? 'ltr' : undefined}
-                >
-                  {isLandline && (
+                  <div
+                    className={isLandline ? 'mt-1 flex items-center gap-1.5' : 'mt-1'}
+                    dir={isLandline ? 'ltr' : undefined}
+                  >
+                    {isLandline && (
+                      <Input
+                        value={landlineCode?.code || '—'}
+                        readOnly
+                        dir="ltr"
+                        aria-label="كود المحافظة"
+                        aria-invalid={Boolean(fieldError) || !landlineCode}
+                        title={landlineCode ? `كود ${landlineCode.region}` : 'اختر المحافظة أولاً'}
+                        variant={fieldError || !landlineCode ? 'failure' : 'default'}
+                        className="h-10 w-12 shrink-0 rounded-lg bg-muted px-1 text-center font-mono text-xs font-semibold tracking-wide tabular-nums"
+                      />
+                    )}
+
                     <Input
-                      value={landlineCode?.code || '—'}
-                      readOnly
-                      dir="ltr"
-                      aria-label="كود المحافظة"
-                      aria-invalid={Boolean(fieldError) || !landlineCode}
-                      title={landlineCode ? `كود ${landlineCode.region}` : 'اختر المحافظة أولاً'}
-                      variant={fieldError || !landlineCode ? 'failure' : 'default'}
-                      className="h-11 w-14 shrink-0 rounded-xl bg-muted px-1 text-center font-mono font-semibold tracking-wide tabular-nums"
-                    />
-                  )}
+                      {...register(inputName, {
+                        required: `${validationLabel} مطلوب`,
+                        onChange: (event: any) => {
+                          event.target.value = event.target.value
+                            .replace(/\D/g, '')
+                            .slice(0, isLandline ? landlineNumberLength : 11);
+                        },
+                        validate: (value: string) => {
+                          const digits = String(value || '').replace(/\D/g, '');
 
-                  <Input
-                    {...register(inputName, {
-                      required: `${validationLabel} مطلوب`,
-                      onChange: (event: any) => {
-                        event.target.value = event.target.value
-                          .replace(/\D/g, '')
-                          .slice(0, isLandline ? landlineNumberLength : 11);
-                      },
-                      validate: (value: string) => {
-                        const digits = String(value || '').replace(/\D/g, '');
+                          if (isLandline) {
+                            if (!landlineCode) {
+                              return 'اختر المحافظة أولاً لتحديد كود الهاتف الأرضي';
+                            }
 
-                        if (isLandline) {
-                          if (!landlineCode) {
-                            return 'اختر المحافظة أولاً لتحديد كود الهاتف الأرضي';
+                            return (
+                              digits.length === landlineNumberLength ||
+                              `رقم الهاتف الأرضي يجب أن يتكون من ${landlineNumberLength} أرقام بعد الكود`
+                            );
                           }
 
                           return (
-                            digits.length === landlineNumberLength ||
-                            `رقم الهاتف الأرضي يجب أن يتكون من ${landlineNumberLength} أرقام بعد الكود`
+                            mobilePhonePattern.test(digits) ||
+                            `${validationLabel} يجب أن يبدأ بـ 010 أو 011 أو 012 أو 015 ويتكون من 11 رقمًا`
                           );
-                        }
+                        },
+                      })}
+                      type="text"
+                      maxLength={isLandline ? landlineNumberLength : 11}
+                      placeholder={isLandline ? 'x'.repeat(landlineNumberLength) : '010xxxxxxxx'}
+                      inputMode="numeric"
+                      dir="ltr"
+                      variant={fieldError ? 'failure' : 'default'}
+                      aria-invalid={Boolean(fieldError)}
+                      className={`h-10 rounded-lg text-left text-sm font-mono tracking-wide tabular-nums ${
+                        isLandline ? 'min-w-0 flex-1' : 'w-full'
+                      }`}
+                    />
+                  </div>
 
-                        return (
-                          mobilePhonePattern.test(digits) ||
-                          `${validationLabel} يجب أن يبدأ بـ 010 أو 011 أو 012 أو 015 ويتكون من 11 رقمًا`
-                        );
-                      },
-                    })}
-                    type="text"
-                    maxLength={isLandline ? landlineNumberLength : 11}
-                    placeholder={isLandline ? 'x'.repeat(landlineNumberLength) : '010xxxxxxxx'}
-                    inputMode="numeric"
-                    dir="ltr"
-                    variant={fieldError ? 'failure' : 'default'}
-                    aria-invalid={Boolean(fieldError)}
-                    className={`h-11 rounded-xl text-left font-mono tracking-wide tabular-nums ${
-                      isLandline ? 'min-w-0 flex-1' : 'w-full'
-                    }`}
-                  />
+                  {fieldError && (
+                    <p className="mt-1 text-xs text-destructive">{fieldError.message}</p>
+                  )}
                 </div>
 
-                {fieldError && (
-                  <p className="mt-1 text-xs text-destructive">{fieldError.message}</p>
-                )}
-              </div>
-
-              <div className="flex items-center justify-between gap-3 md:justify-end">
-                <span className="rounded-full bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground">
-                  {isWhatsApp ? 'اختياري' : 'مطلوب'}
-                </span>
-                {isWhatsApp ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={() => remove(phoneIndex)}
-                    className="h-11 w-11 rounded-xl text-destructive hover:text-destructive"
-                    title="حذف رقم واتساب"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                ) : null}
+                <div className="flex items-center justify-between gap-3 md:justify-end">
+                  <span className="rounded-full bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                    {isWhatsApp ? 'اختياري' : 'مطلوب'}
+                  </span>
+                  {isWhatsApp ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => remove(phoneIndex)}
+                      className="h-10 w-10 rounded-lg text-destructive hover:text-destructive"
+                      title="حذف رقم واتساب"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  ) : null}
+                </div>
               </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
 
       {!hasWhatsApp && (
         <Button
@@ -4688,8 +5343,15 @@ function InitialPaymentsSection({
                     label="الرقم المرجعي"
                     registration={register(`${prefix}.paymentDetails.referenceNumber`, {
                       required: 'الرقم المرجعي مطلوب',
+                      validate: (value: string) =>
+                        /^\d+$/.test(value) || 'الرقم المرجعي يجب أن يحتوي على أرقام فقط',
                     })}
                     error={entryErrors.paymentDetails?.referenceNumber?.message}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    onInput={(event: React.FormEvent<HTMLInputElement>) => {
+                      event.currentTarget.value = event.currentTarget.value.replace(/\D/g, '');
+                    }}
                   />
                 </div>
               )}
@@ -4699,8 +5361,15 @@ function InitialPaymentsSection({
                     label="الرقم المرجعي"
                     registration={register(`${prefix}.paymentDetails.referenceNumber`, {
                       required: 'الرقم المرجعي مطلوب',
+                      validate: (value: string) =>
+                        /^\d+$/.test(value) || 'الرقم المرجعي يجب أن يحتوي على أرقام فقط',
                     })}
                     error={entryErrors.paymentDetails?.referenceNumber?.message}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    onInput={(event: React.FormEvent<HTMLInputElement>) => {
+                      event.currentTarget.value = event.currentTarget.value.replace(/\D/g, '');
+                    }}
                   />
                   <TextField
                     label="تاريخ العملية"
@@ -4729,8 +5398,15 @@ function InitialPaymentsSection({
                     label="رقم الشيك"
                     registration={register(`${prefix}.paymentDetails.chequeNumber`, {
                       required: 'رقم الشيك مطلوب',
+                      validate: (value: string) =>
+                        /^\d+$/.test(value) || 'رقم الشيك يجب أن يحتوي على أرقام فقط',
                     })}
                     error={entryErrors.paymentDetails?.chequeNumber?.message}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    onInput={(event: React.FormEvent<HTMLInputElement>) => {
+                      event.currentTarget.value = event.currentTarget.value.replace(/\D/g, '');
+                    }}
                   />
                   <TextField
                     label="تاريخ استحقاق الشيك"
@@ -4749,8 +5425,13 @@ function InitialPaymentsSection({
                     registration={register(`${prefix}.paymentDetails.receiptNumber`, {
                       required: 'رقم الإيصال مطلوب',
                       validate: (value: string) =>
-                        String(value || '').trim().length > 0 || 'رقم الإيصال مطلوب',
+                        /^\d+$/.test(value) || 'رقم الايصال يجب أن يحتوي على أرقام فقط',
                     })}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    onInput={(event: React.FormEvent<HTMLInputElement>) => {
+                      event.currentTarget.value = event.currentTarget.value.replace(/\D/g, '');
+                    }}
                     error={entryErrors.paymentDetails?.receiptNumber?.message}
                   />
                 </div>
@@ -4764,9 +5445,7 @@ function InitialPaymentsSection({
 }
 function AddOnReceiptSection({
   total,
-  additionalUnits,
-  replicationServices,
-  hardwareDevices,
+  additionalServices,
   amount,
   remainingAmount,
   paidPercentage,
@@ -4784,7 +5463,7 @@ function AddOnReceiptSection({
     return (
       <Card className="border-dashed border-border bg-muted/20 shadow-sm">
         <CardContent className="p-6 text-center text-sm text-muted-foreground">
-          لم يتم اختيار إضافات أو أجهزة. لن يتم إنشاء فاتورة أو إيصال إضافات.
+          لم يتم اختيار خدمات إضافية. لن يتم إنشاء فاتورة أو إيصال خدمات إضافية.
         </CardContent>
       </Card>
     );
@@ -4808,9 +5487,9 @@ function AddOnReceiptSection({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm dark:border-amber-900 dark:bg-amber-950/20">
-            تُحصّل الوحدات الإضافية وخدمات النسخ والأجهزة في إيصال منفصل عن إيصال العقد والخطة.
-          </div>
+          {/* <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm dark:border-amber-900 dark:bg-amber-950/20">
+            تُحصّل الخدمات الإضافية والأجهزة في إيصال منفصل عن إيصال العقد والخطة.
+          </div> */}
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
@@ -4884,9 +5563,16 @@ function AddOnReceiptSection({
                 label="الرقم المرجعي"
                 registration={register('addOnPayment.paymentDetails.referenceNumber', {
                   required: 'الرقم المرجعي مطلوب',
+                  validate: (value: string) =>
+                    /^\d+$/.test(value) || 'الرقم المرجعي يجب أن يحتوي على أرقام فقط',
                 })}
                 error={errors.addOnPayment?.paymentDetails?.referenceNumber?.message}
                 placeholder="الرقم المرجعي"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                onInput={(event: React.FormEvent<HTMLInputElement>) => {
+                  event.currentTarget.value = event.currentTarget.value.replace(/\D/g, '');
+                }}
               />
             </div>
           )}
@@ -4897,9 +5583,16 @@ function AddOnReceiptSection({
                 label="الرقم المرجعي"
                 registration={register('addOnPayment.paymentDetails.referenceNumber', {
                   required: 'الرقم المرجعي مطلوب',
+                  validate: (value: string) =>
+                    /^\d+$/.test(value) || 'الرقم المرجعي يجب أن يحتوي على أرقام فقط',
                 })}
                 error={errors.addOnPayment?.paymentDetails?.referenceNumber?.message}
                 placeholder="الرقم المرجعي"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                onInput={(event: React.FormEvent<HTMLInputElement>) => {
+                  event.currentTarget.value = event.currentTarget.value.replace(/\D/g, '');
+                }}
               />
               <TextField
                 label="تاريخ العملية"
@@ -4931,9 +5624,16 @@ function AddOnReceiptSection({
                 label="رقم الشيك"
                 registration={register('addOnPayment.paymentDetails.chequeNumber', {
                   required: 'رقم الشيك مطلوب',
+                  validate: (value: string) =>
+                    /^\d+$/.test(value) || 'رقم الشيك يجب أن يحتوي على أرقام فقط',
                 })}
                 error={errors.addOnPayment?.paymentDetails?.chequeNumber?.message}
                 placeholder="رقم الشيك"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                onInput={(event: React.FormEvent<HTMLInputElement>) => {
+                  event.currentTarget.value = event.currentTarget.value.replace(/\D/g, '');
+                }}
               />
               <TextField
                 label="تاريخ استحقاق الشيك"
@@ -4955,6 +5655,11 @@ function AddOnReceiptSection({
                   validate: (value) =>
                     String(value ?? '').trim().length > 0 || 'رقم إيصال الإضافات مطلوب',
                 })}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                onInput={(event: React.FormEvent<HTMLInputElement>) => {
+                  event.currentTarget.value = event.currentTarget.value.replace(/\D/g, '');
+                }}
                 error={errors.addOnPayment?.paymentDetails?.receiptNumber?.message}
                 placeholder="رقم الإيصال"
               />
@@ -4962,14 +5667,14 @@ function AddOnReceiptSection({
           )}
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <TextField
+            {/* <TextField
               label="سبب تحصيل الإضافات"
               registration={register('addOnPayment.collectionReason', {
                 required: 'سبب تحصيل الإضافات مطلوب',
               })}
               error={errors.addOnPayment?.collectionReason?.message}
               placeholder="إضافات العقد"
-            />
+            /> */}
             <TextField
               label="ملاحظات إيصال الإضافات"
               registration={register('addOnPayment.notes')}
@@ -5005,9 +5710,7 @@ function AddOnReceiptSection({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <ReviewRow label="الوحدات الإضافية" value={`${additionalUnits.length} عناصر`} />
-          <ReviewRow label="خدمات النسخ" value={`${replicationServices.length} عناصر`} />
-          <ReviewRow label="الأجهزة" value={`${hardwareDevices.length} عناصر`} />
+          <ReviewRow label="الخدمات الإضافية" value={`${additionalServices.length} عناصر`} />
           <Separator />
           <ReviewRow
             label="إجمالي إيصال الإضافات"
@@ -5060,13 +5763,21 @@ function FormField({
    SELECT
 ========================================================= */
 
-function TextField({ label, registration, error, type = 'text', placeholder = '' }: any) {
+function TextField({
+  label,
+  registration,
+  error,
+  type = 'text',
+  placeholder = '',
+  ...inputProps
+}: any) {
   return (
     <div>
       <Label>{label}</Label>
       <Input
         type={type}
         {...registration}
+        {...inputProps}
         placeholder={placeholder}
         variant={error ? 'failure' : 'default'}
         aria-invalid={Boolean(error)}

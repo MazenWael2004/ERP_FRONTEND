@@ -17,3 +17,8 @@ export const fetchNextCustomerCode = async () => {
   const response = await api.get('/customers/next-code');
   return String(response.data?.data?.code ?? '');
 };
+
+export const fetchContractTypes = async () => {
+  const response = await api.get('/contract-types');
+  return response.data;
+};

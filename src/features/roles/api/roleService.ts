@@ -26,7 +26,7 @@ export const createRole = async (roleData:any)=>{
 
 
 export const deleteRole = async (roleId:any)=>{
-   const response = await api.delete(`roles/${roleId}`);
+   const response = await api.delete(`/roles/${roleId}`);
    return response.data;
 };
 
@@ -43,7 +43,7 @@ export const getRoleById = async (roleId:any)=>{
 
 
 export const fetchPages = async()=>{
-        const response = await api.get("pages");
+        const response = await api.get("/pages");
         return response.data;
 }
 
@@ -57,6 +57,11 @@ export const checkRoleExists = async (field:any,value:any,excludeId:any) => {
     },
   });
 
+  return response.data;
+};
+
+export const fetchRolePermissionCatalog = async () => {
+  const response = await api.get('/roles/permission-catalog');
   return response.data;
 };
 

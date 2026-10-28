@@ -100,6 +100,7 @@ export default function OperationalReports() {
           date(receipt.collected_at),
           receipt.receipt_number || '—',
           receipt.customer_name_ar || receipt.customer_name || '—',
+          receipt.parent_customer_name_ar || receipt.parent_customer_name_en || '—',
           `#${receipt.contract_id}`,
           money(receipt.amount),
           receipt.payment_method_name_ar ||
@@ -117,6 +118,7 @@ export default function OperationalReports() {
           receipt.collected_at ? String(receipt.collected_at).slice(0, 10) : '',
           receipt.receipt_number || '',
           receipt.customer_name_ar || receipt.customer_name || '',
+          receipt.parent_customer_name_ar || receipt.parent_customer_name_en || '',
           receipt.contract_id || '',
           toNumber(receipt.amount),
           receipt.payment_method_name_ar ||
@@ -135,8 +137,9 @@ export default function OperationalReports() {
         headers: [
           'تاريخ التحصيل',
           'رقم الإيصال',
-          'العميل',
-          'العقد',
+          'اسم العميل',
+          'تابع لعميل/صيدلية',
+          'كود العميل',
           'المبلغ',
           'طريقة الدفع',
           'اسم البنك',
@@ -155,6 +158,7 @@ export default function OperationalReports() {
           date(unit.invoice_date),
 
           unit.customer_name_ar || unit.customer_name || '—',
+          unit.parent_customer_name_ar || unit.parent_customer_name_en || '—',
 
           `#${unit.contract_id}`,
 
@@ -173,6 +177,7 @@ export default function OperationalReports() {
           unit.invoice_date ? String(unit.invoice_date).slice(0, 10) : '',
 
           unit.customer_name_ar || unit.customer_name || '',
+          unit.parent_customer_name_ar || unit.parent_customer_name_en || '',
 
           unit.contract_id || '',
 
@@ -193,8 +198,9 @@ export default function OperationalReports() {
 
         headers: [
           'التاريخ',
-          'العميل',
-          'العقد',
+          'اسم العميل',
+          'تابع لعميل/صيدلية',
+          'كود العميل',
           'الخدمة',
           'الكمية',
           'سعر الوحدة',
@@ -210,32 +216,50 @@ export default function OperationalReports() {
     const rows = (data?.rows || []).map((sale: any) =>
       [
         date(sale.contract_date),
-
         sale.customer_name_ar || sale.customer_name || '—',
-
+        sale.parent_customer_name_ar || sale.parent_customer_name_en || '—',
+        sale.sales_responsible_name_ar || sale.sales_responsible_name_en || '—',
+        sale.sales_supervisor_name_ar || sale.sales_supervisor_name_en || '—',
+        sale.sales_manager_name_ar || sale.sales_manager_name_en || '—',
         sale.program_name_ar || sale.program_name || '—',
-
         `#${sale.contract_id}`,
-
-        money(sale.subscription_price),
-
-        money(sale.total_after_discount),
+        money(sale.monthly_subscription_price),
+        money(sale.joining_fee_before_discount),
+        money(sale.joining_fee_after_discount),
+        money(sale.subscription_fee_before_discount),
+        money(sale.subscription_fee_after_discount),
+        money(sale.contract_total_before_discount),
+        money(sale.contract_discount_amount),
+        money(sale.contract_total_after_discount),
+        money(sale.additional_services_total),
+        money(sale.total_contract_value),
+        money(sale.advance_payment),
+        money(sale.remaining_contract_balance),
       ].reverse(),
     );
 
     const exportRows = (data?.rows || []).map((sale: any) =>
       [
         sale.contract_date ? String(sale.contract_date).slice(0, 10) : '',
-
         sale.customer_name_ar || sale.customer_name || '',
-
+        sale.parent_customer_name_ar || sale.parent_customer_name_en || '',
+        sale.sales_responsible_name_ar || sale.sales_responsible_name_en || '',
+        sale.sales_supervisor_name_ar || sale.sales_supervisor_name_en || '',
+        sale.sales_manager_name_ar || sale.sales_manager_name_en || '',
         sale.program_name_ar || sale.program_name || '',
-
         sale.contract_id || '',
-
-        toNumber(sale.subscription_price),
-
-        toNumber(sale.total_after_discount),
+        toNumber(sale.monthly_subscription_price),
+        toNumber(sale.joining_fee_before_discount),
+        toNumber(sale.joining_fee_after_discount),
+        toNumber(sale.subscription_fee_before_discount),
+        toNumber(sale.subscription_fee_after_discount),
+        toNumber(sale.contract_total_before_discount),
+        toNumber(sale.contract_discount_amount),
+        toNumber(sale.contract_total_after_discount),
+        toNumber(sale.additional_services_total),
+        toNumber(sale.total_contract_value),
+        toNumber(sale.advance_payment),
+        toNumber(sale.remaining_contract_balance),
       ].reverse(),
     );
 
@@ -246,11 +270,25 @@ export default function OperationalReports() {
 
       headers: [
         'تاريخ العقد',
-        'العميل',
+        'اسم العميل',
+        'تابع لعميل/صيدلية',
+        'مسؤول البيع',
+        'المشرف',
+        'المدير',
         'البرنامج',
-        'العقد',
+        'كود العميل',
         'الاشتراك الشهري',
-        'قيمة العقد',
+        'رسوم الانضمام قبل الخصم',
+        'رسوم الانضمام بعد الخصم',
+        'الاشتراكات قبل الخصم',
+        'الاشتراكات بعد الخصم',
+        'إجمالي العقد قبل الخصم',
+        'خصم العقد',
+        'إجمالي العقد بعد الخصم',
+        'إجمالي الخدمات الإضافية',
+        'إجمالي العقد شامل الإضافات',
+        'الدفعة المقدمة للعقد',
+        'المتبقي من العقد الأساسي',
       ].reverse(),
 
       rows,
@@ -334,6 +372,23 @@ export default function OperationalReports() {
         }
       : null;
 
+  const metrics =
+    active === 'sales'
+      ? [
+          primaryMetric,
+          { label: 'إجمالي المبيعات', value: money(summary.total_sales), icon: <BarChart3 /> },
+          { label: 'الاشتراكات قبل الخصم', value: money(summary.subscriptions_before_discount), icon: <Repeat2 /> },
+          { label: 'الاشتراكات بعد الخصم', value: money(summary.subscriptions_after_discount), icon: <Repeat2 /> },
+          { label: 'الخدمات الإضافية', value: money(summary.additional_services_total), icon: <Boxes /> },
+          { label: 'إجمالي الدفعات المقدمة', value: money(summary.total_advance_payments), icon: <ReceiptText /> },
+          { label: 'إجمالي المتبقي من العقود الأساسية', value: money(summary.total_remaining_contract_balance), icon: <BarChart3 /> },
+          programMetric,
+        ].filter(Boolean) as Array<{ label: string; value: string; icon: ReactNode }>
+      : [
+          primaryMetric,
+          { label: amountMetric.label, value: amountMetric.value, icon: <BarChart3 /> },
+        ];
+
   return (
     <div dir="rtl" className="space-y-6 text-right">
       <div>
@@ -398,12 +453,12 @@ export default function OperationalReports() {
 
           <TabsTrigger value="replication">
             <Repeat2 className="ml-2 h-4 w-4" />
-            خدمة النسخ
+           replication خدمة ال
           </TabsTrigger>
 
           <TabsTrigger value="sales">
             <ShoppingCart className="ml-2 h-4 w-4" />
-            المبيعات
+            مبيعات العقود
           </TabsTrigger>
         </TabsList>
 
@@ -415,17 +470,9 @@ export default function OperationalReports() {
           ) : (
             <>
               <div
-                className={`grid grid-cols-1 gap-4 ${active === 'sales' ? 'md:grid-cols-3' : 'sm:grid-cols-2'}`}
+                className={`grid grid-cols-1 gap-4 ${active === 'sales' ? 'sm:grid-cols-2 xl:grid-cols-3' : 'sm:grid-cols-2'}`}
               >
-                <Metric {...primaryMetric} />
-
-                <Metric
-                  label={amountMetric.label}
-                  value={amountMetric.value}
-                  icon={<BarChart3 />}
-                />
-
-                {programMetric && <Metric {...programMetric} />}
+                {metrics.map((metric) => <Metric key={metric.label} {...metric} />)}
               </div>
 
               <ReportTable {...table} />
@@ -457,11 +504,11 @@ function ReportTable({ headers, rows }: ReportTableData) {
   return (
     <Card className="overflow-hidden">
       <CardContent className="overflow-x-auto p-0">
-        <table className="w-full min-w-[760px] text-right text-sm">
+        <table className="w-full min-w-[3250px] text-right text-sm">
           <thead className="bg-muted">
             <tr>
               {headers.map((header) => (
-                <th key={header} className="px-4 py-3 font-semibold">
+                <th key={header} className="whitespace-nowrap px-4 py-3 font-semibold">
                   {header}
                 </th>
               ))}

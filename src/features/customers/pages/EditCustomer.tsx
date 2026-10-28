@@ -95,7 +95,6 @@ function EditCustomer() {
         setDocuments(customer.documents || []);
 
         reset({
-          nameEn: customer.name_en,
           nameAr: customer.name_ar,
           code: customer.code,
           taxNumber: customer.tax_number,
@@ -136,7 +135,6 @@ function EditCustomer() {
     loadGovernorates();
   }, []);
 
-  const name_en = watch('nameEn');
   const name_ar = watch('nameAr');
   const tax_number = watch('taxNumber');
   const registration_number = watch('registrationNumber');
@@ -145,7 +143,6 @@ function EditCustomer() {
   const checkFieldExists = async (
     field:
       | 'code'
-      | 'name_en'
       | 'name_ar'
       | 'tax_number'
       | 'registration_number'
@@ -153,7 +150,6 @@ function EditCustomer() {
     value: string,
     formField:
       | 'code'
-      | 'nameEn'
       | 'nameAr'
       | 'taxNumber'
       | 'registrationNumber'
@@ -178,19 +174,6 @@ function EditCustomer() {
     }
   };
 
-
-  useEffect(() => {
-    if (!name_en || name_en.trim() === '') {
-      clearErrors('nameEn');
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      checkFieldExists('name_en', name_en, 'nameEn', 'CUSTOMER_NAME_EN_EXISTS');
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [name_en]);
 
   useEffect(() => {
     if (!name_ar || name_ar.trim() === '') {
@@ -322,7 +305,6 @@ function EditCustomer() {
       const formData = new FormData();
 
       // Customer fields
-      formData.append('nameEn', data.nameEn);
       formData.append('nameAr', data.nameAr);
       formData.append('code', data.code);
       formData.append('taxNumber', data.taxNumber);
@@ -351,14 +333,6 @@ function EditCustomer() {
         const message = error.response?.data?.error?.message;
 
         console.log('Backend message:', message);
-
-        if (t(message) === t('CUSTOMER_NAME_EN_EXISTS')) {
-          setError('nameEn', {
-            type: 'server',
-            message: 'CUSTOMER_NAME_EN_EXISTS',
-          });
-          return;
-        }
 
         if (t(message) === t('CUSTOMER_NAME_AR_EXISTS')) {
           setError('nameAr', {
@@ -437,14 +411,6 @@ function EditCustomer() {
         console.log('FORM VALIDATION ERRORS:', errors);
       })}
     >
-      <div>
-        <Label htmlFor="customerNameEn">
-          {t('CUSTOMER_NAME_EN')} <span className="text-red-500">*</span>
-        </Label>
-        <Input id="jobCode" className="mt-2 w-full" {...register('nameEn')} />
-        {errors.nameEn && <span className="error-message">{t(errors.nameEn.message!)}</span>}
-      </div>
-
       <div>
         <Label htmlFor="customerNameAr">
           {t('CUSTOMER_NAME_AR')} <span className="text-red-500">*</span>

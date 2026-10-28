@@ -1,11 +1,6 @@
 import { z } from "zod";
 
 export const createCustomerSchema = z.object({
-  nameEn: z
-    .string()
-    .min(1, "CUSTOMER_NAME_EN_REQUIRED")
-    .regex(/^[A-Za-z\s]+$/, "CUSTOMER_NAME_ONLY_ENGLISH"),
-
   nameAr: z
     .string()
     .min(1, "CUSTOMER_NAME_AR_REQUIRED")

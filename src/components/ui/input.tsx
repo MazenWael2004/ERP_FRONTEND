@@ -36,6 +36,10 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         type={type}
         className={cn(inputVariants({ variant }), className)}
         ref={ref}
+        // Native date controls use this locale to render day/month/year while
+        // retaining their ISO (yyyy-mm-dd) value for form submissions and APIs.
+        lang={type === 'date' ? 'en-GB' : undefined}
+        dir={type === 'date' ? 'ltr' : undefined}
         {...props}
       />
     )

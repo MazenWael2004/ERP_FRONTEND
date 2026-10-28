@@ -19,8 +19,26 @@ export const fetchMasterfileReport = async (filters: {
   workflowStatus?: string;
   startDate?: string;
   endDate?: string;
+  page?: number;
+  pageSize?: number;
 }) => {
   const response = await api.get('/reports/masterfile', {
+    params: Object.fromEntries(
+      Object.entries(filters).filter(([, value]) => value !== undefined && value !== ''),
+    ),
+  });
+  return response.data.data;
+};
+
+export const fetchContractContactsReport = async (filters: {
+  search?: string;
+  zoneId?: string;
+  contactType?: string;
+  workflowStatus?: string;
+  page?: number;
+  pageSize?: number;
+}) => {
+  const response = await api.get('/reports/contract-contacts', {
     params: Object.fromEntries(
       Object.entries(filters).filter(([, value]) => value !== undefined && value !== ''),
     ),
@@ -44,6 +62,21 @@ export const fetchActionHistoryReport = async (filters: {
       contractId: filters.contractId || undefined,
       actionCode: filters.actionCode || undefined,
     },
+  });
+  return response.data.data;
+};
+
+export const fetchRejectedContractsReport = async (filters: {
+  search?: string;
+  zoneId?: string;
+  managerId?: string;
+  startDate?: string;
+  endDate?: string;
+}) => {
+  const response = await api.get('/reports/rejected-contracts', {
+    params: Object.fromEntries(
+      Object.entries(filters).filter(([, value]) => value !== undefined && value !== ''),
+    ),
   });
   return response.data.data;
 };

@@ -8,14 +8,19 @@ import { fetchActionHistoryReport } from '../api/reportsService';
 
 const actionLabels: Record<string, string> = {
   CONTRACT_CREATED: 'إنشاء العقد',
+  CONTRACT_CHECKED: 'مراجعة الكول سنتر',
   CONTRACT_APPROVED: 'اعتماد العقد',
   CONTRACT_REJECTED: 'رفض العقد',
+  CONTRACT_INSTALLED: 'تركيب العقد',
   CONTRACT_ACTIVATED: 'تفعيل العقد',
-  CONTRACT_IMPLEMENTED: 'تنفيذ / تركيب العقد',
+  CONTRACT_RETURNED_TO_MANAGER: 'إعادة للدعم الفني',
+  CONTRACT_NOTE_ADDED: 'إضافة ملاحظة',
+  CONTRACT_UPDATED: 'تعديل العقد',
+  CUSTOMER_UPDATED: 'تعديل بيانات العميل',
   COLLECTION_CREATED: 'إنشاء تحصيل',
 };
 
-const dateTime = (value?: string) => value ? new Intl.DateTimeFormat('ar-EG', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '—';
+const dateTime = (value?: string) => value ? new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Cairo', dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : '—';
 
 export default function ActionHistoryReport() {
   const [startDate, setStartDate] = useState('');
@@ -38,16 +43,17 @@ export default function ActionHistoryReport() {
   const rows = data?.rows || [];
   const summary = data?.summary || {};
   const exportRows = useMemo(() => rows.map((row: any) => [
-    row.created_at ? new Date(row.created_at).toISOString() : '',
+    dateTime(row.created_at),
     actionLabels[row.action_code] || row.action_code,
     row.performed_by_name_ar || row.performed_by_name_en || row.performed_by_username || 'النظام',
     row.contract_id || '',
     row.customer_name_ar || row.customer_name_en || '',
+    row.parent_customer_name_ar || row.parent_customer_name_en || '',
     row.from_status || '', row.to_status || '', row.description || '',
   ]), [rows]);
 
   const exportToExcel = () => {
-    const headers = ['التاريخ والوقت', 'الإجراء', 'المستخدم', 'العقد', 'العميل', 'من الحالة', 'إلى الحالة', 'الوصف'];
+    const headers = ['التاريخ والوقت', 'الإجراء', 'المستخدم', 'العقد', 'العميل', 'العميل / الصيدلية الرئيسية', 'من الحالة', 'إلى الحالة', 'الوصف'];
     const sheet = XLSX.utils.aoa_to_sheet([['سجل إجراءات النظام'], [], headers, ...exportRows]);
     sheet['!cols'] = headers.map((header) => ({ wch: Math.max(header.length + 5, 18) }));
     const book = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(book, sheet, 'سجل الإجراءات');
@@ -66,7 +72,7 @@ export default function ActionHistoryReport() {
     </CardContent></Card>
     <div className="grid gap-4 md:grid-cols-3"><Metric label="إجمالي الإجراءات" value={summary.action_count} icon={<History />} /><Metric label="المستخدمون المنفذون" value={summary.actor_count} icon={<Users />} /><Metric label="العقود المتأثرة" value={summary.contract_count} icon={<FileText />} /></div>
     <Card className="overflow-hidden"><CardHeader><CardTitle>التفاصيل {data?.limit && rows.length >= data.limit ? `(أول ${data.limit} نتيجة)` : ''}</CardTitle></CardHeader><CardContent className="overflow-x-auto p-0">
-      {error ? <p className="p-6 text-destructive">{error}</p> : loading ? <p className="p-6 text-muted-foreground">جارٍ تحميل السجل...</p> : <table className="w-full min-w-[1050px] text-sm"><thead className="bg-muted"><tr>{['التاريخ', 'الإجراء', 'المستخدم', 'العقد / العميل', 'تغير الحالة', 'الوصف'].map((header) => <th key={header} className="px-4 py-3 text-right font-semibold">{header}</th>)}</tr></thead><tbody>{rows.length ? rows.map((row: any) => <tr key={row.id} className="border-t"><td className="whitespace-nowrap px-4 py-3">{dateTime(row.created_at)}</td><td className="px-4 py-3 font-medium">{actionLabels[row.action_code] || row.action_code}</td><td className="px-4 py-3">{row.performed_by_name_ar || row.performed_by_name_en || row.performed_by_username || 'النظام'}</td><td className="px-4 py-3">{row.contract_id ? `#${row.contract_id}` : '—'}{row.customer_name_ar || row.customer_name_en ? <span className="mr-1 text-muted-foreground">— {row.customer_name_ar || row.customer_name_en}</span> : null}</td><td className="px-4 py-3">{row.from_status || '—'} → {row.to_status || '—'}</td><td className="max-w-md px-4 py-3 whitespace-normal text-muted-foreground">{row.description || '—'}</td></tr>) : <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">لا توجد إجراءات مطابقة للفلاتر.</td></tr>}</tbody></table>}
+      {error ? <p className="p-6 text-destructive">{error}</p> : loading ? <p className="p-6 text-muted-foreground">جارٍ تحميل السجل...</p> : <table className="w-full min-w-[1300px] text-sm"><thead className="bg-muted"><tr>{['التاريخ', 'الإجراء', 'المستخدم', 'العقد / العميل', 'العميل / الصيدلية الرئيسية', 'من', 'إلى', 'الوصف'].map((header) => <th key={header} className="px-4 py-3 text-right font-semibold">{header}</th>)}</tr></thead><tbody>{rows.length ? rows.map((row: any) => <tr key={row.id} className="border-t"><td className="whitespace-nowrap px-4 py-3">{dateTime(row.created_at)}</td><td className="px-4 py-3 font-medium">{actionLabels[row.action_code] || row.action_code}</td><td className="px-4 py-3">{row.performed_by_name_ar || row.performed_by_name_en || row.performed_by_username || 'النظام'}</td><td className="px-4 py-3">{row.contract_id ? `#${row.contract_id}` : '—'}{row.customer_name_ar || row.customer_name_en ? <span className="mr-1 text-muted-foreground">— {row.customer_name_ar || row.customer_name_en}</span> : null}</td><td className="px-4 py-3">{row.parent_customer_name_ar || row.parent_customer_name_en || '—'}</td><td className="px-4 py-3">{row.from_status || '—'}</td><td className="px-4 py-3">{row.to_status || '—'}</td><td className="max-w-md px-4 py-3 whitespace-normal text-muted-foreground">{row.description || '—'}</td></tr>) : <tr><td colSpan={8} className="p-8 text-center text-muted-foreground">لا توجد إجراءات مطابقة للفلاتر.</td></tr>}</tbody></table>}
     </CardContent></Card>
   </div>;
 }

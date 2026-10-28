@@ -12,6 +12,14 @@ export interface UserZoneAssignment {
   username: string;
   name_en: string;
   name_ar: string;
+  manager_username?: string | null;
+  manager_name_en?: string | null;
+  manager_name_ar?: string | null;
+  roles: Array<{
+    code: string;
+    name_en: string;
+    name_ar: string;
+  }>;
   zones: AssignedZone[];
 }
 
