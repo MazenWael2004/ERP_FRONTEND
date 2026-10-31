@@ -68,7 +68,7 @@ const Header = () => {
         }`}
       > */}
       <header
-        className={`sticky top-0 z-[2] bg-slate-100 dark:bg-slate-900 ${
+        className={`sticky top-0 z-[2] bg-slate-100 dark:bg-black ${
           isSticky ? 'shadow-md fixed w-full' : ''
         }`}
       >

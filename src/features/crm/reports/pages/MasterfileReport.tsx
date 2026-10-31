@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Download, FileText, MapPinned, RefreshCw, Search, Users } from 'lucide-react';
+import { Check, ChevronsUpDown, Download, FileText, MapPinned, RefreshCw, Search, Users } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Button } from 'src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from 'src/components/ui/card';
 import { Input } from 'src/components/ui/input';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from 'src/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from 'src/components/ui/popover';
+import { cn } from 'src/lib/utils';
 import { fetchMasterfileReport } from '../api/reportsService';
 
 const workflowLabels: Record<string, string> = {
@@ -15,51 +18,28 @@ const workflowLabels: Record<string, string> = {
   ACTIVATED: 'مفعل',
   REJECTED: 'مرفوض',
 };
+
+function SearchableSelect({ value, onValueChange, options, placeholder }: any) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find((option: any) => String(option.value) === String(value));
+  return <Popover open={open} onOpenChange={setOpen}><PopoverTrigger asChild><Button type="button" variant="outline" role="combobox" className={cn('relative h-10 w-full justify-start bg-background py-0 pl-9 pr-3 text-right font-normal', !selected && 'text-muted-foreground')}><span className="truncate">{selected?.label || placeholder}</span><ChevronsUpDown className="absolute left-3 h-4 w-4 text-muted-foreground" /></Button></PopoverTrigger><PopoverContent dir="rtl" align="start" className="w-[--radix-popover-trigger-width] p-0"><Command><CommandInput placeholder="اكتب للبحث..." /><CommandList><CommandEmpty>لا توجد نتائج مطابقة</CommandEmpty><CommandGroup>{options.map((option: any) => <CommandItem key={String(option.value)} value={`${option.label} ${option.value}`} onSelect={() => { onValueChange(String(option.value)); setOpen(false); }}><Check className={cn('ml-2 h-4 w-4', String(value) === String(option.value) ? 'opacity-100' : 'opacity-0')} /><span className="truncate">{option.label}</span></CommandItem>)}</CommandGroup></CommandList></Command></PopoverContent></Popover>;
+}
 const date = (value?: string | null) =>
   value ? new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Cairo' }).format(new Date(value)) : '—';
 const value = (input: unknown) =>
   input === null || input === undefined || input === '' ? '—' : String(input);
 const bilingual = (ar?: string | null, en?: string | null) => value(ar || en);
+const contactType = (input: unknown) => {
+  const type = String(input || '').toUpperCase();
+  if (type === 'OWNER') return 'مالك';
+  if (type === 'TENANT') return 'مستأجر';
+  return value(input);
+};
 const person = (row: any, prefix: string) =>
   value(row[`${prefix}_name_ar`] || row[`${prefix}_name_en`] || row[`${prefix}_username`]);
 const number = (input: unknown) =>
   Number(input || 0).toLocaleString('ar-EG', { maximumFractionDigits: 2 });
 const currency = (input: unknown) => `${number(input)} جنيه`;
-const inputDate = (input: Date) => {
-  const year = input.getFullYear();
-  const month = String(input.getMonth() + 1).padStart(2, '0');
-  const day = String(input.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-const periodDates = (period: string) => {
-  const today = new Date();
-  const endOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  if (period === 'TODAY') return { startDate: inputDate(endOfToday), endDate: inputDate(endOfToday) };
-  if (period === 'THIS_WEEK') {
-    const start = new Date(endOfToday);
-    start.setDate(start.getDate() - start.getDay());
-    return { startDate: inputDate(start), endDate: inputDate(endOfToday) };
-  }
-  if (period === 'THIS_MONTH') {
-    return {
-      startDate: inputDate(new Date(today.getFullYear(), today.getMonth(), 1)),
-      endDate: inputDate(endOfToday),
-    };
-  }
-  if (period === 'LAST_MONTH') {
-    return {
-      startDate: inputDate(new Date(today.getFullYear(), today.getMonth() - 1, 1)),
-      endDate: inputDate(new Date(today.getFullYear(), today.getMonth(), 0)),
-    };
-  }
-  if (period === 'THIS_YEAR') {
-    return {
-      startDate: inputDate(new Date(today.getFullYear(), 0, 1)),
-      endDate: inputDate(endOfToday),
-    };
-  }
-  return { startDate: '', endDate: '' };
-};
 
 type MasterfileColumn = { key: string; header: string; value: (row: any) => string };
 const columns: MasterfileColumn[] = [
@@ -94,6 +74,7 @@ const columns: MasterfileColumn[] = [
   { key: 'structure', header: 'الهيكل', value: (row) => value(row.customer_structure) },
   { key: 'phone', header: 'هاتف العميل', value: (row) => value(row.customer_phone) },
   { key: 'contactAr', header: 'اسم جهة الاتصال بالعربية', value: (row) => value(row.contact_name_ar) },
+  { key: 'contactType', header: 'صفة جهة الاتصال', value: (row) => contactType(row.contact_type) },
   { key: 'contactNationalId', header: 'الرقم القومي لجهة الاتصال', value: (row) => value(row.contact_national_id) },
   { key: 'contactEmail', header: 'بريد جهة الاتصال', value: (row) => value(row.contact_email) },
   {
@@ -186,16 +167,26 @@ const columns: MasterfileColumn[] = [
 
 export const masterfileColumns = columns;
 
+const toDateInputValue = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export default function MasterfileReport() {
   const pageSize = 50;
+  const today = new Date();
+  const defaultDateRange = {
+    startDate: toDateInputValue(new Date(today.getFullYear(), today.getMonth(), 1)),
+    endDate: toDateInputValue(today),
+  };
   const [filters, setFilters] = useState({
     search: '',
     zoneId: '',
     programId: '',
     workflowStatus: '',
-    period: '',
-    startDate: '',
-    endDate: '',
+    ...defaultDateRange,
   });
   const [data, setData] = useState<any>({ rows: [], summary: {} });
   const [filterRows, setFilterRows] = useState<any[]>([]);
@@ -269,9 +260,7 @@ export default function MasterfileReport() {
       zoneId: '',
       programId: '',
       workflowStatus: '',
-      period: '',
-      startDate: '',
-      endDate: '',
+      ...defaultDateRange,
     };
     setFilters(empty);
     void load(empty, 1);
@@ -286,14 +275,14 @@ export default function MasterfileReport() {
             بيانات مرجعية تفصيلية لكل عقد وعميل وموقع، بدون أي أعمدة تحصيل أو مبالغ.
           </p>
         </div>
-        <Button asChild variant="outline" className="w-fit">
+        {/* <Button asChild variant="outline" className="w-fit">
           <Link to="/contract-contacts-report">
             <Users className="ml-2 h-4 w-4" /> تقرير جهات الاتصال
           </Link>
-        </Button>
+        </Button> */}
       </div>
       <Card>
-        <CardContent className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-8">
+        <CardContent className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-7">
           <label className="grid gap-1 text-sm xl:col-span-2">
             <span>بحث</span>
             <div className="relative">
@@ -302,72 +291,37 @@ export default function MasterfileReport() {
                 value={filters.search}
                 onChange={(event) => setFilters({ ...filters, search: event.target.value })}
                 className="pr-9"
-                placeholder="رقم العقد/الكود أو أي تفصيلة بالعقد للبحث"
+                inputMode="numeric"
+                placeholder="كود العميل (رقم العقد)"
               />
             </div>
           </label>
           <label className="grid gap-1 text-sm">
-            <span>المنطقة</span>
-            <select
-              className="h-10 rounded-md border bg-background px-3"
+            <span>الفرع</span>
+            <SearchableSelect
               value={filters.zoneId}
-              onChange={(event) => setFilters({ ...filters, zoneId: event.target.value })}
-            >
-              <option value="">كل المناطق</option>
-              {zones.map((row: any) => (
-                <option key={row.zone_id} value={row.zone_id}>
-                  {bilingual(row.zone_name_ar, row.zone_name_en)}
-                </option>
-              ))}
-            </select>
+              onValueChange={(zoneId: string) => setFilters({ ...filters, zoneId })}
+              placeholder="كل المناطق"
+              options={[{ value: '', label: 'كل الفروع' }, ...zones.map((row: any) => ({ value: row.zone_id, label: bilingual(row.zone_name_ar, row.zone_name_en) }))]}
+            />
           </label>
           <label className="grid gap-1 text-sm">
             <span>البرنامج</span>
-            <select
-              className="h-10 rounded-md border bg-background px-3"
+            <SearchableSelect
               value={filters.programId}
-              onChange={(event) => setFilters({ ...filters, programId: event.target.value })}
-            >
-              <option value="">كل البرامج</option>
-              {programs.map((row: any) => (
-                <option key={row.program_id} value={row.program_id}>
-                  {bilingual(row.program_name_ar, row.program_name_en)}
-                </option>
-              ))}
-            </select>
+              onValueChange={(programId: string) => setFilters({ ...filters, programId })}
+              placeholder="كل البرامج"
+              options={[{ value: '', label: 'كل البرامج' }, ...programs.map((row: any) => ({ value: row.program_id, label: bilingual(row.program_name_ar, row.program_name_en) }))]}
+            />
           </label>
           <label className="grid gap-1 text-sm">
             <span>حالة سير العمل</span>
-            <select
-              className="h-10 rounded-md border bg-background px-3"
+            <SearchableSelect
               value={filters.workflowStatus}
-              onChange={(event) => setFilters({ ...filters, workflowStatus: event.target.value })}
-            >
-              <option value="">كل الحالات</option>
-              {Object.entries(workflowLabels).map(([key, label]) => (
-                <option key={key} value={key}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span>فترة تاريخ العقد</span>
-            <select
-              className="h-10 rounded-md border bg-background px-3"
-              value={filters.period}
-              onChange={(event) => {
-                const period = event.target.value;
-                setFilters({ ...filters, period, ...periodDates(period) });
-              }}
-            >
-              <option value="">فترة مخصصة</option>
-              <option value="TODAY">اليوم</option>
-              <option value="THIS_WEEK">هذا الأسبوع</option>
-              <option value="THIS_MONTH">هذا الشهر</option>
-              <option value="LAST_MONTH">الشهر السابق</option>
-              <option value="THIS_YEAR">هذه السنة</option>
-            </select>
+              onValueChange={(workflowStatus: string) => setFilters({ ...filters, workflowStatus })}
+              placeholder="كل الحالات"
+              options={[{ value: '', label: 'كل الحالات' }, ...Object.entries(workflowLabels).map(([value, label]) => ({ value, label }))]}
+            />
           </label>
           <label className="grid gap-1 text-sm">
             <span>من تاريخ</span>
@@ -375,7 +329,7 @@ export default function MasterfileReport() {
               dir="ltr"
               type="date"
               value={filters.startDate}
-              onChange={(event) => setFilters({ ...filters, period: '', startDate: event.target.value })}
+              onChange={(event) => setFilters({ ...filters, startDate: event.target.value })}
             />
           </label>
           <label className="grid gap-1 text-sm">
@@ -384,10 +338,10 @@ export default function MasterfileReport() {
               dir="ltr"
               type="date"
               value={filters.endDate}
-              onChange={(event) => setFilters({ ...filters, period: '', endDate: event.target.value })}
+              onChange={(event) => setFilters({ ...filters, endDate: event.target.value })}
             />
           </label>
-          <div className="flex items-end gap-2 md:col-span-2 xl:col-span-8">
+          <div className="flex items-end gap-2 md:col-span-2 xl:col-span-7">
             <Button onClick={() => void load(filters, 1)} disabled={loading}>
               <RefreshCw className={`ml-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               تطبيق الفلاتر

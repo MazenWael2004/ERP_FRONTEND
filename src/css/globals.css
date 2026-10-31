@@ -164,22 +164,22 @@ body {
 }
 
 .dark {
-  --background: var(--dark);
+  --background: #000000;
   --foreground: var(--white);
-  --card: var(--dark);
+  --card: #000000;
   --card-foreground: var(--white);
-  --popover: #333f55;
+  --popover: #000000;
   --popover-foreground: var(--white);
   --primary: #5d87ff;
   --primary-foreground: var(--white);
   --secondary: #49beff;
   --secondary-foreground: var(--white);
-  --muted: #2a3851;
+  --muted: #121212;
   --muted-foreground: #7c8fac;
   --accent: var(--accent);
   --accent-foreground: var(--accent-foreground);
   --destructive: var(--error);
-  --border: #333f55;
+  --border: #2b2b2b;
   --input: var(--border);
   --ring: var(--lightprimary);
   --chart-1: var(--primary);
@@ -187,7 +187,7 @@ body {
   --chart-3: var(--success);
   --chart-4: var(--warning);
   --chart-5: var(--error);
-  --sidebar: var(--dark);
+  --sidebar: #000000;
   --sidebar-foreground: #7c8fac;
   --sidebar-primary: var(--sidebar-primary);
   --sidebar-primary-foreground: var(--sidebar-primary-foreground);
@@ -202,7 +202,7 @@ body {
   --warning: #f6b51e;
   --error: #ef4444;
   --white: #ffffff;
-  --dark: #1c2536;
+  --dark: #000000;
   --bodytext: #5a6a85bf;
 
   /* Light Variants */

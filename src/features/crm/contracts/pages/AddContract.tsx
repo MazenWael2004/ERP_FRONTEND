@@ -218,6 +218,11 @@ type SellableService = {
   isQuantityBased: boolean;
 };
 
+const additionalSubscriptionCodeByServiceCode: Record<string, string> = {
+  ADDITIONAL_UNIT: 'ADDITIONAL_UNIT_SUBSCRIPTION',
+  REPLICATION_SERVICE: 'REPLICATION_SUBSCRIPTION',
+};
+
 type ContractTypeOffer = {
   id: number;
   code: string;
@@ -1008,6 +1013,17 @@ export default function AddCustomerContract() {
       !service.isSubscriptionBased &&
       contractAdditionalServiceCodes.has(service.code),
   );
+  const additionalSubscriptionServicesByCode = new Map(
+    availableServices
+      .filter(
+        (service) =>
+          service.type === 'SUBSCRIPTION' &&
+          service.isSubscriptionBased &&
+          service.subscriptionClass === 'ADDITIONAL' &&
+          service.billingType === 'MONTHLY',
+      )
+      .map((service) => [service.code, service]),
+  );
   // Retained for the legacy markup below while the catalog-driven selector is active.
   const additionalUnitService = additionalServicesCatalog.find(
     (service) => service.code === 'ADDITIONAL_UNIT',
@@ -1124,10 +1140,6 @@ export default function AddCustomerContract() {
 
   const mainMonthlySubscription = selectedMainSubscriptionService?.subscription_fee || 0;
 
-  // The chosen months at contract creation collect the main plan only.
-  const initialCollectedMonthlySubscription = mainMonthlySubscription;
-  const monthlySubscription = selectedMonths.length * initialCollectedMonthlySubscription;
-
   /*
    * Latest selected month (ISO dates compare correctly as strings).
    * null when no month is selected.
@@ -1137,21 +1149,6 @@ export default function AddCustomerContract() {
         month.value > latest.value ? month : latest,
       )
     : null;
-
-  const subscriptionDiscountPercentage = currentContractTypeRule.subscriptionDiscountPercentage;
-  const joiningFeeDiscountPercentage = currentContractTypeRule.joiningFeeDiscountPercentage;
-
-  const monthlySubscriptionAfterDiscount = Number(
-    (initialCollectedMonthlySubscription * (1 - subscriptionDiscountPercentage / 100)).toFixed(2),
-  );
-  const subscriptionPriceAfterDiscount = Number(
-    (monthlySubscriptionAfterDiscount * selectedMonths.length).toFixed(2),
-  );
-  const subscriptionDiscount = monthlySubscription - subscriptionPriceAfterDiscount;
-  const joiningFeeAfterContractTypeDiscount = Number(
-    (joiningFee * (1 - joiningFeeDiscountPercentage / 100)).toFixed(2),
-  );
-  const joiningFeeDiscount = joiningFee - joiningFeeAfterContractTypeDiscount;
 
   const selectedAdditionalServiceRows = selectedAdditionalServices
     .map((item: any) => {
@@ -1166,13 +1163,52 @@ export default function AddCustomerContract() {
       )
         return null;
       const quantity = Math.max(Number(item.quantity) || 1, 1);
-      return { ...service, quantity, total: service.joining_fee * quantity };
+      const subscriptionService = additionalSubscriptionServicesByCode.get(
+        additionalSubscriptionCodeByServiceCode[service.code],
+      );
+      const monthlySubscriptionUnitPrice = Number(subscriptionService?.subscription_fee ?? 0);
+      return {
+        ...service,
+        quantity,
+        total: service.joining_fee * quantity,
+        monthlySubscriptionUnitPrice,
+        monthlySubscriptionTotal: monthlySubscriptionUnitPrice * quantity,
+      };
     })
-    .filter((item): item is SellableService & { quantity: number; total: number } => Boolean(item));
+    .filter(
+      (
+        item,
+      ): item is SellableService & {
+        quantity: number;
+        total: number;
+        monthlySubscriptionUnitPrice: number;
+        monthlySubscriptionTotal: number;
+      } => Boolean(item),
+    );
   const additionalServicesTotal = selectedAdditionalServiceRows.reduce(
     (total, service) => total + service.total,
     0,
   );
+  const additionalServicesMonthlySubscription = selectedAdditionalServiceRows.reduce(
+    (total, service) => total + service.monthlySubscriptionTotal,
+    0,
+  );
+  const initialCollectedMonthlySubscription =
+    mainMonthlySubscription + additionalServicesMonthlySubscription;
+  const monthlySubscription = selectedMonths.length * initialCollectedMonthlySubscription;
+  const subscriptionDiscountPercentage = currentContractTypeRule.subscriptionDiscountPercentage;
+  const joiningFeeDiscountPercentage = currentContractTypeRule.joiningFeeDiscountPercentage;
+  const monthlySubscriptionAfterDiscount = Number(
+    (initialCollectedMonthlySubscription * (1 - subscriptionDiscountPercentage / 100)).toFixed(2),
+  );
+  const subscriptionPriceAfterDiscount = Number(
+    (monthlySubscriptionAfterDiscount * selectedMonths.length).toFixed(2),
+  );
+  const subscriptionDiscount = monthlySubscription - subscriptionPriceAfterDiscount;
+  const joiningFeeAfterContractTypeDiscount = Number(
+    (joiningFee * (1 - joiningFeeDiscountPercentage / 100)).toFixed(2),
+  );
+  const joiningFeeDiscount = joiningFee - joiningFeeAfterContractTypeDiscount;
   const selectedHardwareDeviceRows = selectedHardwareDevices
     .map((item: any) => {
       const device = availableServices.find((candidate) => candidate.id === Number(item.serviceId));
@@ -1894,20 +1930,18 @@ export default function AddCustomerContract() {
           serviceId: Number(service.serviceId),
           quantity: Math.max(Number(service.quantity) || 0, 0),
         }))
-        .filter(
-          (service: any) => {
-            const catalogService = availableServices.find((item) => item.id === service.serviceId);
-            return Boolean(
-              Number.isInteger(service.serviceId) &&
-                service.serviceId > 0 &&
-                service.quantity > 0 &&
-                catalogService?.type === 'ADDITIONAL_SERVICE' &&
-                catalogService.billingType === 'ONE_TIME' &&
-                !catalogService.isSubscriptionBased &&
-                contractAdditionalServiceCodes.has(catalogService.code),
-            );
-          },
-        ),
+        .filter((service: any) => {
+          const catalogService = availableServices.find((item) => item.id === service.serviceId);
+          return Boolean(
+            Number.isInteger(service.serviceId) &&
+            service.serviceId > 0 &&
+            service.quantity > 0 &&
+            catalogService?.type === 'ADDITIONAL_SERVICE' &&
+            catalogService.billingType === 'ONE_TIME' &&
+            !catalogService.isSubscriptionBased &&
+            contractAdditionalServiceCodes.has(catalogService.code),
+          );
+        }),
       hardwareDevices: (data.hardwareDevices || [])
         .map((device: any) => ({
           serviceId: Number(device.serviceId),
@@ -4071,10 +4105,16 @@ export default function AddCustomerContract() {
                                     Number(selectedAdditionalServices[index]?.quantity) || 1,
                                     1,
                                   );
+                                  const monthlySubscriptionUnitPrice = Number(
+                                    additionalSubscriptionServicesByCode.get(
+                                      additionalSubscriptionCodeByServiceCode[service.code],
+                                    )?.subscription_fee ?? 0,
+                                  );
+                                  const monthlySubscriptionTotal = monthlySubscriptionUnitPrice * quantity;
                                   return (
                                     <div
                                       key={field.id}
-                                      className="grid grid-cols-1 items-end gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm md:grid-cols-[minmax(0,1fr)_130px_150px_auto]"
+                                      className="grid grid-cols-1 items-end gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm md:grid-cols-[minmax(0,1fr)_120px_150px_170px_auto]"
                                     >
                                       <input
                                         type="hidden"
@@ -4090,7 +4130,7 @@ export default function AddCustomerContract() {
                                         </p>
                                       </div>
                                       <div>
-                                        <Label>عدد الوحدات</Label>
+                                        <Label>الكمية</Label>
                                         {service.isQuantityBased ? (
                                           <Input
                                             type="number"
@@ -4112,10 +4152,20 @@ export default function AddCustomerContract() {
                                         )}
                                       </div>
                                       <div>
-                                        <Label>السعر</Label>
+                                        <Label>إجمالي السعر</Label>
                                         <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-muted/20 px-3 text-sm font-semibold">
                                           {(service.joining_fee * quantity).toLocaleString('ar-EG')}{' '}
                                           جنيه
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <Label>
+                                          {service.code === 'ADDITIONAL_UNIT'
+                                            ? 'إجمالي اشتراك الوحدة'
+                                            : 'إجمالي اشتراك الخدمة'}
+                                        </Label>
+                                        <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-muted/20 px-3 text-sm font-semibold">
+                                          {monthlySubscriptionTotal.toLocaleString('ar-EG')} جنيه/شهر
                                         </div>
                                       </div>
                                       <Button
@@ -4131,6 +4181,24 @@ export default function AddCustomerContract() {
                                     </div>
                                   );
                                 })}
+                                <div className="grid gap-3 rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:grid-cols-2">
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">
+                                      إجمالي اشتراك الإضافات الشهري
+                                    </p>
+                                    <p className="mt-1 font-bold">
+                                      {additionalServicesMonthlySubscription.toLocaleString('ar-EG')} جنيه/شهر
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">
+                                      إجمالي الاشتراك الشهري
+                                    </p>
+                                    <p className="mt-1 font-bold">
+                                      {initialCollectedMonthlySubscription.toLocaleString('ar-EG')} جنيه/شهر
+                                    </p>
+                                  </div>
+                                </div>
                               </div>
                             )}
 
@@ -4685,7 +4753,7 @@ export default function AddCustomerContract() {
 
                             <FinancialSummaryCard
                               title="الاشتراكات"
-                              description={`المحصل عند إنشاء العقد: الاشتراك الرئيسي ${mainMonthlySubscription.toLocaleString('ar-EG')} فقط.`}
+                              description={`الاشتراك الرئيسي ${mainMonthlySubscription.toLocaleString('ar-EG')} + اشتراكات الإضافات ${additionalServicesMonthlySubscription.toLocaleString('ar-EG')} جنيه شهريًا.`}
                               unitPrice={initialCollectedMonthlySubscription}
                               quantity={selectedMonths.length}
                               quantityLabel="عدد الشهور"

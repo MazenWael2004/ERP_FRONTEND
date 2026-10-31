@@ -97,11 +97,13 @@ export default function OperationalReports() {
     if (active === 'collections') {
       const rows = (data?.receipts || []).map((receipt: any) =>
         [
+          `${receipt.contract_id}`,
+          receipt.customer_name_ar || receipt.customer_name || '—',
           date(receipt.collected_at),
           receipt.receipt_number || '—',
-          receipt.customer_name_ar || receipt.customer_name || '—',
+          
           receipt.parent_customer_name_ar || receipt.parent_customer_name_en || '—',
-          `#${receipt.contract_id}`,
+          
           money(receipt.amount),
           receipt.payment_method_name_ar ||
             receipt.payment_method_name ||
@@ -135,11 +137,12 @@ export default function OperationalReports() {
         title: 'تقرير التحصيلات',
         sheetName: 'التحصيلات',
         headers: [
+          'كود العميل',
+          'اسم العميل',
           'تاريخ التحصيل',
           'رقم الإيصال',
-          'اسم العميل',
+          
           'تابع لعميل/صيدلية',
-          'كود العميل',
           'المبلغ',
           'طريقة الدفع',
           'اسم البنك',

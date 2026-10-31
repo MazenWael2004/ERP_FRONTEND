@@ -477,10 +477,10 @@ export default function SubscriptionCollectionPage() {
         {/* Header */}
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight md:text-3xl">أهدافي</h1>
+            <h1 className="text-2xl font-bold tracking-tight md:text-3xl">العقود المفعّلة ضمن نطاقي</h1>
 
             <p className="mt-1 text-sm text-muted-foreground">
-              تعرض كل العقود اللي تم تفعيلها اللتي في مناطق المندوب
+              تعرض الصيدليات ذات العقود المفعّلة في مناطقك ومناطق فريقك التابع لك في الهيكل.
             </p>
           </div>
 

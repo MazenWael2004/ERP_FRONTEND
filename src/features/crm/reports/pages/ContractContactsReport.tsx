@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Download, RefreshCw, Search, Users } from 'lucide-react';
+import { Check, ChevronsUpDown, Download, RefreshCw, Search, Users } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { Button } from 'src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from 'src/components/ui/card';
 import { Input } from 'src/components/ui/input';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from 'src/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from 'src/components/ui/popover';
+import { cn } from 'src/lib/utils';
 import { fetchContractContactsReport } from '../api/reportsService';
 
 const workflowLabels: Record<string, string> = {
@@ -58,7 +61,7 @@ export default function ContractContactsReport() {
   const uniqueCustomers = useMemo(() => new Set(rows.map((row: any) => row.customer_id)).size, [rows]);
 
   const exportToExcel = () => {
-    const headers = ['كود العميل', 'كود العقد', 'العميل', 'العميل / الصيدلية الرئيسية', 'جهة الاتصال', 'الصفة', 'رقم الهاتف', 'الهاتف الأرضي', 'واتساب', 'البريد الإلكتروني', 'الرقم القومي', 'الفرع', 'حالة العقد', 'تاريخ العقد'];
+    const headers = ['كود العميل', 'كود العقد', 'العميل', 'العميل / الصيدلية الرئيسية', 'المتعاقد', 'الصفة', 'رقم الهاتف', 'الهاتف الأرضي', 'واتساب', 'البريد الإلكتروني', 'الرقم القومي', 'الفرع', 'حالة العقد', 'تاريخ العقد'];
     const exportRows = rows.map((row: any) => [
       row.customer_code || '', row.contract_id || '', row.customer_name_ar || row.customer_name_en || '', row.parent_customer_name_ar || row.parent_customer_name_en || '',
       row.contact_name_ar || row.contact_name_en || '', contactTypeLabels[row.contact_type] || row.contact_type || '',
@@ -93,7 +96,7 @@ export default function ContractContactsReport() {
             <span>بحث</span>
             <div className="relative">
               <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} onKeyDown={(event) => event.key === 'Enter' && void load(filters, 1)} className="pr-9" placeholder="العقد، كود العميل، جهة الاتصال، الهاتف أو البريد" />
+              <Input inputMode="numeric" value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} onKeyDown={(event) => event.key === 'Enter' && void load(filters, 1)} className="pr-9" placeholder="كود العميل (رقم العقد)" />
             </div>
           </label>
           <FilterSelect label="المنطقة" value={filters.zoneId} onChange={(value) => setFilters({ ...filters, zoneId: value })} emptyLabel="كل المناطق" options={(filterOptions.zones || []).map((zone: any) => [zone.id, bilingual(zone.name_ar, zone.name_en)])} />
@@ -117,7 +120,7 @@ export default function ContractContactsReport() {
         <CardContent className="overflow-x-auto p-0">
           {error ? <p className="p-6 text-destructive">{error}</p> : loading ? <p className="p-6 text-muted-foreground">جارٍ تحميل جهات الاتصال...</p> : (
             <table className="w-full min-w-[1500px] text-sm">
-              <thead className="bg-muted"><tr>{['كود العميل', 'تاريخ العقد', 'العميل', 'العميل / الصيدلية الرئيسية', 'جهة الاتصال', 'الصفة', 'رقم الهاتف', 'الهاتف الأرضي', 'واتساب', 'البريد الإلكتروني', 'الرقم القومي', 'الفرع', 'حالة العقد'].map((header) => <th key={header} className="whitespace-nowrap px-4 py-3 text-right font-semibold">{header}</th>)}</tr></thead>
+              <thead className="bg-muted"><tr>{['كود العميل', 'تاريخ العقد', 'اسم العميل', 'العميل / الصيدلية الرئيسية', 'الاسم', 'الصفة', 'رقم الهاتف المحمول', 'الهاتف الأرضي', 'واتساب', 'البريد الإلكتروني', 'الرقم القومي', 'الفرع', 'حالة العقد'].map((header) => <th key={header} className="whitespace-nowrap px-4 py-3 text-right font-semibold">{header}</th>)}</tr></thead>
               <tbody>{rows.length ? rows.map((row: any) => (
                 <tr key={`${row.contract_id}-${row.contact_id}`} className="border-t align-top">
                   <td className="whitespace-nowrap px-4 py-3">{display(row.contract_id)}</td>
@@ -155,7 +158,10 @@ export default function ContractContactsReport() {
 }
 
 function FilterSelect({ label, value, onChange, emptyLabel, options }: { label: string; value: string; onChange: (value: string) => void; emptyLabel: string; options: Array<[string | number, string]> }) {
-  return <label className="grid gap-1 text-sm"><span>{label}</span><select className="h-10 rounded-md border bg-background px-3" value={value} onChange={(event) => onChange(event.target.value)}><option value="">{emptyLabel}</option>{options.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}</select></label>;
+  const [open, setOpen] = useState(false);
+  const allOptions = [["", emptyLabel], ...options];
+  const selected = allOptions.find(([optionValue]) => String(optionValue) === String(value));
+  return <label className="grid gap-1 text-sm"><span>{label}</span><Popover open={open} onOpenChange={setOpen}><PopoverTrigger asChild><Button type="button" variant="outline" role="combobox" className={cn('relative h-10 w-full justify-start bg-background py-0 pl-9 pr-3 text-right font-normal', !value && 'text-muted-foreground')}><span className="truncate">{selected?.[1] || emptyLabel}</span><ChevronsUpDown className="absolute left-3 h-4 w-4 text-muted-foreground" /></Button></PopoverTrigger><PopoverContent dir="rtl" align="start" className="w-[--radix-popover-trigger-width] p-0"><Command><CommandInput placeholder="اكتب للبحث..." /><CommandList><CommandEmpty>لا توجد نتائج مطابقة</CommandEmpty><CommandGroup>{allOptions.map(([optionValue, optionLabel]) => <CommandItem key={String(optionValue) || '__all'} value={`${optionLabel} ${optionValue}`} onSelect={() => { onChange(String(optionValue)); setOpen(false); }}><Check className={cn('ml-2 h-4 w-4', String(value) === String(optionValue) ? 'opacity-100' : 'opacity-0')} /><span className="truncate">{optionLabel}</span></CommandItem>)}</CommandGroup></CommandList></Command></PopoverContent></Popover></label>;
 }
 
 function SummaryCard({ label, value }: { label: string; value: string }) {

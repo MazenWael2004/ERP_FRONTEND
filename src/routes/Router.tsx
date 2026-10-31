@@ -10,8 +10,6 @@ import ViewUsers from '../features/users/pages/UserManagementPage';
 import AddNewCollection from 'src/features/crm/collections/pages/AddCollection';
 import NewContact from '../features/contacts/pages/AddContact';
 import ViewZones from '../features/zones/pages/ViewZones';
-import NewZone from 'src/features/zones/pages/NewZone';
-import EditZone from 'src/features/zones/pages/EditZone';
 import RoleManagementPage from 'src/features/roles/pages/RoleManagementPage';
 import EditJob from 'src/features/jobs/pages/EditJob';
 import Unauthorized from 'src/shared/pages/Unauthorized';
@@ -144,23 +142,6 @@ const Router = [
         element: (
           <ProtectedRoute route="/zones" action_code="READ">
             <ViewZones />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'zones/new-zone',
-
-        element: (
-          <ProtectedRoute route="/zones" action_code="CREATE">
-            <NewZone />
-          </ProtectedRoute>
-        ),
-      },
-      {
-        path: 'zones/edit',
-        element: (
-          <ProtectedRoute route="/zones" action_code="WRITE">
-            <EditZone />
           </ProtectedRoute>
         ),
       },

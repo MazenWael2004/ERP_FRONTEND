@@ -11,10 +11,23 @@ export type WorkflowContract = {
   customer_name_ar?: string | null;
   customer_name_en?: string | null;
   customer_code?: string | null;
+  contact_name_ar?: string | null;
+  contact_name_en?: string | null;
+  contact_type?: string | null;
+  contact_national_id?: string | null;
   zone_name_ar?: string | null;
   zone_name_en?: string | null;
   total_after_discount?: number | null;
+  checked_at?: string | null;
+  checked_by?: number | null;
+  checked_by_username?: string | null;
+  checked_by_name_ar?: string | null;
+  checked_by_name_en?: string | null;
   assigned_technician_id?: number | null;
+  technician_assigned_at?: string | null;
+  actual_installation_date?: string | null;
+  activation_code_issued_at?: string | null;
+  activated_at?: string | null;
   technician_name_ar?: string | null;
   technician_name_en?: string | null;
   implemented_by?: number | null;
@@ -38,7 +51,13 @@ export type WorkflowHistory = {
   performed_by_name_en?: string | null;
 };
 
-export const fetchContractWorkflow = async () => (await api.get('/contract-workflow')).data.data as WorkflowContract[];
+export type WorkflowDateFilters = {
+  startDate?: string;
+  endDate?: string;
+};
+
+export const fetchContractWorkflow = async (filters: WorkflowDateFilters = {}) =>
+  (await api.get('/contract-workflow', { params: filters })).data.data as WorkflowContract[];
 export const fetchContractHistory = async (contractId: number) => (await api.get(`/contract-workflow/${contractId}/history`)).data.data as WorkflowHistory[];
 export type HierarchyAssignmentOptions = {
   supervisors: Array<{ id: number; name_ar?: string; name_en?: string; username?: string }>;

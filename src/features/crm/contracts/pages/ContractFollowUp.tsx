@@ -73,12 +73,32 @@ const dateTime = (value: any) =>
         timeStyle: 'short',
       }).format(new Date(value))
     : '—';
+const currentMonthDateRange = () => {
+  const today = new Date();
+  const toDateInput = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  return {
+    startDate: toDateInput(new Date(today.getFullYear(), today.getMonth(), 1)),
+    endDate: toDateInput(today),
+  };
+};
 const date = (value: any) =>
   value
     ? new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Cairo' }).format(new Date(value))
     : '—';
 const text = (value: any) =>
   value === null || value === undefined || value === '' ? '—' : String(value);
+const contactType = (value: any) => {
+  const type = String(value || '').toUpperCase();
+  if (type === 'OWNER') return 'مالك';
+  if (type === 'TENANT') return 'مستأجر';
+  return text(value);
+};
 const auditChanges = (metadata: unknown) => {
   try {
     const parsed = typeof metadata === 'string' ? JSON.parse(metadata) : metadata;
@@ -175,6 +195,9 @@ const columns: any[] = [
   },
   { header: 'الهيكل', value: (c: any) => text(c.structure) },
   { header: 'هاتف العميل', value: (c: any) => text(c.customer_phone) },
+  { header: 'اسم المتعاقد', value: (c: any) => text(c.contact_name_ar || c.contact_name_en) },
+  { header: 'صفة المتعاقد', value: (c: any) => contactType(c.contact_type) },
+  { header: 'رقم القومي المتعاقد', value: (c: any) => text(c.contact_national_id) },
   { header: 'الرقم الضريبي', value: (c: any) => text(c.tax_number) },
   { header: 'السجل التجاري', value: (c: any) => text(c.registration_number) },
   { header: 'رقم الترخيص', value: (c: any) => text(c.license_number) },
@@ -188,7 +211,11 @@ const columns: any[] = [
   { header: 'رابط الخريطة', value: (c: any) => text(c.google_maps_url) },
   { header: 'خط العرض', value: (c: any) => text(c.latitude) },
   { header: 'خط الطول', value: (c: any) => text(c.longitude) },
-  { header: 'تاريخ التركيب', value: (c: any) => date(c.installation_date) },
+  { header: 'موعد التركيب المخطط', value: (c: any) => date(c.installation_date) },
+  { header: 'تاريخ تعيين مدير الدعم الفني', value: (c: any) => date(c.technician_assigned_at) },
+  { header: 'تاريخ التركيب الفعلي', value: (c: any) => date(c.actual_installation_date) },
+  { header: 'تاريخ إصدار كود التفعيل', value: (c: any) => date(c.activation_code_issued_at) },
+  { header: 'تاريخ التفعيل', value: (c: any) => date(c.activated_at) },
   {
     header: 'مسئول التركيب',
     value: (c: any) =>
@@ -199,9 +226,13 @@ const columns: any[] = [
   { header: 'إجمالي العقد بعد الخصم', value: (c: any) => Number(c.total_after_discount) },
   { header: 'المقدم', value: (c: any) => Number(c.advance_payment) },
   { header: 'ملاحظات العقد', value: (c: any) => text(c.notes) },
+  {
+    header: 'تمت المراجعة بواسطة',
+    value: (c: any) => text(c.checked_by_name_ar || c.checked_by_name_en || c.checked_by_username),
+  },
   { header: 'مراجعة خدمة العملاء', value: (c: any) => text(c.under_checking_notes) },
   { header: 'ملاحظات مدير عمليات', value: (c: any) => text(c.pending_notes) },
-  { header: 'كود التفعيل', value: (c: any) => text(c.under_installation_notes) },
+  { header: 'كود التفعيل', value: (c: any) => text(c.activation_code) },
   { header: 'ملاحظات  التركيبات', value: (c: any) => text(c.under_installation_notes) },
   { header: 'تأكيد خدمة العملاء', value: (c: any) => text(c.installed_notes) },
   { header: 'حالة العقد', value: (c: any) => labels[c.workflow_status] || c.workflow_status },
@@ -217,6 +248,7 @@ export default function ContractFollowUp() {
   const [workflowStatus, setWorkflowStatus] = useState('');
   const [zoneId, setZoneId] = useState('');
   const [salesResponsibleId, setSalesResponsibleId] = useState('');
+  const [dateRange, setDateRange] = useState(currentMonthDateRange);
   const [page, setPage] = useState(1);
   const [busyId, setBusyId] = useState<any>(null);
   const [openHistory, setOpenHistory] = useState<any>(null);
@@ -227,11 +259,11 @@ export default function ContractFollowUp() {
   const [assignmentTechnicianId, setAssignmentTechnicianId] = useState('');
   const [assignmentNote, setAssignmentNote] = useState('');
   const [assignmentError, setAssignmentError] = useState('');
-  const load = async () => {
+  const load = async (requestedDateRange = dateRange) => {
     setLoading(true);
     setError('');
     try {
-      setContracts(await fetchContractWorkflow());
+      setContracts(await fetchContractWorkflow(requestedDateRange));
     } catch {
       setError('تعذر تحميل متابعة العقود. تحقق من الاتصال ثم أعد المحاولة.');
     } finally {
@@ -509,11 +541,14 @@ export default function ContractFollowUp() {
   const firstVisibleRow = filteredContracts.length ? (currentPage - 1) * pageSize + 1 : 0;
   const lastVisibleRow = Math.min(currentPage * pageSize, filteredContracts.length);
   const clearFilters = () => {
+    const defaultDateRange = currentMonthDateRange();
     setSearch('');
     setWorkflowStatus('');
     setZoneId('');
     setSalesResponsibleId('');
+    setDateRange(defaultDateRange);
     setPage(1);
+    void load(defaultDateRange);
   };
   const assignmentTechnicians =
     assignment?.technicians.filter(
@@ -556,7 +591,7 @@ export default function ContractFollowUp() {
         </CardContent>
       </Card>
       <Card>
-        <CardContent className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-6">
+        <CardContent className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-7">
           <label className="grid gap-1 text-sm xl:col-span-2">
             <span>بحث</span>
             <div className="relative">
@@ -574,78 +609,103 @@ export default function ContractFollowUp() {
           </label>
           <label className="grid gap-1 text-sm">
             <span>حالة العقد</span>
-            <select
-              className="h-10 rounded-md border bg-background px-3"
+            <SearchableSelect
               value={workflowStatus}
-              onChange={(event) => {
-                setWorkflowStatus(event.target.value);
+              onValueChange={(value: string) => {
+                setWorkflowStatus(value);
                 setPage(1);
               }}
-            >
-              <option value="">كل الحالات</option>
-              {Object.entries(labels).map(([status, label]) => (
-                <option key={status} value={status}>
-                  {String(label)}
-                </option>
-              ))}
-            </select>
+              options={[
+                { value: '', label: 'كل الحالات' },
+                ...Object.entries(labels).map(([status, label]) => ({
+                  value: status,
+                  label: String(label),
+                })),
+              ]}
+              placeholder="ابحث واختر الحالة"
+              searchPlaceholder="ابحث باسم الحالة..."
+            />
           </label>
           <label className="grid gap-1 text-sm">
             <span>الفرع</span>
-            <select
-              className="h-10 rounded-md border bg-background px-3"
+            <SearchableSelect
               value={zoneId}
-              onChange={(event) => {
-                setZoneId(event.target.value);
+              onValueChange={(value: string) => {
+                setZoneId(value);
                 setPage(1);
               }}
-            >
-              <option value="">كل المناطق</option>
-              {zones.map((zone: any) => {
-                const value = String(zone.zone_id ?? zone.zone_name_ar ?? zone.zone_name_en);
-                return (
-                  <option key={value} value={value}>
-                    {zone.zone_name_ar || zone.zone_name_en}
-                  </option>
-                );
-              })}
-            </select>
+              options={[
+                { value: '', label: 'كل المناطق' },
+                ...zones.map((zone: any) => ({
+                  value: String(zone.zone_id ?? zone.zone_name_ar ?? zone.zone_name_en),
+                  label: zone.zone_name_ar || zone.zone_name_en,
+                })),
+              ]}
+              placeholder="ابحث واختر المنطقة"
+              searchPlaceholder="ابحث باسم المنطقة..."
+            />
           </label>
           <label className="grid gap-1 text-sm">
             <span>مسؤول البيع</span>
-            <select
-              className="h-10 rounded-md border bg-background px-3"
+            <SearchableSelect
               value={salesResponsibleId}
-              onChange={(event) => {
-                setSalesResponsibleId(event.target.value);
+              onValueChange={(value: string) => {
+                setSalesResponsibleId(value);
                 setPage(1);
               }}
-            >
-              <option value="">كل مسؤولي البيع</option>
-              {salesResponsibles.map((responsible: any) => {
-                const value = String(
-                  responsible.sales_responsible_id ??
-                    responsible.created_by_username ??
-                    responsible.created_by_name_ar ??
-                    responsible.created_by_name_en,
-                );
-                const label =
-                  responsible.created_by_name_ar ||
-                  responsible.created_by_name_en ||
-                  responsible.created_by_username;
-                return (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                );
-              })}
-            </select>
+              options={[
+                { value: '', label: 'كل مسؤولي البيع' },
+                ...salesResponsibles.map((responsible: any) => ({
+                  value: String(
+                    responsible.sales_responsible_id ??
+                      responsible.created_by_username ??
+                      responsible.created_by_name_ar ??
+                      responsible.created_by_name_en,
+                  ),
+                  label:
+                    responsible.created_by_name_ar ||
+                    responsible.created_by_name_en ||
+                    responsible.created_by_username,
+                })),
+              ]}
+              placeholder="ابحث واختر مسؤول البيع"
+              searchPlaceholder="ابحث باسم مسؤول البيع..."
+            />
           </label>
-          <div className="flex items-end">
+          <label className="grid gap-1 text-sm">
+            <span>من تاريخ العقد</span>
+            <Input
+              type="date"
+              dir="ltr"
+              value={dateRange.startDate}
+              max={dateRange.endDate || undefined}
+              onChange={(event) => setDateRange((current) => ({ ...current, startDate: event.target.value }))}
+            />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span>إلى تاريخ العقد</span>
+            <Input
+              type="date"
+              dir="ltr"
+              value={dateRange.endDate}
+              min={dateRange.startDate || undefined}
+              onChange={(event) => setDateRange((current) => ({ ...current, endDate: event.target.value }))}
+            />
+          </label>
+          <div className="flex items-end gap-2 xl:col-span-7">
+            <Button
+              onClick={() => {
+                setPage(1);
+                void load();
+              }}
+              disabled={loading || !dateRange.startDate || !dateRange.endDate}
+            >
+              تطبيق الفترة
+            </Button>
             <Button
               variant="outline"
               onClick={clearFilters}
-              disabled={!search && !workflowStatus && !zoneId && !salesResponsibleId}
+              disabled={loading}
             >
               إعادة تعيين
             </Button>
