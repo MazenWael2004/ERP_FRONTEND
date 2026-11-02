@@ -223,15 +223,15 @@ const Router = [
       {
         path: '/add-new-contract',
         element: (
-          // <ProtectedRoute route="/contracts" action_code="CREATE">
+          <ProtectedRoute route="/add-new-contract" action_code="READ">
             <AddNewContract />
-          // </ProtectedRoute>
+           </ProtectedRoute>
         ),
       },
       {
         path: '/add-new-request',
         element: (
-          <ProtectedRoute route="/add-new-request" action_code="CREATE">
+          <ProtectedRoute route="/add-new-request" action_code="READ">
             <AdditionalServiceRequestPage />
           </ProtectedRoute>
         ),
@@ -245,8 +245,21 @@ const Router = [
         ),
       },
       {
+        path: '/collect-additional-services',
+        element: (
+          <ProtectedRoute route="/collect-additional-services" action_code="READ">
+            <CollectAdditionalUnits />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        
         path: '/contract-follow-up',
-        element: <ContractFollowUp />,
+        element:( 
+        <ProtectedRoute route="/contract-follow-up" action_code="READ">
+        <ContractFollowUp />
+        </ProtectedRoute>
+        )
       },
       {
         path: '/operational-reports',
@@ -273,12 +286,6 @@ const Router = [
       {
         path: '/customer-tickets',
         element: <TicketingPage />,
-      },
-      {
-        path:'/collect-additional-units',
-        element:(
-          <CollectAdditionalUnits />
-        )
       },
       {
         path:'/targets',

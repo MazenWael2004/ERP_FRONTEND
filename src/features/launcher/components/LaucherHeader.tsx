@@ -80,7 +80,7 @@ function LauncherHeader({ name, role }: any) {
           </button>
         )}
 
-        <img src={companyLogoIcon} style={{ width: 80, height: 80 }} alt="" />
+        <img src={companyLogoIcon} style={{ width: 250, height: 80 }} alt="" />
       </div>
     </div>
   );

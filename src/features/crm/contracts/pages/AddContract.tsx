@@ -84,6 +84,12 @@ type EgyptAdministrativeDivision = {
   hasChildren: boolean;
 };
 
+type Zone = {
+  id: number;
+  name_ar: string;
+  geographic_governorate_source_id: string | null;
+};
+
 function normalizeArabicForMatching(value = '') {
   return value
     .replace(/[أإآ]/g, 'ا')
@@ -261,7 +267,7 @@ export default function AddCustomerContract() {
   const [contractTypes, setContractTypes] = useState<ContractTypeOffer[]>([]);
   const [isContractTypesLoading, setIsContractTypesLoading] = useState(true);
   const [contractTypesError, setContractTypesError] = useState('');
-  const [zones, setZones] = useState<any[]>([]);
+  const [zones, setZones] = useState<Zone[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
   const [banks, setBanks] = useState<any[]>([]);
   const [isBanksLoading, setIsBanksLoading] = useState(true);
@@ -276,7 +282,7 @@ export default function AddCustomerContract() {
           : Array.isArray(response)
             ? response
             : [];
-        setZones(records);
+        setZones(records as Zone[]);
       } catch (error) {
         console.error('Failed to fetch zones:', error);
       }
@@ -719,6 +725,16 @@ export default function AddCustomerContract() {
   const selectedDistrict = districts.find((division) => division.id === districtId);
   const shiyakhaId = watch('address.shiyakhaId');
   const selectedShiyakha = shiyakhas.find((division) => division.id === shiyakhaId);
+  const governorateZones = useMemo(
+    () =>
+      governorateId
+        ? zones.filter(
+            (zone) =>
+              String(zone.geographic_governorate_source_id ?? '') === String(governorateId),
+          )
+        : [],
+    [governorateId, zones],
+  );
 
   const openGoogleMaps = () => {
     const address = getValues('address');
@@ -832,6 +848,24 @@ export default function AddCustomerContract() {
       abortController.abort();
     };
   }, [districtId, geographyRefresh, governorateId, workflowCustomerEdit]);
+
+  useEffect(() => {
+    if (!governorateId || !zoneId || zones.length === 0) {
+      return;
+    }
+
+    const selectedZoneForGovernorate = zones.find(
+      (zone) => String(zone.id) === String(zoneId),
+    );
+
+    if (
+      !selectedZoneForGovernorate ||
+      String(selectedZoneForGovernorate.geographic_governorate_source_id ?? '') !==
+        String(governorateId)
+    ) {
+      setValue('zoneId', '', { shouldDirty: true, shouldValidate: true });
+    }
+  }, [governorateId, setValue, zoneId, zones]);
 
   useEffect(() => {
     let isActive = true;
@@ -1198,8 +1232,11 @@ export default function AddCustomerContract() {
   const monthlySubscription = selectedMonths.length * initialCollectedMonthlySubscription;
   const subscriptionDiscountPercentage = currentContractTypeRule.subscriptionDiscountPercentage;
   const joiningFeeDiscountPercentage = currentContractTypeRule.joiningFeeDiscountPercentage;
+  const discountedMainMonthlySubscription = Number(
+    (mainMonthlySubscription * (1 - subscriptionDiscountPercentage / 100)).toFixed(2),
+  );
   const monthlySubscriptionAfterDiscount = Number(
-    (initialCollectedMonthlySubscription * (1 - subscriptionDiscountPercentage / 100)).toFixed(2),
+    (discountedMainMonthlySubscription + additionalServicesMonthlySubscription).toFixed(2),
   );
   const subscriptionPriceAfterDiscount = Number(
     (monthlySubscriptionAfterDiscount * selectedMonths.length).toFixed(2),
@@ -1257,7 +1294,8 @@ export default function AddCustomerContract() {
     addOnTotal > 0 ? Math.min((addOnPaymentAmount / addOnTotal) * 100, 100) : 0;
 
   const selectedBranch = branchId !== '' ? (branches[Number(branchId)] ?? null) : null;
-  const selectedZone = zoneId !== '' ? (zones[Number(zoneId)] ?? null) : null;
+  const selectedZone =
+    zoneId !== '' ? zones.find((zone) => String(zone.id) === String(zoneId)) ?? null : null;
 
   const customerStatus =
     customerMode === 'reactivate' ? 'إعادة تفعيل' : customerMode === 'new' ? 'عميل جديد' : '—';
@@ -2610,22 +2648,6 @@ export default function AddCustomerContract() {
                       </div>
                     )}
 
-                    <SelectField
-                      label={
-                        <>
-                          الفرع
-                          <span className="mr-1 text-red-500">*</span>
-                        </>
-                      }
-                      registration={register('zoneId', {
-                        required: 'المنطقة مطلوبة',
-                        valueAsNumber: true,
-                      })}
-                      options={zones.map((zone) => [zone.id, zone.name_ar])}
-                      control={control}
-                      error={errors.zoneId?.message}
-                    />
-
                     <FormField
                       label={
                         <>
@@ -3104,6 +3126,10 @@ export default function AddCustomerContract() {
                                 shouldDirty: true,
                                 shouldValidate: true,
                               });
+                              setValue('zoneId', '', {
+                                shouldDirty: true,
+                                shouldValidate: true,
+                              });
                             }}
                             disabled={isGeographyLoading || Boolean(geographyError)}
                             error={Boolean(errors.address?.governorateId)}
@@ -3127,6 +3153,45 @@ export default function AddCustomerContract() {
                       {errors.address?.governorateId?.message && (
                         <ErrorText>{errors.address.governorateId.message}</ErrorText>
                       )}
+                    </div>
+
+                    <div data-validation-anchor={errors.zoneId ? 'true' : undefined}>
+                      <SelectField
+                        label={
+                          <>
+                            الفرع
+                            <span className="mr-1 text-red-500">*</span>
+                          </>
+                        }
+                        registration={register('zoneId', {
+                          required: 'المنطقة مطلوبة',
+                          valueAsNumber: true,
+                          validate: (value) => {
+                            const selected = zones.find(
+                              (zone) => String(zone.id) === String(value),
+                            );
+
+                            return (
+                              !value ||
+                              (selected &&
+                                String(selected.geographic_governorate_source_id ?? '') ===
+                                  String(governorateId)) ||
+                              'الفرع المختار لا يتبع المحافظة المختارة'
+                            );
+                          },
+                        })}
+                        options={governorateZones.map((zone) => [zone.id, zone.name_ar])}
+                        control={control}
+                        disabled={!governorateId}
+                        placeholder={
+                          governorateId ? 'اختر الفرع' : 'اختر المحافظة أولاً'
+                        }
+                        searchPlaceholder="ابحث عن فرع..."
+                        error={errors.zoneId?.message}
+                      />
+                      <p className="mt-1.5 text-xs text-muted-foreground">
+                        تظهر الفروع التابعة للمحافظة المختارة فقط.
+                      </p>
                     </div>
 
                     <div>
@@ -4753,7 +4818,7 @@ export default function AddCustomerContract() {
 
                             <FinancialSummaryCard
                               title="الاشتراكات"
-                              description={`الاشتراك الرئيسي ${mainMonthlySubscription.toLocaleString('ar-EG')} + اشتراكات الإضافات ${additionalServicesMonthlySubscription.toLocaleString('ar-EG')} جنيه شهريًا.`}
+                              description={`الاشتراك الرئيسي ${mainMonthlySubscription.toLocaleString('ar-EG')} بعد الخصم ${discountedMainMonthlySubscription.toLocaleString('ar-EG')} + اشتراكات الإضافات ${additionalServicesMonthlySubscription.toLocaleString('ar-EG')} = ${monthlySubscriptionAfterDiscount.toLocaleString('ar-EG')} جنيه شهريًا.`}
                               unitPrice={initialCollectedMonthlySubscription}
                               quantity={selectedMonths.length}
                               quantityLabel="عدد الشهور"

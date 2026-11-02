@@ -187,14 +187,14 @@ const columns: any[] = [
       text(c.representative_name_ar || c.representative_name_en || c.representative_username),
   },
   { header: 'البرنامج', value: (c: any) => text(c.program_name_ar || c.program_name_en) },
-  { header: 'الخطة', value: (c: any) => text(c.plan_name_ar || c.plan_name_en) },
+  { header: 'نوع الاشتراك', value: (c: any) => text(c.main_subscription_service_name_ar || c.main_subscription_service_name_en) },
   { header: 'اسم العميل ', value: (c: any) => text(c.customer_name_ar) },
   {
     header: 'نوع العميل',
     value: (c: any) => text(c.customer_type_name_ar || c.customer_type_name_en),
   },
   { header: 'الهيكل', value: (c: any) => text(c.structure) },
-  { header: 'هاتف العميل', value: (c: any) => text(c.customer_phone) },
+  { header: 'رقم المحمول المتعاقد', value: (c: any) => text(c.customer_phone) },
   { header: 'اسم المتعاقد', value: (c: any) => text(c.contact_name_ar || c.contact_name_en) },
   { header: 'صفة المتعاقد', value: (c: any) => contactType(c.contact_type) },
   { header: 'رقم القومي المتعاقد', value: (c: any) => text(c.contact_national_id) },
@@ -221,8 +221,8 @@ const columns: any[] = [
     value: (c: any) =>
       text(c.implemented_by_name_ar || c.implemented_by_name_en || c.implemented_by_username),
   },
-  { header: 'الاستحقاق القادم', value: (c: any) => date(c.next_subscription_due_date) },
-  { header: 'سعر الاشتراك الأساسي', value: (c: any) => Number(c.subscription_price) },
+  { header: 'تاريخ الاستحقاق القادم', value: (c: any) => date(c.next_subscription_due_date) },
+  
   { header: 'إجمالي العقد بعد الخصم', value: (c: any) => Number(c.total_after_discount) },
   { header: 'المقدم', value: (c: any) => Number(c.advance_payment) },
   { header: 'ملاحظات العقد', value: (c: any) => text(c.notes) },
@@ -635,7 +635,7 @@ export default function ContractFollowUp() {
                 setPage(1);
               }}
               options={[
-                { value: '', label: 'كل المناطق' },
+                { value: '', label: 'كل الفروع' },
                 ...zones.map((zone: any) => ({
                   value: String(zone.zone_id ?? zone.zone_name_ar ?? zone.zone_name_en),
                   label: zone.zone_name_ar || zone.zone_name_en,

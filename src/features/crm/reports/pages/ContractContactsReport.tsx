@@ -96,10 +96,10 @@ export default function ContractContactsReport() {
             <span>بحث</span>
             <div className="relative">
               <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input inputMode="numeric" value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} onKeyDown={(event) => event.key === 'Enter' && void load(filters, 1)} className="pr-9" placeholder="كود العميل (رقم العقد)" />
+              <Input inputMode="numeric" value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} onKeyDown={(event) => event.key === 'Enter' && void load(filters, 1)} className="pr-9" placeholder="كود العميل" />
             </div>
           </label>
-          <FilterSelect label="المنطقة" value={filters.zoneId} onChange={(value) => setFilters({ ...filters, zoneId: value })} emptyLabel="كل المناطق" options={(filterOptions.zones || []).map((zone: any) => [zone.id, bilingual(zone.name_ar, zone.name_en)])} />
+          <FilterSelect label="الفرع" value={filters.zoneId} onChange={(value) => setFilters({ ...filters, zoneId: value })} emptyLabel="كل الفروع" options={(filterOptions.zones || []).map((zone: any) => [zone.id, bilingual(zone.name_ar, zone.name_en)])} />
           <FilterSelect label="الصفة" value={filters.contactType} onChange={(value) => setFilters({ ...filters, contactType: value })} emptyLabel="كل الصفات" options={(filterOptions.contactTypes || []).map((type: string) => [type, contactTypeLabels[type] || type])} />
           <FilterSelect label="حالة العقد" value={filters.workflowStatus} onChange={(value) => setFilters({ ...filters, workflowStatus: value })} emptyLabel="كل الحالات" options={(filterOptions.workflowStatuses || []).map((status: string) => [status, workflowLabels[status] || status])} />
           <div className="flex items-end gap-2 md:col-span-2 xl:col-span-5">

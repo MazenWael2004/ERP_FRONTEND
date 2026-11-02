@@ -78,7 +78,7 @@ function LoginPage() {
       </div>
       <div className="second-half-container">
         <div className="company-logo">
-          <img src={companyLogoIcon} alt="B-Connect" style={{ width: 560, height: 80 }} />
+          <img src={companyLogoIcon} alt="B-Connect" style={{ width: 260, height: 80 }} />
         </div>
         <h2>{t('WELCOME_MESSAGE')}</h2>
         <form className="login-form-container" onSubmit={handleSubmit(onSubmit)}>

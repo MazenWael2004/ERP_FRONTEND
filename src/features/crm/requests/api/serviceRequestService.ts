@@ -4,6 +4,12 @@ export type ServiceRequestItemPayload = { serviceId: number; quantity: number };
 
 export const fetchRequestZones = async () => (await api.get('/service-requests/zones')).data;
 export const fetchZoneContracts = async (zoneId: number) => (await api.get('/service-requests/contracts', { params: { zoneId } })).data;
+export const fetchContractById = async (contractId: number) =>
+  (await api.get('/service-requests/contracts', { params: { contractId } })).data;
+export const fetchApprovedServiceRequestsForCollection = async (contractId: number) =>
+  (await api.get('/service-requests/approved-for-collection', { params: { contractId } })).data;
+export const createAdditionalServiceCollection = async (payload: unknown) =>
+  (await api.post('/collections', payload)).data;
 export const fetchRequestCatalog = async () => (await api.get('/service-requests/catalog')).data;
 export const createServiceRequest = async (payload: { zoneId: number; contractId: number; notes: string; items: ServiceRequestItemPayload[] }) =>
   (await api.post('/service-requests', payload)).data;

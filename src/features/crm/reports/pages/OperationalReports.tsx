@@ -49,6 +49,14 @@ type ReportTableData = {
   exportRows: Array<Array<string | number>>;
 };
 
+type MetricData = {
+  label: string;
+  value: string;
+  icon: ReactNode;
+  featured?: boolean;
+  helper?: string;
+};
+
 export default function OperationalReports() {
   const today = new Date().toISOString().slice(0, 10);
 
@@ -102,7 +110,6 @@ export default function OperationalReports() {
           date(receipt.collected_at),
           receipt.receipt_number || '—',
           
-          receipt.parent_customer_name_ar || receipt.parent_customer_name_en || '—',
           
           money(receipt.amount),
           receipt.payment_method_name_ar ||
@@ -120,7 +127,6 @@ export default function OperationalReports() {
           receipt.collected_at ? String(receipt.collected_at).slice(0, 10) : '',
           receipt.receipt_number || '',
           receipt.customer_name_ar || receipt.customer_name || '',
-          receipt.parent_customer_name_ar || receipt.parent_customer_name_en || '',
           receipt.contract_id || '',
           toNumber(receipt.amount),
           receipt.payment_method_name_ar ||
@@ -141,8 +147,6 @@ export default function OperationalReports() {
           'اسم العميل',
           'تاريخ التحصيل',
           'رقم الإيصال',
-          
-          'تابع لعميل/صيدلية',
           'المبلغ',
           'طريقة الدفع',
           'اسم البنك',
@@ -219,50 +223,46 @@ export default function OperationalReports() {
     const rows = (data?.rows || []).map((sale: any) =>
       [
         date(sale.contract_date),
-        sale.customer_name_ar || sale.customer_name || '—',
-        sale.parent_customer_name_ar || sale.parent_customer_name_en || '—',
         sale.sales_responsible_name_ar || sale.sales_responsible_name_en || '—',
         sale.sales_supervisor_name_ar || sale.sales_supervisor_name_en || '—',
         sale.sales_manager_name_ar || sale.sales_manager_name_en || '—',
+        sale.customer_code || '—',
+        sale.customer_name_ar || sale.customer_name || '—',
         sale.program_name_ar || sale.program_name || '—',
-        `#${sale.contract_id}`,
-        money(sale.monthly_subscription_price),
-        money(sale.joining_fee_before_discount),
+        sale.contract_type_name_ar || sale.contract_type_name_en || sale.contract_type_code || '—',
+        sale.subscription_type_name_ar || sale.subscription_type_name_en || '—',
+        `${toNumber(sale.subscription_discount_percentage).toLocaleString('en-US')}`,
+        money(sale.monthly_subscription_after_discount),
         money(sale.joining_fee_after_discount),
-        money(sale.subscription_fee_before_discount),
         money(sale.subscription_fee_after_discount),
-        money(sale.contract_total_before_discount),
-        money(sale.contract_discount_amount),
-        money(sale.contract_total_after_discount),
-        money(sale.additional_services_total),
         money(sale.total_contract_value),
-        money(sale.advance_payment),
         money(sale.remaining_contract_balance),
+        money(sale.additional_units_total),
+        money(sale.replication_service_total),
+        money(sale.additional_services_total),
       ].reverse(),
     );
 
     const exportRows = (data?.rows || []).map((sale: any) =>
       [
         sale.contract_date ? String(sale.contract_date).slice(0, 10) : '',
-        sale.customer_name_ar || sale.customer_name || '',
-        sale.parent_customer_name_ar || sale.parent_customer_name_en || '',
         sale.sales_responsible_name_ar || sale.sales_responsible_name_en || '',
         sale.sales_supervisor_name_ar || sale.sales_supervisor_name_en || '',
         sale.sales_manager_name_ar || sale.sales_manager_name_en || '',
+        sale.customer_code || '',
+        sale.customer_name_ar || sale.customer_name || '',
         sale.program_name_ar || sale.program_name || '',
-        sale.contract_id || '',
-        toNumber(sale.monthly_subscription_price),
-        toNumber(sale.joining_fee_before_discount),
+        sale.contract_type_name_ar || sale.contract_type_name_en || sale.contract_type_code || '',
+        sale.subscription_type_name_ar || sale.subscription_type_name_en || '',
+        toNumber(sale.subscription_discount_percentage) / 100,
+        toNumber(sale.monthly_subscription_after_discount),
         toNumber(sale.joining_fee_after_discount),
-        toNumber(sale.subscription_fee_before_discount),
         toNumber(sale.subscription_fee_after_discount),
-        toNumber(sale.contract_total_before_discount),
-        toNumber(sale.contract_discount_amount),
-        toNumber(sale.contract_total_after_discount),
-        toNumber(sale.additional_services_total),
         toNumber(sale.total_contract_value),
-        toNumber(sale.advance_payment),
         toNumber(sale.remaining_contract_balance),
+        toNumber(sale.additional_units_total),
+        toNumber(sale.replication_service_total),
+        toNumber(sale.additional_services_total),
       ].reverse(),
     );
 
@@ -273,25 +273,23 @@ export default function OperationalReports() {
 
       headers: [
         'تاريخ العقد',
-        'اسم العميل',
-        'تابع لعميل/صيدلية',
         'مسؤول البيع',
         'المشرف',
         'المدير',
-        'البرنامج',
         'كود العميل',
-        'الاشتراك الشهري',
-        'رسوم الانضمام قبل الخصم',
-        'رسوم الانضمام بعد الخصم',
-        'الاشتراكات قبل الخصم',
-        'الاشتراكات بعد الخصم',
-        'إجمالي العقد قبل الخصم',
-        'خصم العقد',
-        'إجمالي العقد بعد الخصم',
+        'اسم العميل',
+        'البرنامج',
+        'نوع العرض',
+        'نوع الاشتراك',
+        'نسبة خصم الاشتراك',
+        'سعر الاشتراك بعد الخصم',
+        'إجمالي رسم الانضمام',
+        'إجمالي الاشتراكات',
+        'إجمالي قيمة العقد شامل الخدمات الإضافية',
+        'المتبقي',
+        'إجمالي وحدات إضافية',
+        'إجمالي خدمة النسخ',
         'إجمالي الخدمات الإضافية',
-        'إجمالي العقد شامل الإضافات',
-        'الدفعة المقدمة للعقد',
-        'المتبقي من العقد الأساسي',
       ].reverse(),
 
       rows,
@@ -378,19 +376,20 @@ export default function OperationalReports() {
   const metrics =
     active === 'sales'
       ? [
+          { label: 'إجمالي قيمة العقود', value: money(summary.total_sales), icon: <BarChart3 />, featured: true, helper: 'شامل الخدمات الإضافية' },
           primaryMetric,
-          { label: 'إجمالي المبيعات', value: money(summary.total_sales), icon: <BarChart3 /> },
-          { label: 'الاشتراكات قبل الخصم', value: money(summary.subscriptions_before_discount), icon: <Repeat2 /> },
-          { label: 'الاشتراكات بعد الخصم', value: money(summary.subscriptions_after_discount), icon: <Repeat2 /> },
-          { label: 'الخدمات الإضافية', value: money(summary.additional_services_total), icon: <Boxes /> },
-          { label: 'إجمالي الدفعات المقدمة', value: money(summary.total_advance_payments), icon: <ReceiptText /> },
-          { label: 'إجمالي المتبقي من العقود الأساسية', value: money(summary.total_remaining_contract_balance), icon: <BarChart3 /> },
-          programMetric,
-        ].filter(Boolean) as Array<{ label: string; value: string; icon: ReactNode }>
+          { label: 'متوسط قيمة العقد', value: money(summary.average_sale), icon: <ShoppingCart /> },
+          { label: 'إجمالي الاشتراكات بعد الخصم', value: money(summary.subscriptions_after_discount), icon: <Repeat2 />, helper: 'للفترات المحددة في العقود' },
+          { label: 'إجمالي رسوم الانضمام', value: money(summary.joining_fees_after_discount), icon: <ReceiptText /> },
+          { label: 'إجمالي الخدمات الإضافية', value: money(summary.additional_services_total), icon: <Boxes /> },
+          // { label: 'إجمالي الدفعات المقدمة', value: money(summary.total_advance_payments), icon: <ReceiptText /> },
+          { label: 'إجمالي المتبقي', value: money(summary.total_remaining_contract_balance), icon: <BarChart3 />, helper: 'للرسم الأساسي للعقود' },
+          // programMetric,
+        ].filter(Boolean) as MetricData[]
       : [
           primaryMetric,
           { label: amountMetric.label, value: amountMetric.value, icon: <BarChart3 /> },
-        ];
+        ] as MetricData[];
 
   return (
     <div dir="rtl" className="space-y-6 text-right">
@@ -398,7 +397,7 @@ export default function OperationalReports() {
         <h1 className="text-2xl font-bold">تقارير التعاقدات الجديدة</h1>
 
         <p className="mt-1 text-sm text-muted-foreground">
-          التحصيلات والوحدات الإضافية وخدمات النسخ والمبيعات حسب الفترة.
+          التحصيلات والوحدات الإضافية و خدمات الreplication والمبيعات حسب الفترة.
         </p>
       </div>
 
@@ -487,17 +486,21 @@ export default function OperationalReports() {
   );
 }
 
-function Metric({ label, value, icon }: { label: string; value: string; icon: ReactNode }) {
+function Metric({ label, value, icon, featured = false, helper }: MetricData) {
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium">{label}</CardTitle>
-
-        {icon}
+    <Card className={featured ? 'border-primary/25 bg-gradient-to-br from-primary/10 via-card to-card shadow-sm sm:col-span-2' : 'transition-shadow hover:shadow-sm'}>
+      <CardHeader className="flex flex-row items-start justify-between gap-3 pb-2">
+        <div className="min-w-0">
+          <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
+          {helper && <p className="mt-1 text-xs text-muted-foreground">{helper}</p>}
+        </div>
+        <div className={featured ? 'rounded-xl bg-primary p-2 text-primary-foreground' : 'rounded-xl bg-muted p-2 text-muted-foreground'}>
+          {icon}
+        </div>
       </CardHeader>
 
       <CardContent>
-        <div className="text-2xl font-bold">{value || '0'}</div>
+        <div className={featured ? 'text-3xl font-bold tracking-tight' : 'text-2xl font-bold tracking-tight'}>{value || '0'}</div>
       </CardContent>
     </Card>
   );

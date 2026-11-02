@@ -1,602 +1,191 @@
-import * as React from 'react';
-import {
-  Calendar,
-  CheckCircle2,
-  CreditCard,
-  Building2,
-  MapPin,
-  Receipt,
-  Banknote,
-  WalletCards,
-  ChevronDown,
-} from 'lucide-react';
-
+import { useEffect, useMemo, useState } from 'react';
+import Swal from 'sweetalert2';
+import { CheckCircle2, FileText, Loader2, Search, Wallet, X } from 'lucide-react';
+import CardBox from 'src/components/shared/CardBox';
+import BreadcrumbComp from 'src/layouts/full/shared/breadcrumb/BreadcrumbComp';
+import { Badge } from 'src/components/ui/badge';
 import { Button } from 'src/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from 'src/components/ui/card';
-
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from 'src/components/ui/dialog';
 import { Input } from 'src/components/ui/input';
 import { Label } from 'src/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from 'src/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from 'src/components/ui/table';
+import { Textarea } from 'src/components/ui/textarea';
+import { fetchBanks, fetchPaymentMethods } from 'src/features/crm/contracts/api/contractService';
+import { createAdditionalServiceCollection, fetchApprovedServiceRequestsForCollection } from 'src/features/crm/requests/api/serviceRequestService';
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from 'src/components/ui/select';
+type RequestItem = {
+  invoiceLineId: number;
+  description?: string;
+  serviceNameAr?: string;
+  serviceNameEn?: string;
+  quantity: number;
+  totalAmount: number;
+  paidAmount: number;
+  outstandingAmount: number;
+};
 
-import { Badge } from 'src/components/ui/badge';
-import { Separator } from 'src/components/ui/separator';
+type CollectionRequest = {
+  requestId: number;
+  contractId: number;
+  representativeId?: number;
+  customerCode?: string;
+  customerNameAr?: string;
+  customerNameEn?: string;
+  zoneNameAr?: string;
+  zoneNameEn?: string;
+  invoiceId: number;
+  invoiceNumber?: string;
+  approvedAt?: string;
+  totalAmount: number;
+  paidAmount: number;
+  outstandingAmount: number;
+  items: RequestItem[];
+};
 
-// ============================================================
-// MOCK DATA
-// ============================================================
-
-const mockContracts = [
-  {
-    id: 101,
-    contractNumber: 'CNT-2026-00125',
-    pharmacyName: 'صيدلية العزبي - فرع الدقي',
-    zoneName: 'منطقة الجيزة',
-    branchName: 'فرع الدقي',
-  },
-  {
-    id: 102,
-    contractNumber: 'CNT-2026-00131',
-    pharmacyName: 'صيدليات سيف - فرع المهندسين',
-    zoneName: 'منطقة شمال الجيزة',
-    branchName: 'فرع المهندسين',
-  },
-  {
-    id: 103,
-    contractNumber: 'CNT-2026-00142',
-    pharmacyName: 'صيدلية مصر الجديدة',
-    zoneName: 'منطقة القاهرة',
-    branchName: 'فرع مصر الجديدة',
-  },
-];
-
-const mockAdditionalUnitRequests = [
-  {
-    id: 501,
-    contractId: 101,
-    requestNumber: 'AUR-2026-00031',
-    requestedAt: '2026-10-02',
-    approvedAt: '2026-10-04',
-    quantity: 2,
-    unitPrice: 4000,
-    totalAmount: 8000,
-    status: 'APPROVED',
-  },
-  {
-    id: 502,
-    contractId: 101,
-    requestNumber: 'AUR-2026-00035',
-    requestedAt: '2026-10-03',
-    approvedAt: '2026-10-05',
-    quantity: 1,
-    unitPrice: 4000,
-    totalAmount: 4000,
-    status: 'APPROVED',
-  },
-  {
-    id: 503,
-    contractId: 102,
-    requestNumber: 'AUR-2026-00038',
-    requestedAt: '2026-10-04',
-    approvedAt: '2026-10-05',
-    quantity: 3,
-    unitPrice: 4000,
-    totalAmount: 12000,
-    status: 'APPROVED',
-  },
-];
-
-// ============================================================
-// COMPONENT
-// ============================================================
+const today = () => new Date().toISOString().slice(0, 10);
+const amount = (value: unknown) => `${Number(value || 0).toLocaleString('ar-EG')} ج.م`;
+const errorMessage = (error: any) => error?.response?.data?.error?.message || error?.response?.data?.message || 'تعذر إتمام العملية. حاول مرة أخرى.';
+const paymentDetailsDefaults = () => ({ transferDate: '', bankId: '', referenceNumber: '', chequeNumber: '', chequeDueDate: '', transactionDate: '', receiptNumber: '' });
 
 export default function CollectAdditionalUnits() {
-  const [selectedContractId, setSelectedContractId] = React.useState<string>('101');
+  const [contractId, setContractId] = useState('');
+  const [requests, setRequests] = useState<CollectionRequest[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [methods, setMethods] = useState<any[]>([]);
+  const [banks, setBanks] = useState<any[]>([]);
+  const [selected, setSelected] = useState<CollectionRequest | null>(null);
+  const [amountToCollect, setAmountToCollect] = useState('');
+  const [paymentMethodId, setPaymentMethodId] = useState('');
+  const [collectionDate, setCollectionDate] = useState(today());
+  const [notes, setNotes] = useState('');
+  const [paymentDetails, setPaymentDetails] = useState(paymentDetailsDefaults);
+  const [saving, setSaving] = useState(false);
 
-  const [selectedRequestIds, setSelectedRequestIds] = React.useState<number[]>([]);
-
-  const [paymentMethod, setPaymentMethod] = React.useState<string>('');
-
-  const selectedContract = mockContracts.find(
-    (contract) => contract.id === Number(selectedContractId),
-  );
-
-  const approvedRequests = mockAdditionalUnitRequests.filter(
-    (request) => request.contractId === Number(selectedContractId) && request.status === 'APPROVED',
-  );
-
-  const selectedRequests = approvedRequests.filter((request) =>
-    selectedRequestIds.includes(request.id),
-  );
-
-  const totalUnits = selectedRequests.reduce((sum, request) => sum + request.quantity, 0);
-
-  const totalAmount = selectedRequests.reduce((sum, request) => sum + request.totalAmount, 0);
-
-  const today = new Date().toLocaleDateString('ar-EG', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-
-  // ==========================================================
-  // HANDLERS
-  // ==========================================================
-
-  const handleContractChange = (value: string) => {
-    setSelectedContractId(value);
-    setSelectedRequestIds([]);
-  };
-
-  const toggleRequest = (requestId: number) => {
-    setSelectedRequestIds((current) => {
-      if (current.includes(requestId)) {
-        return current.filter((id) => id !== requestId);
+  useEffect(() => {
+    const loadLookups = async () => {
+      try {
+        const [paymentMethods, activeBanks] = await Promise.all([fetchPaymentMethods(), fetchBanks()]);
+        setMethods(Array.isArray(paymentMethods) ? paymentMethods : []);
+        setBanks(Array.isArray(activeBanks) ? activeBanks : []);
+      } catch (error) {
+        await Swal.fire({ icon: 'error', title: 'تعذر تحميل طرق الدفع', text: errorMessage(error) });
       }
-
-      return [...current, requestId];
-    });
-  };
-
-  const handleSubmit = () => {
-    if (!selectedContract) {
-      alert('برجاء اختيار العقد');
-      return;
-    }
-
-    if (selectedRequests.length === 0) {
-      alert('برجاء اختيار طلب إضافي واحد على الأقل');
-      return;
-    }
-
-    if (!paymentMethod) {
-      alert('برجاء اختيار طريقة الدفع');
-      return;
-    }
-
-    const payload = {
-      contractId: selectedContract.id,
-      collectedAt: new Date(),
-      collectionType: 'ADDITIONAL_UNIT',
-      paymentMethod,
-      amount: totalAmount,
-
-      additionalUnits: selectedRequests.map((request) => ({
-        requestId: request.id,
-        quantity: request.quantity,
-        unitPrice: request.unitPrice,
-        totalAmount: request.totalAmount,
-      })),
     };
+    void loadLookups();
+  }, []);
 
-    console.log('Additional Unit Collection:', payload);
+  const selectedMethod = useMemo(
+    () => methods.find((method) => Number(method.id) === Number(paymentMethodId)),
+    [methods, paymentMethodId],
+  );
+  const paymentMethodCode = String(selectedMethod?.code || '').toUpperCase().replace(/_/g, '');
+  const totalOutstanding = useMemo(() => requests.reduce((sum, request) => sum + Number(request.outstandingAmount || 0), 0), [requests]);
+  const customer = requests[0];
 
-    alert('تم تسجيل التحصيل بنجاح');
+  const loadRequests = async () => {
+    const id = Number(contractId);
+    if (!Number.isInteger(id) || id < 1) {
+      await Swal.fire({ icon: 'warning', title: 'رقم عقد غير صالح', text: 'اكتب رقم العقد ثم اضغط بحث.' });
+      return;
+    }
+    try {
+      setLoading(true);
+      const response = await fetchApprovedServiceRequestsForCollection(id);
+      setRequests(response.data || []);
+    } catch (error) {
+      setRequests([]);
+      await Swal.fire({ icon: 'error', title: 'تعذر تحميل طلبات التحصيل', text: errorMessage(error) });
+    } finally { setLoading(false); }
   };
 
-  // ==========================================================
-  // UI
-  // ==========================================================
-
-  return (
-    <div dir="rtl" className="min-h-screen bg-background p-4 md:p-6">
-      <div className="mx-auto max-w-7xl space-y-6">
-        {/* =====================================================
-            PAGE HEADER
-        ====================================================== */}
-
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">تحصيل الوحدات الإضافية</h1>
-
-            <p className="mt-1 text-sm text-muted-foreground">
-              تسجيل تحصيل قيمة طلبات الوحدات الإضافية المعتمدة
-            </p>
-          </div>
-
-          <Badge variant="outline" className="flex w-fit items-center gap-2 px-3 py-2">
-            <Receipt className="h-4 w-4" />
-            تحصيل وحدات إضافية
-          </Badge>
-        </div>
-
-        {/* =====================================================
-            BASIC COLLECTION INFORMATION
-        ====================================================== */}
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Receipt className="h-5 w-5" />
-              بيانات التحصيل
-            </CardTitle>
-          </CardHeader>
-
-          <CardContent>
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
-              {/* Visit Date */}
-
-              <div className="space-y-2">
-                <Label>تاريخ الزيارة</Label>
-
-                <div className="relative">
-                  <Calendar className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-
-                  <Input value={today} readOnly className="bg-muted pr-10" />
-                </div>
-
-                <p className="text-xs text-muted-foreground">يتم تسجيل تاريخ الزيارة تلقائياً</p>
-              </div>
-
-              {/* Contract */}
-
-              <div className="space-y-2">
-                <Label>العقد / الصيدلية</Label>
-
-                <Select value={selectedContractId} onValueChange={handleContractChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="اختر العقد" />
-                  </SelectTrigger>
-
-                  <SelectContent>
-                    {mockContracts.map((contract) => (
-                      <SelectItem key={contract.id} value={String(contract.id)}>
-                        {contract.pharmacyName}
-                        {' - '}
-                        {contract.contractNumber}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Zone */}
-
-              <div className="space-y-2">
-                <Label>المنطقة</Label>
-
-                <div className="relative">
-                  <MapPin className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-
-                  <Input
-                    value={selectedContract?.zoneName || ''}
-                    readOnly
-                    className="bg-muted pr-10"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Contract Information */}
-
-            {selectedContract && (
-              <div className="mt-5 rounded-lg border bg-muted/40 p-4">
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                  <div className="flex items-center gap-3">
-                    <div className="rounded-lg bg-background p-2">
-                      <Building2 className="h-5 w-5 text-muted-foreground" />
-                    </div>
-
-                    <div>
-                      <p className="text-xs text-muted-foreground">الصيدلية</p>
-
-                      <p className="font-medium">{selectedContract.pharmacyName}</p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-muted-foreground">رقم العقد</p>
-
-                    <p className="font-medium">{selectedContract.contractNumber}</p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-muted-foreground">الفرع</p>
-
-                    <p className="font-medium">{selectedContract.branchName}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* =====================================================
-            APPROVED REQUESTS
-        ====================================================== */}
-
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <CheckCircle2 className="h-5 w-5" />
-                  طلبات الوحدات الإضافية المعتمدة
-                </CardTitle>
-
-                <p className="mt-1 text-sm text-muted-foreground">
-                  اختر الطلبات التي سيتم تحصيل قيمتها
-                </p>
-              </div>
-
-              <Badge variant="secondary">{approvedRequests.length} طلب معتمد</Badge>
-            </div>
-          </CardHeader>
-
-          <CardContent>
-            {approvedRequests.length === 0 ? (
-              <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-12 text-center">
-                <CheckCircle2 className="mb-3 h-10 w-10 text-muted-foreground" />
-
-                <p className="font-medium">لا توجد طلبات وحدات إضافية معتمدة</p>
-
-                <p className="mt-1 text-sm text-muted-foreground">
-                  لا يوجد مبلغ مستحق للتحصيل لهذا العقد
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {approvedRequests.map((request) => {
-                  const isSelected = selectedRequestIds.includes(request.id);
-
-                  return (
-                    <button
-                      key={request.id}
-                      type="button"
-                      onClick={() => toggleRequest(request.id)}
-                      className={`w-full rounded-lg border p-4 text-right transition ${
-                        isSelected
-                          ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                          : 'hover:bg-muted/50'
-                      }`}
-                    >
-                      <div className="flex items-center gap-4">
-                        {/* Checkbox */}
-
-                        <div
-                          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
-                            isSelected
-                              ? 'border-primary bg-primary text-primary-foreground'
-                              : 'border-muted-foreground'
-                          }`}
-                        >
-                          {isSelected && <CheckCircle2 className="h-4 w-4" />}
-                        </div>
-
-                        {/* Request */}
-
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-semibold">{request.requestNumber}</span>
-
-                            <Badge variant="outline" className="border-green-500 text-green-600">
-                              معتمد
-                            </Badge>
-                          </div>
-
-                          <div className="mt-2 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
-                            <span>تاريخ الطلب: {request.requestedAt}</span>
-
-                            <span>تاريخ الاعتماد: {request.approvedAt}</span>
-                          </div>
-                        </div>
-
-                        {/* Quantity */}
-
-                        <div className="hidden text-center sm:block">
-                          <p className="text-xs text-muted-foreground">عدد الوحدات</p>
-
-                          <p className="mt-1 text-lg font-bold">{request.quantity}</p>
-                        </div>
-
-                        {/* Unit Price */}
-
-                        <div className="hidden text-center md:block">
-                          <p className="text-xs text-muted-foreground">سعر الوحدة</p>
-
-                          <p className="mt-1 font-semibold">
-                            {request.unitPrice.toLocaleString()} ج.م
-                          </p>
-                        </div>
-
-                        {/* Total */}
-
-                        <div className="text-left">
-                          <p className="text-xs text-muted-foreground">الإجمالي</p>
-
-                          <p className="mt-1 text-lg font-bold">
-                            {request.totalAmount.toLocaleString()} ج.م
-                          </p>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* =====================================================
-            PAYMENT SECTION
-        ====================================================== */}
-
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          {/* Payment Method */}
-
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <CreditCard className="h-5 w-5" />
-                بيانات الدفع
-              </CardTitle>
-            </CardHeader>
-
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                {/* Payment Method */}
-
-                <div className="space-y-2">
-                  <Label>طريقة الدفع</Label>
-
-                  <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="اختر طريقة الدفع" />
-                    </SelectTrigger>
-
-                    <SelectContent>
-                      <SelectItem value="CASH">
-                        <div className="flex items-center gap-2">
-                          <Banknote className="h-4 w-4" />
-                          نقدي
-                        </div>
-                      </SelectItem>
-
-                      <SelectItem value="BANK_TRANSFER">
-                        <div className="flex items-center gap-2">
-                          <WalletCards className="h-4 w-4" />
-                          تحويل بنكي
-                        </div>
-                      </SelectItem>
-
-                      <SelectItem value="CHEQUE">شيك</SelectItem>
-
-                      <SelectItem value="CREDIT_CARD">
-                        <div className="flex items-center gap-2">
-                          <CreditCard className="h-4 w-4" />
-                          بطاقة ائتمان
-                        </div>
-                      </SelectItem>
-
-                      <SelectItem value="ONLINE_PAYMENT">دفع إلكتروني</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Amount */}
-
-                <div className="space-y-2">
-                  <Label>المبلغ المحصل</Label>
-
-                  <div className="relative">
-                    <Input
-                      value={totalAmount.toLocaleString()}
-                      readOnly
-                      className="bg-muted pl-16 text-lg font-bold"
-                    />
-
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                      ج.م
-                    </span>
-                  </div>
-
-                  <p className="text-xs text-muted-foreground">
-                    المبلغ يتم حسابه تلقائياً حسب الطلبات المختارة
-                  </p>
-                </div>
-              </div>
-
-              {/* Important Rule */}
-
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
-                <div className="flex gap-3">
-                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
-
-                  <div>
-                    <p className="font-medium">قيمة التحصيل ثابتة</p>
-
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      لا يمكن تعديل مبلغ التحصيل يدوياً. يجب أن يساوي المبلغ إجمالي قيمة الوحدات
-                      الإضافية المعتمدة والمختارة.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* ===================================================
-              SUMMARY
-          ==================================================== */}
-
-          <Card className="h-fit lg:sticky lg:top-6">
-            <CardHeader>
-              <CardTitle className="text-base">ملخص التحصيل</CardTitle>
-            </CardHeader>
-
-            <CardContent className="space-y-5">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">عدد الطلبات</span>
-
-                <span className="font-semibold">{selectedRequests.length}</span>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">عدد الوحدات</span>
-
-                <span className="font-semibold">{totalUnits}</span>
-              </div>
-
-              <Separator />
-
-              {/* Selected Requests */}
-
-              <div className="space-y-3">
-                {selectedRequests.map((request) => (
-                  <div key={request.id} className="rounded-lg bg-muted/50 p-3">
-                    <div className="flex justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-medium">{request.requestNumber}</p>
-
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {request.quantity} وحدة × {request.unitPrice.toLocaleString()} ج.م
-                        </p>
-                      </div>
-
-                      <p className="font-semibold">{request.totalAmount.toLocaleString()} ج.م</p>
-                    </div>
-                  </div>
-                ))}
-
-                {selectedRequests.length === 0 && (
-                  <p className="py-3 text-center text-sm text-muted-foreground">
-                    لم يتم اختيار أي طلب
-                  </p>
-                )}
-              </div>
-
-              <Separator />
-
-              {/* Total */}
-
-              <div>
-                <p className="text-sm text-muted-foreground">إجمالي المبلغ المطلوب تحصيله</p>
-
-                <p className="mt-2 text-3xl font-bold">
-                  {totalAmount.toLocaleString()}
-                  <span className="mr-2 text-base font-normal">ج.م</span>
-                </p>
-              </div>
-
-              <Button
-                className="w-full"
-                size="lg"
-                disabled={selectedRequests.length === 0 || !paymentMethod}
-                onClick={handleSubmit}
-              >
-                <CheckCircle2 className="ml-2 h-5 w-5" />
-                تسجيل التحصيل
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </div>
-  );
+  const openReview = (request: CollectionRequest) => {
+    setSelected(request);
+    setAmountToCollect(String(Number(request.outstandingAmount || 0)));
+    setPaymentMethodId('');
+    setCollectionDate(today());
+    setNotes('');
+    setPaymentDetails(paymentDetailsDefaults());
+  };
+
+  const updateDetails = (key: string, value: string) => setPaymentDetails((current) => ({ ...current, [key]: value }));
+
+  const validatePaymentDetails = () => {
+    if (!paymentMethodId) return 'اختر طريقة الدفع.';
+    if (paymentMethodCode === 'CASH' && !paymentDetails.receiptNumber.trim()) return 'رقم الإيصال النقدي مطلوب.';
+    if (paymentMethodCode === 'BANKTRANSFER' && (!paymentDetails.transferDate || !paymentDetails.bankId || !paymentDetails.referenceNumber.trim())) return 'أدخل تاريخ الحوالة والبنك والرقم المرجعي.';
+    if ((paymentMethodCode === 'INSTAPAY' || paymentMethodCode === 'PAYSKY') && (!paymentDetails.transactionDate || !paymentDetails.referenceNumber.trim())) return 'أدخل تاريخ العملية والرقم المرجعي.';
+    if (paymentMethodCode === 'CHEQUE' && (!paymentDetails.chequeDueDate || !paymentDetails.bankId || !paymentDetails.chequeNumber.trim())) return 'أدخل البنك ورقم الشيك وتاريخ الاستحقاق.';
+    return '';
+  };
+
+  const submitCollection = async () => {
+    if (!selected) return;
+    const paymentAmount = Number(selected.outstandingAmount);
+    if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
+      await Swal.fire({ icon: 'warning', title: 'لا يوجد رصيد مستحق', text: 'أعد تحميل الطلب قبل تسجيل التحصيل.' });
+      return;
+    }
+    const detailsError = validatePaymentDetails();
+    if (detailsError) {
+      await Swal.fire({ icon: 'warning', title: 'بيانات الدفع ناقصة', text: detailsError });
+      return;
+    }
+
+    let remainder = Math.round(paymentAmount * 100);
+    const allocations = selected.items
+      .filter((item) => Number(item.outstandingAmount) > 0)
+      .map((item) => {
+        const paidCents = Math.min(remainder, Math.round(Number(item.outstandingAmount) * 100));
+        remainder -= paidCents;
+        return { invoiceLineId: item.invoiceLineId, amountPaid: paidCents / 100, notes: `تحصيل طلب خدمات إضافية #${selected.requestId}` };
+      })
+      .filter((allocation) => allocation.amountPaid > 0);
+
+    if (remainder > 0 || !allocations.length) {
+      await Swal.fire({ icon: 'error', title: 'تعذر توزيع مبلغ التحصيل', text: 'أعد تحميل الطلب ثم حاول مرة أخرى.' });
+      return;
+    }
+
+    try {
+      setSaving(true);
+      await createAdditionalServiceCollection({
+        contractId: selected.contractId,
+        representativeId: selected.representativeId || null,
+        paymentMethodId: Number(paymentMethodId),
+        amount: paymentAmount,
+        collectedAt: collectionDate,
+        collectionReason: `تحصيل خدمات إضافية معتمدة — طلب #${selected.requestId}`,
+        notes: notes.trim() || null,
+        paymentDetails,
+        allocations,
+      });
+      setSelected(null);
+      await Swal.fire({ icon: 'success', title: 'تم تسجيل التحصيل', text: 'تم ربط المبلغ ببنود فاتورة الخدمات الإضافية.' });
+      await loadRequests();
+    } catch (error) {
+      await Swal.fire({ icon: 'error', title: 'تعذر تسجيل التحصيل', text: errorMessage(error) });
+    } finally { setSaving(false); }
+  };
+
+  return <div dir="rtl" className="space-y-6">
+    <BreadcrumbComp title="تحصيل الخدمات الإضافية" items={[{ title: 'CRM', to: '/' }, { title: 'التحصيل' }, { title: 'تحصيل الخدمات الإضافية' }]} />
+    <CardBox><div className="mb-6 border-b pb-5"><h1 className="text-xl font-semibold">مراجعة التحصيل</h1><p className="mt-1 text-sm text-muted-foreground">ابحث برقم العقد لعرض طلبات الخدمات الإضافية المعتمدة والجاهزة للتحصيل.</p></div>
+      <div className="max-w-2xl rounded-2xl border bg-muted/20 p-5"><Label htmlFor="collection-contract-id">كود العميل *</Label><div className="mt-2 flex gap-3"><Input id="collection-contract-id" dir="ltr" inputMode="numeric" value={contractId} onChange={(event) => setContractId(event.target.value.replace(/\D/g, ''))} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); void loadRequests(); } }} placeholder="مثال: 123" className="h-11 rounded-xl text-right" /><Button type="button" onClick={() => void loadRequests()} disabled={loading} className="h-11 shrink-0 rounded-xl px-5">{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="me-2 h-4 w-4" />}بحث</Button></div></div>
+      {!!customer && <div className="mt-5 grid gap-3 rounded-2xl border bg-card p-4 sm:grid-cols-3"><div><p className="text-xs text-muted-foreground">العميل</p><p className="mt-1 font-semibold">{customer.customerNameAr || customer.customerNameEn || '—'}</p><p className="text-xs text-muted-foreground">كود العميل: {customer.customerCode || '—'}</p></div><div><p className="text-xs text-muted-foreground">المنطقة</p><p className="mt-1 font-semibold">{customer.zoneNameAr || customer.zoneNameEn || '—'}</p></div><div><p className="text-xs text-muted-foreground">إجمالي المستحق للخدمات الإضافية</p><p className="mt-1 text-xl font-bold text-primary">{amount(totalOutstanding)}</p></div></div>}
+    </CardBox>
+
+    <CardBox><div className="mb-5 flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">الطلبات الجاهزة للتحصيل</h2><p className="mt-1 text-sm text-muted-foreground">تظهر الطلبات المعتمدة التي لا يزال بها رصيد خدمات إضافية مستحق.</p></div><Badge variant="secondary">{requests.length} طلب</Badge></div>
+      <div className="overflow-x-auto rounded-xl border"><Table><TableHeader><TableRow><TableHead>رقم الطلب</TableHead><TableHead>الفاتورة</TableHead><TableHead>بنود الخدمات</TableHead><TableHead className="text-left">الإجمالي</TableHead><TableHead className="text-left">المدفوع</TableHead><TableHead className="text-left">المتبقي</TableHead><TableHead className="w-36" /></TableRow></TableHeader><TableBody>{requests.length ? requests.map((request) => <TableRow key={request.requestId}><TableCell className="font-medium">#{request.requestId}</TableCell><TableCell><p className="font-medium">{request.invoiceNumber || `#${request.invoiceId}`}</p><p className="text-xs text-muted-foreground">{request.approvedAt ? new Intl.DateTimeFormat('ar-EG').format(new Date(request.approvedAt)) : '—'}</p></TableCell><TableCell><div className="space-y-1">{request.items.map((item) => <p key={item.invoiceLineId} className="text-sm">{item.serviceNameAr || item.serviceNameEn || item.description || '—'} <span className="text-muted-foreground">× {item.quantity}</span></p>)}</div></TableCell><TableCell className="text-left">{amount(request.totalAmount)}</TableCell><TableCell className="text-left text-emerald-700">{amount(request.paidAmount)}</TableCell><TableCell className="text-left font-semibold text-destructive">{amount(request.outstandingAmount)}</TableCell><TableCell><Button type="button" size="sm" onClick={() => openReview(request)}><Wallet className="me-2 h-4 w-4" />مراجعة التحصيل</Button></TableCell></TableRow>) : <TableRow><TableCell colSpan={7} className="py-10 text-center text-sm text-muted-foreground">{loading ? 'جارٍ البحث...' : contractId ? 'لا توجد طلبات خدمات إضافية معتمدة جاهزة للتحصيل لهذا العقد.' : 'ابحث برقم العقد لعرض الطلبات.'}</TableCell></TableRow>}</TableBody></Table></div>
+    </CardBox>
+
+    <Dialog open={Boolean(selected)} onOpenChange={(open) => { if (!open && !saving) setSelected(null); }}><DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto"><DialogHeader><DialogTitle>مراجعة التحصيل — طلب #{selected?.requestId}</DialogTitle></DialogHeader>{selected && <div className="space-y-5"><div className="rounded-xl border bg-muted/30 p-4"><div className="flex items-start justify-between gap-4"><div><p className="font-semibold">{selected.customerNameAr || selected.customerNameEn || '—'}</p><p className="mt-1 text-xs text-muted-foreground">العقد #{selected.contractId} · {selected.invoiceNumber || `فاتورة #${selected.invoiceId}`}</p></div><div className="text-left"><p className="text-xs text-muted-foreground">المتبقي</p><p className="text-lg font-bold text-destructive">{amount(selected.outstandingAmount)}</p></div></div><div className="mt-4 space-y-2 border-t pt-3">{selected.items.map((item) => <div key={item.invoiceLineId} className="flex justify-between gap-3 text-sm"><span>{item.serviceNameAr || item.serviceNameEn || item.description || '—'} × {item.quantity}</span><span className="font-medium">{amount(item.outstandingAmount)}</span></div>)}</div></div>
+      <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label>مبلغ التحصيل</Label><Input type="number" value={amountToCollect} readOnly aria-readonly="true" className="cursor-not-allowed bg-muted font-semibold" /><p className="text-xs text-muted-foreground">يُحصّل كامل الرصيد المستحق في الطلب: {amount(selected.outstandingAmount)}</p></div><div className="space-y-2"><Label>تاريخ التحصيل *</Label><Input dir="ltr" type="date" value={collectionDate} onChange={(event) => setCollectionDate(event.target.value)} /></div></div>
+      <div className="space-y-2"><Label>طريقة الدفع *</Label><Select value={paymentMethodId} onValueChange={(value) => { setPaymentMethodId(value); setPaymentDetails(paymentDetailsDefaults()); }}><SelectTrigger><SelectValue placeholder="اختر طريقة الدفع" /></SelectTrigger><SelectContent>{methods.map((method) => <SelectItem key={method.id} value={String(method.id)}>{method.nameAr || method.name_ar || method.code}</SelectItem>)}</SelectContent></Select></div>
+      {paymentMethodCode === 'CASH' && <div className="space-y-2"><Label>رقم الإيصال النقدي *</Label><Input value={paymentDetails.receiptNumber} onChange={(event) => updateDetails('receiptNumber', event.target.value)} /></div>}
+      {paymentMethodCode === 'BANKTRANSFER' && <div className="grid gap-4 sm:grid-cols-3"><div className="space-y-2"><Label>تاريخ الحوالة *</Label><Input dir="ltr" type="date" value={paymentDetails.transferDate} onChange={(event) => updateDetails('transferDate', event.target.value)} /></div><div className="space-y-2"><Label>البنك *</Label><Select value={paymentDetails.bankId} onValueChange={(value) => updateDetails('bankId', value)}><SelectTrigger><SelectValue placeholder="اختر البنك" /></SelectTrigger><SelectContent>{banks.map((bank) => <SelectItem key={bank.id} value={String(bank.id)}>{bank.nameAr || bank.name_ar || bank.nameEn || bank.name_en}</SelectItem>)}</SelectContent></Select></div><div className="space-y-2"><Label>الرقم المرجعي *</Label><Input value={paymentDetails.referenceNumber} onChange={(event) => updateDetails('referenceNumber', event.target.value)} /></div></div>}
+      {(paymentMethodCode === 'INSTAPAY' || paymentMethodCode === 'PAYSKY') && <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label>الرقم المرجعي *</Label><Input value={paymentDetails.referenceNumber} onChange={(event) => updateDetails('referenceNumber', event.target.value)} /></div><div className="space-y-2"><Label>تاريخ العملية *</Label><Input dir="ltr" type="date" value={paymentDetails.transactionDate} onChange={(event) => updateDetails('transactionDate', event.target.value)} /></div></div>}
+      {paymentMethodCode === 'CHEQUE' && <div className="grid gap-4 sm:grid-cols-3"><div className="space-y-2"><Label>البنك *</Label><Select value={paymentDetails.bankId} onValueChange={(value) => updateDetails('bankId', value)}><SelectTrigger><SelectValue placeholder="اختر البنك" /></SelectTrigger><SelectContent>{banks.map((bank) => <SelectItem key={bank.id} value={String(bank.id)}>{bank.nameAr || bank.name_ar || bank.nameEn || bank.name_en}</SelectItem>)}</SelectContent></Select></div><div className="space-y-2"><Label>رقم الشيك *</Label><Input inputMode="numeric" value={paymentDetails.chequeNumber} onChange={(event) => updateDetails('chequeNumber', event.target.value.replace(/\D/g, ''))} /></div><div className="space-y-2"><Label>تاريخ الاستحقاق *</Label><Input dir="ltr" type="date" value={paymentDetails.chequeDueDate} onChange={(event) => updateDetails('chequeDueDate', event.target.value)} /></div></div>}
+      <div className="space-y-2"><Label>ملاحظات</Label><Textarea value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={1000} placeholder="ملاحظات التحصيل..." /></div><div className="flex gap-3 border-t pt-5"><Button type="button" variant="outline" className="flex-1" onClick={() => setSelected(null)} disabled={saving}><X className="me-2 h-4 w-4" />إلغاء</Button><Button type="button" className="flex-1" onClick={() => void submitCollection()} disabled={saving}>{saving ? <Loader2 className="me-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="me-2 h-4 w-4" />}تأكيد التحصيل</Button></div></div>}</DialogContent></Dialog>
+  </div>;
 }
