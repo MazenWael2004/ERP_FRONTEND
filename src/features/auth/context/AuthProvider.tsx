@@ -1,5 +1,6 @@
 import  type {ReactNode } from "react";
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type {loggedUser } from "../types";
 import { AuthContext } from "./AuthContext";
 import { getUserPermissions } from "../authService";
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export default function AuthProvider({ children }: Props) {
+  const queryClient = useQueryClient();
 
 
   const [user, setUser] = useState<any | null>(() => {
@@ -24,7 +26,7 @@ export default function AuthProvider({ children }: Props) {
   });
 
   const login = (user: loggedUser, token: string) => {
-   
+    queryClient.clear();
     setUser(user);
 
     setToken(token);
@@ -33,8 +35,7 @@ export default function AuthProvider({ children }: Props) {
   };
 
   const logout = () => {
-
-  
+    queryClient.clear();
     localStorage.removeItem("user");
 
     localStorage.removeItem("access");

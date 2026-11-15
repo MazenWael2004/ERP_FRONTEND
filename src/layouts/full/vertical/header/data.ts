@@ -130,47 +130,6 @@ const SearchLinks: SearchType[] = [
   },
 ];
 
-//   Message Data
-interface MessageType {
-  title: string;
-  avatar: string;
-  subtitle: string;
-}
-
-import avatar1 from 'src/assets/images/profile/user-2.jpg';
-import avatar2 from 'src/assets/images/profile/user-3.jpg';
-import avatar3 from 'src/assets/images/profile/user-4.jpg';
-import avatar4 from 'src/assets/images/profile/user-5.jpg';
-import avatar5 from 'src/assets/images/profile/user-6.jpg';
-
-const MessagesLink: MessageType[] = [
-  {
-    avatar: avatar1,
-    title: 'Roman Joined the Team!',
-    subtitle: 'Congratulate him',
-  },
-  {
-    avatar: avatar2,
-    title: 'New message',
-    subtitle: 'Salma sent you new message',
-  },
-  {
-    avatar: avatar3,
-    title: 'Bianca sent payment',
-    subtitle: 'Check your earnings',
-  },
-  {
-    avatar: avatar4,
-    title: 'Jolly completed tasks',
-    subtitle: 'Assign her new tasks',
-  },
-  {
-    avatar: avatar5,
-    title: 'John received payment',
-    subtitle: '$230 deducted from account',
-  },
-];
-
 //   Notification Data
 interface NotificationType {
   title: string;
@@ -269,4 +228,4 @@ const profileDD: ProfileType[] = [
   },
 ];
 
-export { appsLink, pageLinks, SearchLinks, MessagesLink, Notification, profileDD };
+export { appsLink, pageLinks, SearchLinks, Notification, profileDD };

@@ -816,7 +816,7 @@ export default function Collections() {
                 <Input
                   value={receiptNumber}
                   onChange={(e) =>
-                    setReceiptNumber(e.target.value)
+                    setReceiptNumber(e.target.value.replace(/\D/g, ''))
                   }
                   placeholder="رقم الإيصال"
                   className="mt-2"

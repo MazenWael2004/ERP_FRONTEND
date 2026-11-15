@@ -8,21 +8,22 @@ type CollectionValidationContext = {
   monthlyAmount: number;
   paidMonths: string[];
   allowedMonths: string[];
+  monthMaximums?: Record<string, number>;
 };
 
-export function createCollectionSchema({ monthlyAmount, paidMonths, allowedMonths }: CollectionValidationContext) {
+export function createCollectionSchema({ monthlyAmount, paidMonths, allowedMonths, monthMaximums = {} }: CollectionValidationContext) {
   return z
     .object({
       contractId: z.number().int('رقم العقد غير صالح').positive('رقم العقد غير صالح'),
       collectionDate: z.string().min(1, 'تاريخ التحصيل مطلوب').regex(/^\d{4}-\d{2}-\d{2}$/, 'صيغة تاريخ التحصيل غير صحيحة'),
-      receiptNumber: z.string().trim().min(1, 'رقم الإيصال مطلوب').max(50, 'رقم الإيصال لا يمكن أن يتجاوز 50 حرفاً'),
+      receiptNumber: z.string().trim().min(1, 'رقم الإيصال مطلوب').max(50, 'رقم الإيصال لا يمكن أن يتجاوز 50 حرفاً').regex(/^\d+$/, 'رقم الإيصال يجب أن يحتوي أرقاماً فقط'),
       paymentMethodId: z.number().int('طريقة الدفع غير صالحة').positive('طريقة الدفع مطلوبة'),
       amount: z.number().positive('إجمالي المبلغ المحصل يجب أن يكون أكبر من صفر'),
       notes: z.string().trim().max(1000, 'الملاحظات لا يمكن أن تتجاوز 1000 حرف').optional(),
       selectedMonths: z.array(monthValueSchema).min(1, 'يجب اختيار شهر واحد على الأقل للتحصيل'),
       monthPayments: z.array(z.object({
         month: monthValueSchema,
-        amount: z.number().positive('قيمة التحصيل لهذا الشهر يجب أن تكون أكبر من صفر').max(monthlyAmount, `لا يمكن أن تتجاوز قيمة تحصيل الشهر ${monthlyAmount} جنيه`),
+        amount: z.number().positive('قيمة التحصيل لهذا الشهر يجب أن تكون أكبر من صفر'),
       })).min(1, 'يجب تحديد قيمة التحصيل للشهور المختارة'),
     })
     .superRefine((data, ctx) => {
@@ -39,6 +40,10 @@ export function createCollectionSchema({ monthlyAmount, paidMonths, allowedMonth
         if (paymentMonthSet.has(payment.month)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['monthPayments', index, 'month'], message: 'يوجد شهر مكرر في قيم التحصيل' });
         paymentMonthSet.add(payment.month);
         if (!selectedSet.has(payment.month)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['monthPayments', index, 'month'], message: 'قيمة التحصيل مرتبطة بشهر غير مختار' });
+        const maximum = Number(monthMaximums[payment.month] ?? monthlyAmount);
+        if (payment.amount > maximum + 0.001) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['monthPayments', index, 'amount'], message: `لا يمكن أن تتجاوز قيمة تحصيل الشهر المتبقي ${maximum} جنيه` });
+        }
       });
       for (const month of data.selectedMonths) {
         if (!paymentMonthSet.has(month)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['selectedMonths'], message: 'يجب تحديد قيمة التحصيل لكل شهر مختار' });

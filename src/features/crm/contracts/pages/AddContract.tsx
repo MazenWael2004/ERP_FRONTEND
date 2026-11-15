@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import Swal from 'sweetalert2';
+import * as L from 'leaflet';
+import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
 import { Popover, PopoverContent, PopoverTrigger } from 'src/components/ui/popover';
 import { useLocation, useNavigate } from 'react-router';
 
@@ -21,6 +24,7 @@ import {
   ChevronsUpDown,
   Building2,
   CalendarDays,
+  Crosshair,
   Check,
   CreditCard,
   FileText,
@@ -56,7 +60,6 @@ import { api } from 'src/shared/api/axios';
 import {
   fetchBanks,
   fetchContractTypes,
-  fetchNextCustomerCode,
   fetchPaymentMethods,
 } from '../api/contractService';
 
@@ -75,6 +78,33 @@ function generateMonthOptions() {
   });
 }
 
+const currentDate = () => new Date().toISOString().slice(0, 10);
+const ADD_CONTRACT_DRAFT_KEY = 'b-connect:add-contract:draft:v1';
+
+const readAddContractDraft = () => {
+  try {
+    const stored = window.sessionStorage.getItem(ADD_CONTRACT_DRAFT_KEY);
+    if (!stored) return null;
+    const draft = JSON.parse(stored);
+    return draft && typeof draft === 'object' && draft.form && typeof draft.form === 'object'
+      ? draft
+      : null;
+  } catch {
+    window.sessionStorage.removeItem(ADD_CONTRACT_DRAFT_KEY);
+    return null;
+  }
+};
+
+const saveAddContractDraft = (form: Record<string, any>, activeStep: number) => {
+  // Browser session storage cannot restore selected files after a page refresh.
+  // Do not persist document metadata that could make a user think files will be uploaded.
+  const { documents: _documents, ...formWithoutFiles } = form;
+  window.sessionStorage.setItem(
+    ADD_CONTRACT_DRAFT_KEY,
+    JSON.stringify({ form: formWithoutFiles, activeStep }),
+  );
+};
+
 type EgyptAdministrativeDivision = {
   id: string;
   level: number;
@@ -88,6 +118,45 @@ type Zone = {
   id: number;
   name_ar: string;
   geographic_governorate_source_id: string | null;
+};
+
+type GeoPoint = { latitude: number; longitude: number };
+const defaultMapPoint: GeoPoint = { latitude: 30.04442, longitude: 31.235712 };
+const locationMarkerIcon = L.divIcon({
+  className: '',
+  html: '<span style="display:block;width:22px;height:22px;border-radius:9999px;background:#2563eb;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.35)"></span>',
+  iconSize: [22, 22],
+  iconAnchor: [11, 11],
+});
+
+function DraggableLocationMarker({ point, onChange }: { point: GeoPoint; onChange: (point: GeoPoint) => void }) {
+  const map = useMap();
+  const markerRef = useRef<L.Marker>(null);
+  useEffect(() => {
+    map.setView([point.latitude, point.longitude], Math.max(map.getZoom(), 16), { animate: true });
+  }, [map, point.latitude, point.longitude]);
+  useMapEvents({ click: (event) => onChange({ latitude: event.latlng.lat, longitude: event.latlng.lng }) });
+  return (
+    <Marker
+      ref={markerRef}
+      position={[point.latitude, point.longitude]}
+      icon={locationMarkerIcon}
+      draggable
+      eventHandlers={{
+        dragend: () => {
+          const position = markerRef.current?.getLatLng();
+          if (position) onChange({ latitude: position.lat, longitude: position.lng });
+        },
+      }}
+    />
+  );
+}
+
+type CommercialActivity = {
+  id: number;
+  code: string;
+  name_ar: string;
+  name_en: string;
 };
 
 function normalizeArabicForMatching(value = '') {
@@ -251,6 +320,8 @@ export default function AddCustomerContract() {
   const nav = useNavigate();
   const location = useLocation();
   const workflowCustomerEdit = location.state?.workflowCustomerEdit === true;
+  const workflowBillingEdit = location.state?.workflowBillingEdit === true;
+  const workflowEdit = workflowCustomerEdit || workflowBillingEdit;
   const workflowContract = location.state?.contract;
   const [openBranch, setOpenBranch] = useState(false);
   const [governorates, setGovernorates] = useState<EgyptAdministrativeDivision[]>([]);
@@ -271,7 +342,8 @@ export default function AddCustomerContract() {
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
   const [banks, setBanks] = useState<any[]>([]);
   const [isBanksLoading, setIsBanksLoading] = useState(true);
-  const [isCustomerCodePreviewLoading, setIsCustomerCodePreviewLoading] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationError, setLocationError] = useState('');
 
   useEffect(() => {
     const loadZones = async () => {
@@ -400,6 +472,7 @@ export default function AddCustomerContract() {
     setValue,
     getValues,
     trigger,
+    clearErrors,
     reset,
     handleSubmit,
     formState: { errors, isSubmitting },
@@ -411,8 +484,9 @@ export default function AddCustomerContract() {
 
       customerId: '',
       customerNameAr: '',
-      customerCode: 'سيتم توليده تلقائياً',
+      customerCode: 'سيطابق رقم العقد بعد الحفظ',
       customerTypeId: null,
+      commercialActivityId: '',
       structure: '',
       parentCustomerId: '',
       zoneId: '',
@@ -438,6 +512,7 @@ export default function AddCustomerContract() {
       nextDueDate: '',
       installationDate: installationDateMin,
       notes: '',
+      financialCorrectionReason: '',
 
       paymentAmount: 0,
       paymentMethodId: null,
@@ -531,8 +606,54 @@ export default function AddCustomerContract() {
   // Pricing starts async and changes with plan, offer, months, and add-ons. Keep the
   // suggested collection equal to the discounted total until the user edits it.
   const hasManuallyEditedInitialPayments = useRef(false);
-  const hasManuallyEditedAddOnPaymentAmount = useRef(false);
   const isAdvancingToAddOnsRef = useRef(false);
+  const hasRestoredDraftRef = useRef(false);
+
+  useEffect(() => {
+    if (workflowEdit || hasRestoredDraftRef.current) return;
+    hasRestoredDraftRef.current = true;
+
+    const draft = readAddContractDraft();
+    if (!draft) return;
+
+    // The pricing effect starts before its async inputs are ready and otherwise
+    // replaces a restored first payment with a temporary total of zero.
+    if (
+      Array.isArray(draft.form.initialPayments) &&
+      draft.form.initialPayments.some((payment: any) => Number(payment?.amount) > 0)
+    ) {
+      hasManuallyEditedInitialPayments.current = true;
+    }
+
+    reset((current) => ({
+      ...current,
+      ...draft.form,
+      // A File object cannot be restored by the browser after refresh.
+      documents: [],
+    }));
+    if (Number.isInteger(draft.activeStep) && draft.activeStep >= 1 && draft.activeStep <= 3) {
+      setActiveStep(draft.activeStep);
+    }
+  }, [reset, workflowEdit]);
+
+  useEffect(() => {
+    if (workflowEdit) return;
+
+    let saveTimer: number | undefined;
+    const subscription = watch((values) => {
+      window.clearTimeout(saveTimer);
+      saveTimer = window.setTimeout(() => saveAddContractDraft(values as Record<string, any>, activeStep), 300);
+    });
+
+    return () => {
+      window.clearTimeout(saveTimer);
+      subscription.unsubscribe();
+    };
+  }, [activeStep, watch, workflowEdit]);
+
+  useEffect(() => {
+    if (!workflowEdit) saveAddContractDraft(getValues(), activeStep);
+  }, [activeStep, getValues, workflowEdit]);
 
   useEffect(() => {
     if (user?.id) {
@@ -549,6 +670,7 @@ export default function AddCustomerContract() {
     append: appendDocument,
     remove: removeDocument,
     update: updateDocument,
+    replace: replaceDocuments,
   } = useFieldArray({
     control,
     name: 'documents',
@@ -636,49 +758,57 @@ export default function AddCustomerContract() {
   const customerId = watch('customerId');
 
   useEffect(() => {
-    if (customerMode !== 'new') {
-      return;
+    if (customerMode === 'new') {
+      setValue('customerCode', 'سيطابق رقم العقد بعد الحفظ', {
+        shouldDirty: false,
+        shouldValidate: false,
+      });
     }
-
-    let isActive = true;
-
-    const loadNextCustomerCode = async () => {
-      setIsCustomerCodePreviewLoading(true);
-
-      try {
-        const nextCode = await fetchNextCustomerCode();
-        if (isActive && nextCode) {
-          setValue('customerCode', nextCode, { shouldDirty: false, shouldValidate: false });
-        }
-      } catch {
-        if (isActive) {
-          setValue('customerCode', 'سيتم توليده تلقائياً', {
-            shouldDirty: false,
-            shouldValidate: false,
-          });
-        }
-      } finally {
-        if (isActive) {
-          setIsCustomerCodePreviewLoading(false);
-        }
-      }
-    };
-
-    void loadNextCustomerCode();
-
-    return () => {
-      isActive = false;
-    };
   }, [customerMode, setValue]);
+
   const customerNameAr = watch('customerNameAr');
   const customerCode = watch('customerCode');
   const customerTypeId = watch('customerTypeId');
+  const commercialActivityId = watch('commercialActivityId');
   const taxRegistrationType = watch('taxRegistrationType');
   const structure = watch('structure');
   const parentCustomerId = watch('parentCustomerId');
 
   const [parentCustomers, setParentCustomers] = useState<any[]>([]);
   const [isParentCustomersLoading, setIsParentCustomersLoading] = useState(false);
+  const [commercialActivities, setCommercialActivities] = useState<CommercialActivity[]>([]);
+  const [isCommercialActivitiesLoading, setIsCommercialActivitiesLoading] = useState(false);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadCommercialActivities = async () => {
+      setIsCommercialActivitiesLoading(true);
+      try {
+        const response = await api.get('/customers/commercial-activities');
+        if (isActive) {
+          setCommercialActivities(
+            Array.isArray(response.data?.data) ? response.data.data : [],
+          );
+        }
+      } catch {
+        if (isActive) setCommercialActivities([]);
+      } finally {
+        if (isActive) setIsCommercialActivitiesLoading(false);
+      }
+    };
+
+    void loadCommercialActivities();
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (Number(customerTypeId) !== 2 && commercialActivityId) {
+      setValue('commercialActivityId', '', { shouldDirty: true, shouldValidate: true });
+    }
+  }, [commercialActivityId, customerTypeId, setValue]);
 
   useEffect(() => {
     let isActive = true;
@@ -706,6 +836,12 @@ export default function AddCustomerContract() {
     }
   }, [parentCustomerId, setValue, structure]);
 
+  useEffect(() => {
+    if (structure !== 'CHAIN') {
+      clearErrors('registrationNumber');
+    }
+  }, [clearErrors, structure]);
+
   const parentCustomerOptions = parentCustomers;
 
   const mainSubscriptionServiceId = watch('mainSubscriptionServiceId');
@@ -725,6 +861,45 @@ export default function AddCustomerContract() {
   const selectedDistrict = districts.find((division) => division.id === districtId);
   const shiyakhaId = watch('address.shiyakhaId');
   const selectedShiyakha = shiyakhas.find((division) => division.id === shiyakhaId);
+  const latitudeValue = watch('address.latitude');
+  const longitudeValue = watch('address.longitude');
+  const selectedMapPoint: GeoPoint =
+    String(latitudeValue ?? '').trim() !== '' && String(longitudeValue ?? '').trim() !== '' &&
+    Number.isFinite(Number(latitudeValue)) && Number(latitudeValue) >= -90 && Number(latitudeValue) <= 90 &&
+    Number.isFinite(Number(longitudeValue)) && Number(longitudeValue) >= -180 && Number(longitudeValue) <= 180
+      ? { latitude: Number(latitudeValue), longitude: Number(longitudeValue) }
+      : defaultMapPoint;
+  const hasPinnedLocation = String(latitudeValue ?? '').trim() !== '' && String(longitudeValue ?? '').trim() !== '';
+  const setMapPoint = (point: GeoPoint) => {
+    const latitude = Number(point.latitude.toFixed(6));
+    const longitude = Number(point.longitude.toFixed(6));
+    setValue('address.latitude', String(latitude), { shouldDirty: true, shouldValidate: true });
+    setValue('address.longitude', String(longitude), { shouldDirty: true, shouldValidate: true });
+    setValue('address.googleMapsUrl', `https://www.google.com/maps?q=${latitude},${longitude}`, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+    setLocationError('');
+  };
+  const useCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationError('المتصفح الحالي لا يدعم تحديد الموقع. حدّد النقطة يدويًا على الخريطة.');
+      return;
+    }
+    setIsLocating(true);
+    setLocationError('');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setMapPoint({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+        setIsLocating(false);
+      },
+      () => {
+        setLocationError('تعذر الوصول إلى موقعك. تأكد من السماح بالموقع ثم حاول مرة أخرى، أو حدّد النقطة يدويًا.');
+        setIsLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 },
+    );
+  };
   const governorateZones = useMemo(
     () =>
       governorateId
@@ -738,6 +913,16 @@ export default function AddCustomerContract() {
 
   const openGoogleMaps = () => {
     const address = getValues('address');
+    const latitude = Number(address.latitude);
+    const longitude = Number(address.longitude);
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      window.open(
+        `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`,
+        '_blank',
+        'noopener,noreferrer',
+      );
+      return;
+    }
     const query = [
       address.buildingNumber,
       address.street,
@@ -771,9 +956,10 @@ export default function AddCustomerContract() {
         return divisions as EgyptAdministrativeDivision[];
       };
 
-      // An edited workflow contract already has its full address. Fetch each
-      // level so the saved governorate, district, and shiyakha can be shown.
-      if (workflowCustomerEdit) {
+      // Workflow edits and restored browser drafts can already contain a full
+      // address. Fetch every level so the selected values remain available in
+      // their dependent dropdowns after a refresh.
+      if (workflowEdit || (governorateId && districtId)) {
         setIsGeographyLoading(true);
         setGeographyError('');
 
@@ -847,7 +1033,7 @@ export default function AddCustomerContract() {
       isActive = false;
       abortController.abort();
     };
-  }, [districtId, geographyRefresh, governorateId, workflowCustomerEdit]);
+  }, [districtId, geographyRefresh, governorateId, workflowEdit]);
 
   useEffect(() => {
     if (!governorateId || !zoneId || zones.length === 0) {
@@ -951,8 +1137,6 @@ export default function AddCustomerContract() {
       isActive = false;
     };
   }, []);
-  const addOnPaymentMethodId = watch('addOnPayment.paymentMethodId');
-
   const selectedMonths = watch('selectedMonths') || [];
   const selectedAdditionalServices =
     useWatch({
@@ -971,8 +1155,6 @@ export default function AddCustomerContract() {
     (total: number, payment: any) => total + (Number(payment?.amount) || 0),
     0,
   );
-  const addOnPaymentAmount = Number(watch('addOnPayment.amount') || 0);
-
   const branches = watch('branches') || [];
 
   const selectedParticipant = users.find((user) => String(user.id) === String(participantId));
@@ -1227,17 +1409,18 @@ export default function AddCustomerContract() {
     (total, service) => total + service.monthlySubscriptionTotal,
     0,
   );
-  const initialCollectedMonthlySubscription =
-    mainMonthlySubscription + additionalServicesMonthlySubscription;
+  // Contract add-ons wait for Operations approval. Their recurring portion is
+  // intentionally excluded from the initial contract and selected months.
+  const initialCollectedMonthlySubscription = mainMonthlySubscription;
+  const monthlySubscriptionAfterAdditionalApproval =
+    initialCollectedMonthlySubscription + additionalServicesMonthlySubscription;
   const monthlySubscription = selectedMonths.length * initialCollectedMonthlySubscription;
   const subscriptionDiscountPercentage = currentContractTypeRule.subscriptionDiscountPercentage;
   const joiningFeeDiscountPercentage = currentContractTypeRule.joiningFeeDiscountPercentage;
   const discountedMainMonthlySubscription = Number(
     (mainMonthlySubscription * (1 - subscriptionDiscountPercentage / 100)).toFixed(2),
   );
-  const monthlySubscriptionAfterDiscount = Number(
-    (discountedMainMonthlySubscription + additionalServicesMonthlySubscription).toFixed(2),
-  );
+  const monthlySubscriptionAfterDiscount = discountedMainMonthlySubscription;
   const subscriptionPriceAfterDiscount = Number(
     (monthlySubscriptionAfterDiscount * selectedMonths.length).toFixed(2),
   );
@@ -1276,22 +1459,10 @@ export default function AddCustomerContract() {
     }
   }, [initialPayments.length, setValue, totalContractValue]);
 
-  useEffect(() => {
-    if (!hasManuallyEditedAddOnPaymentAmount.current) {
-      setValue('addOnPayment.amount', addOnTotal, {
-        shouldDirty: false,
-        shouldValidate: false,
-      });
-    }
-  }, [addOnTotal, setValue]);
-
   const remainingAmount = Math.max(totalContractValue - paymentAmount, 0);
-  const addOnRemainingAmount = Math.max(addOnTotal - addOnPaymentAmount, 0);
 
   const paidPercentage =
     totalContractValue > 0 ? Math.min((paymentAmount / totalContractValue) * 100, 100) : 0;
-  const addOnPaidPercentage =
-    addOnTotal > 0 ? Math.min((addOnPaymentAmount / addOnTotal) * 100, 100) : 0;
 
   const selectedBranch = branchId !== '' ? (branches[Number(branchId)] ?? null) : null;
   const selectedZone =
@@ -1299,12 +1470,6 @@ export default function AddCustomerContract() {
 
   const customerStatus =
     customerMode === 'reactivate' ? 'إعادة تفعيل' : customerMode === 'new' ? 'عميل جديد' : '—';
-  const selectedAddOnPaymentMethod = paymentMethods.find(
-    (method) => Number(method.id) === Number(addOnPaymentMethodId),
-  );
-  const addOnPaymentMethodCode = String(selectedAddOnPaymentMethod?.code || '')
-    .toUpperCase()
-    .replace(/_/g, '');
   const initialPaymentMethodLabel = initialPayments.length
     ? initialPayments
         .map((payment: any) => {
@@ -1326,6 +1491,8 @@ export default function AddCustomerContract() {
   const [replaceDocumentIndex, setReplaceDocumentIndex] = useState<any>(null);
   const [renamingDocumentIndex, setRenamingDocumentIndex] = useState<number | null>(null);
   const [documentNameDraft, setDocumentNameDraft] = useState('');
+  const [deletedWorkflowDocumentIds, setDeletedWorkflowDocumentIds] = useState<number[]>([]);
+  const [workflowDocumentsDirty, setWorkflowDocumentsDirty] = useState(false);
 
   const openDocumentPicker = () => {
     addDocumentInputRef.current?.click();
@@ -1356,6 +1523,7 @@ export default function AddCustomerContract() {
       ...document,
       name: normaliseDocumentName(documentNameDraft, document.file?.name || document.name),
     });
+    if (workflowEdit) setWorkflowDocumentsDirty(true);
     setRenamingDocumentIndex(null);
     setDocumentNameDraft('');
   };
@@ -1393,6 +1561,7 @@ export default function AddCustomerContract() {
         size: file.size,
       });
     });
+    if (workflowEdit && validFiles.length) setWorkflowDocumentsDirty(true);
 
     event.target.value = '';
   };
@@ -1410,12 +1579,17 @@ export default function AddCustomerContract() {
       return;
     }
 
+    const replacedDocument = documentFields[replaceDocumentIndex] as any;
+    if (workflowEdit && replacedDocument?.existing && Number.isInteger(Number(replacedDocument.documentId))) {
+      setDeletedWorkflowDocumentIds((ids) => [...new Set([...ids, Number(replacedDocument.documentId)])]);
+    }
     updateDocument(replaceDocumentIndex, {
       file,
       name: file.name,
       type: file.type,
       size: file.size,
     });
+    if (workflowEdit) setWorkflowDocumentsDirty(true);
 
     setReplaceDocumentIndex(null);
     event.target.value = '';
@@ -1595,12 +1769,12 @@ export default function AddCustomerContract() {
   };
 
   const handleInvalidSubmit = (submitErrors: Record<string, unknown>) => {
-    // Add-on fields are entered on the final step. Give them priority over stale
-    // errors from an earlier step so submitting an additional unit/replication
-    // receipt never hides the field the user needs to correct.
+    // Collection fields are entered on the final step. Keep that step visible
+    // for receipt errors instead of sending the user back to the plan step.
     const hasAddOnError = ['addOnPayment', 'additionalServices', 'hardwareDevices'].some((field) =>
       Boolean(submitErrors[field]),
     );
+    const hasContractCollectionError = Boolean(submitErrors.initialPayments);
 
     const hasStepOneError = [
       'customerMode',
@@ -1619,21 +1793,20 @@ export default function AddCustomerContract() {
       'address',
     ].some((field) => Boolean(submitErrors[field]));
 
-    const hasSubscriptionError = [
+    const hasSubscriptionConfigurationError = [
       'contractDate',
       'programId',
       'mainSubscriptionServiceId',
       'contractType',
       'selectedMonths',
-      'initialPayments',
       'installationDate',
       'nextDueDate',
     ].some((field) => Boolean(submitErrors[field]));
 
     setActiveStep((currentStep) => {
-      if (hasAddOnError) return 3;
+      if (hasAddOnError || hasContractCollectionError) return 3;
       if (hasStepOneError) return 1;
-      if (hasSubscriptionError) return 2;
+      if (hasSubscriptionConfigurationError) return 2;
       return currentStep;
     });
     scrollToFirstValidationError();
@@ -1709,7 +1882,7 @@ export default function AddCustomerContract() {
         .toUpperCase()
         .replace(/_/g, '');
       const fields = [`${prefix}.amount`, `${prefix}.paymentMethodId`];
-      if (code === 'CASH') fields.push(`${prefix}.paymentDetails.receiptNumber`);
+      fields.push(`${prefix}.paymentDetails.receiptNumber`);
       if (code === 'BANKTRANSFER')
         fields.push(
           `${prefix}.paymentDetails.transferDate`,
@@ -1751,7 +1924,15 @@ export default function AddCustomerContract() {
   ========================================================= */
 
   useEffect(() => {
-    if (!workflowCustomerEdit || !workflowContract) return;
+    if (!workflowEdit || !workflowContract) return;
+    let initialBilling: any = {};
+    try {
+      initialBilling = typeof workflowContract.initial_billing_payload === 'string'
+        ? JSON.parse(workflowContract.initial_billing_payload)
+        : workflowContract.initial_billing_payload || {};
+    } catch {
+      initialBilling = {};
+    }
     const landlineCode =
       getLandlineTelephoneCode(workflowContract.governorate_name_ar || '')?.code || '';
     const savedLandline = String(workflowContract.landline_phone || '').replace(/\D/g, '');
@@ -1765,12 +1946,25 @@ export default function AddCustomerContract() {
       customerNameAr: workflowContract.customer_name_ar || '',
       customerCode: workflowContract.customer_code || '',
       customerTypeId: workflowContract.customer_type_id || null,
+      commercialActivityId: workflowContract.commercial_activity_id || '',
       structure: workflowContract.structure || '',
       parentCustomerId: workflowContract.parent_customer_id || '',
       zoneId: workflowContract.zone_id || '',
       licenseNumber: workflowContract.license_number || '',
       taxNumber: workflowContract.tax_number || '',
       registrationNumber: workflowContract.registration_number || '',
+      contractDate: String(initialBilling.contractDate || workflowContract.contract_date || '').slice(0, 10),
+      contractNumber: initialBilling.contractNumber || '',
+      programId: workflowContract.program_id || null,
+      mainSubscriptionServiceId: workflowContract.main_subscription_service_id || null,
+      contractType: initialBilling.contractType || '',
+      participantId: workflowContract.rep_assistant_id || '',
+      installationDate: workflowContract.installation_date ? String(workflowContract.installation_date).slice(0, 10) : '',
+      notes: initialBilling.notes || workflowContract.notes || '',
+      selectedMonths: (initialBilling.selectedMonths || []).map((month: string) => ({ label: month, value: `${month}-01` })),
+      initialPayments: (initialBilling.initialPayments || []).filter((payment: any) => Number(payment?.amount) > 0).map((payment: any) => ({ amount: Number(payment.amount), paymentMethodId: payment.paymentMethodId || null, paymentDetails: payment.paymentDetails || {} })),
+      additionalServices: initialBilling.additionalServices || [],
+      hardwareDevices: initialBilling.hardwareDevices || [],
       address: {
         governorateId: workflowContract.geographic_governorate_id || '',
         districtId: workflowContract.geographic_district_id || '',
@@ -1799,8 +1993,55 @@ export default function AddCustomerContract() {
         },
       ],
     }));
-    setActiveStep(1);
-  }, [workflowCustomerEdit, workflowContract, reset]);
+    setActiveStep(workflowBillingEdit ? 2 : 1);
+  }, [workflowEdit, workflowBillingEdit, workflowContract, reset]);
+
+  useEffect(() => {
+    if (!workflowEdit || !workflowContract?.id) return;
+    let active = true;
+    api.get(`/contract-workflow/${workflowContract.id}/documents`)
+      .then((response) => {
+        if (!active) return;
+        replaceDocuments((response.data?.data || []).map((document: any) => ({
+          documentId: Number(document.id),
+          name: document.fileName || document.originalName || 'مستند',
+          type: document.type || document.mimeType || 'ملف',
+          size: Number(document.size || 0),
+          filePath: document.filePath,
+          existing: true,
+        })));
+        setDeletedWorkflowDocumentIds([]);
+        setWorkflowDocumentsDirty(false);
+      })
+      .catch(() => {
+        if (active) replaceDocuments([]);
+      });
+    return () => { active = false; };
+  }, [workflowEdit, workflowContract?.id, replaceDocuments]);
+
+  const openExistingDocument = (document: any) => {
+    if (!document.filePath) return;
+    window.open(new URL(document.filePath, 'http://localhost:3000').toString(), '_blank', 'noopener,noreferrer');
+  };
+
+  const saveWorkflowDocuments = async () => {
+    if (!workflowCustomerEdit || !workflowContract || !workflowDocumentsDirty) return;
+    const formData = new FormData();
+    const documents = getValues('documents') || [];
+    formData.append('deletedDocumentIds', JSON.stringify([...new Set(deletedWorkflowDocumentIds)]));
+    formData.append(
+      'documentNames',
+      JSON.stringify(
+        documents
+          .filter((document: any) => document.existing && Number.isInteger(Number(document.documentId)))
+          .map((document: any) => ({ id: Number(document.documentId), name: document.name })),
+      ),
+    );
+    documents.forEach((document: any) => {
+      if (document.file instanceof File) formData.append('documents', document.file);
+    });
+    await api.patch(`/contract-workflow/${workflowContract.id}/documents`, formData);
+  };
 
   const saveWorkflowCustomer = async () => {
     if (!workflowCustomerEdit || !workflowContract) return;
@@ -1819,6 +2060,8 @@ export default function AddCustomerContract() {
         structure: data.structure,
         parentCustomerId: data.structure === 'CHAIN' ? Number(data.parentCustomerId) : null,
         customerTypeId: data.customerTypeId,
+        commercialActivityId:
+          Number(data.customerTypeId) === 2 ? Number(data.commercialActivityId) : null,
         zoneId: data.zoneId,
         address: data.address,
         contact: {
@@ -1830,6 +2073,7 @@ export default function AddCustomerContract() {
           landlinePhone: landlineSubscriber ? `${landlineCode}${landlineSubscriber}` : '',
         },
       });
+      await saveWorkflowDocuments();
       await Swal.fire({ icon: 'success', title: 'تم حفظ بيانات العميل' });
       nav('/contract-follow-up');
     } catch (error: any) {
@@ -1841,9 +2085,61 @@ export default function AddCustomerContract() {
     }
   };
 
+  const saveWorkflowBilling = async (data: any) => {
+    if (!workflowBillingEdit || !workflowContract) return;
+    let financialCorrectionReason = String(data.financialCorrectionReason || '').trim();
+    if (!financialCorrectionReason) {
+      const reasonPrompt = await Swal.fire({
+        title: 'سبب تعديل التحصيلات',
+        text: 'سيتم تسجيل التعديل كتصحيح مالي في سجل التحصيلات.',
+        input: 'textarea',
+        inputPlaceholder: 'اكتب سبب التعديل بوضوح...',
+        inputAttributes: { 'aria-label': 'سبب تعديل التحصيلات' },
+        showCancelButton: true,
+        confirmButtonText: 'متابعة الحفظ',
+        cancelButtonText: 'إلغاء',
+        inputValidator: (value) =>
+          String(value || '').trim().length >= 3 ? undefined : 'سبب التعديل مطلوب (3 أحرف على الأقل).',
+      });
+      if (!reasonPrompt.isConfirmed) return;
+      financialCorrectionReason = String(reasonPrompt.value || '').trim();
+    }
+    try {
+      await api.patch(`/contract-workflow/${workflowContract.id}/billing`, {
+        mainSubscriptionServiceId: Number(data.mainSubscriptionServiceId),
+        programId: data.programId || null,
+        contractType: data.contractType,
+        contractNumber: data.contractNumber,
+        contractDate: data.contractDate,
+        selectedMonths: (data.selectedMonths || []).map((month: any) => month.value.slice(0, 7)),
+        initialPayments: (data.initialPayments || [])
+          .filter((payment: any) => Number(payment?.amount) > 0)
+          .map((payment: any) => ({ amount: Number(payment.amount), paymentMethodId: Number(payment.paymentMethodId), paymentDetails: payment.paymentDetails || {} })),
+        repAssistantId: participantId || null,
+        installationDate: data.installationDate || null,
+        notes: data.notes || null,
+        financialCorrectionReason,
+        additionalServices: (data.additionalServices || []).map((service: any) => ({ serviceId: Number(service.serviceId), quantity: Number(service.quantity) })),
+        hardwareDevices: (data.hardwareDevices || []).map((device: any) => ({ serviceId: Number(device.serviceId), quantity: Number(device.quantity) })),
+      });
+      await Swal.fire({ icon: 'success', title: 'تم حفظ تعديل العقد والفواتير والتحصيلات' });
+      nav('/contract-follow-up');
+    } catch (error: any) {
+      await Swal.fire({ icon: 'error', title: 'تعذر حفظ تعديل العقد', text: error?.response?.data?.message || 'حاول مرة أخرى.' });
+    }
+  };
+
   const onSubmit = async (data: any) => {
     if (workflowCustomerEdit) {
       await saveWorkflowCustomer();
+      return;
+    }
+    if (workflowBillingEdit) {
+      if (activeStep !== 3 || isAdvancingToAddOnsRef.current) {
+        if (activeStep !== 3) goToAddOnsStep();
+        return;
+      }
+      await saveWorkflowBilling(data);
       return;
     }
     // Only the final Add-ons step may open the creation confirmation.
@@ -1907,6 +2203,8 @@ export default function AddCustomerContract() {
     const payload = {
       customerNameAr: data.customerNameAr,
       customerTypeId: data.customerTypeId,
+      commercialActivityId:
+        Number(data.customerTypeId) === 2 ? Number(data.commercialActivityId) : null,
       structure: data.structure,
       parentCustomerId: data.structure === 'CHAIN' ? Number(data.parentCustomerId) : null,
       taxRegistrationType: data.taxRegistrationType,
@@ -1953,16 +2251,9 @@ export default function AddCustomerContract() {
         paymentMethodId: Number(payment?.paymentMethodId || 0),
         paymentDetails: payment?.paymentDetails || {},
       })),
-      addOnPayment:
-        addOnTotal > 0
-          ? {
-              amount: Number(data.addOnPayment?.amount || 0),
-              paymentMethodId: Number(data.addOnPayment?.paymentMethodId || 0),
-              paymentDetails: data.addOnPayment?.paymentDetails || {},
-              collectionReason: data.addOnPayment?.collectionReason || 'إضافات العقد',
-              notes: data.addOnPayment?.notes || null,
-            }
-          : null,
+      // Add-ons are created as a pending manager-approval request. Their
+      // invoice and collection occur only after approval.
+      addOnPayment: null,
       additionalServices: (data.additionalServices || [])
         .map((service: any) => ({
           serviceId: Number(service.serviceId),
@@ -2051,11 +2342,15 @@ export default function AddCustomerContract() {
 
       const response = await api.post('/customers', formData);
 
+      window.sessionStorage.removeItem(ADD_CONTRACT_DRAFT_KEY);
       Swal.close();
+      const additionalServiceRequestId = response.data?.data?.additionalServiceRequestId;
       await Swal.fire({
         icon: 'success',
         title: 'تم إنشاء العقد بنجاح',
-        text: response.data?.message || 'تم حفظ العقد بنجاح.',
+        text: additionalServiceRequestId
+          ? `تم حفظ العقد وإنشاء طلب خدمات إضافية #${additionalServiceRequestId} بانتظار اعتماد مدير العمليات.`
+          : response.data?.message || 'تم حفظ العقد بنجاح.',
         confirmButtonText: 'حسناً',
       });
       nav('/contract-follow-up');
@@ -2559,22 +2854,20 @@ export default function AddCustomerContract() {
                     />
 
                     <div>
-                      <Label>كود العميل</Label>
+                      <Label>كود العميل (رقم العقد)</Label>
 
                       <div className="relative mt-2">
                         <Input
                           {...register('customerCode')}
                           readOnly
-                          placeholder="سيتم توليده تلقائياً"
+                          placeholder="سيظهر رقم العقد بعد الحفظ"
                           className="h-11 cursor-not-allowed rounded-xl bg-muted"
                         />
                       </div>
 
                       <p className="mt-1.5 text-xs text-muted-foreground">
                         {customerMode === 'new'
-                          ? isCustomerCodePreviewLoading
-                            ? 'جارٍ تحميل الكود المتوقع…'
-                            : 'هذا هو الكود المتوقع؛ ويُثبت الكود النهائي تلقائياً عند الحفظ.'
+                          ? 'رقم العقد هو كود العميل، وسيظهر تلقائياً بعد الحفظ.'
                           : customerMode === 'reactivate'
                             ? 'كود العميل المحدد محفوظ كما هو.'
                             : 'اختر نوع العملية أولاً لتحديد طريقة إنشاء الكود.'}
@@ -2584,7 +2877,7 @@ export default function AddCustomerContract() {
                     <SelectField
                       label={
                         <>
-                          نوع الصيدلية
+                          هيكل العميل
                           <span className="mr-1 text-red-500">*</span>
                         </>
                       }
@@ -2598,6 +2891,39 @@ export default function AddCustomerContract() {
                       control={control}
                       error={errors.structure?.message}
                     />
+
+                    {Number(customerTypeId) === 2 && (
+                      <SelectField
+                        label={
+                          <>
+                            النشاط التجاري
+                            <span className="mr-1 text-red-500">*</span>
+                          </>
+                        }
+                        registration={register('commercialActivityId', {
+                          validate: (value) =>
+                            Number(customerTypeId) !== 2 ||
+                            Number(value) > 0 ||
+                            'النشاط التجاري مطلوب للعميل التجاري',
+                        })}
+                        options={[
+                          ['', 'اختر النشاط التجاري'],
+                          ...commercialActivities.map((activity) => [
+                            activity.id,
+                            activity.name_ar || activity.name_en,
+                          ]),
+                        ]}
+                        control={control}
+                        disabled={isCommercialActivitiesLoading}
+                        placeholder={
+                          isCommercialActivitiesLoading
+                            ? 'جارٍ تحميل الأنشطة التجارية...'
+                            : 'اختر النشاط التجاري'
+                        }
+                        searchPlaceholder="ابحث باسم النشاط التجاري..."
+                        error={errors.commercialActivityId?.message}
+                      />
+                    )}
 
                     {structure === 'CHAIN' && (
                       <div data-validation-anchor={errors.parentCustomerId ? 'true' : undefined}>
@@ -2835,11 +3161,11 @@ export default function AddCustomerContract() {
                       label={
                         <>
                           السجل التجاري
-                          <span className="mr-1 text-red-500">*</span>
+                          {structure === 'CHAIN' && <span className="mr-1 text-red-500">*</span>}
                         </>
                       }
                       registration={register('registrationNumber', {
-                        required: 'رقم السجل التجاري مطلوب',
+                        required: structure === 'CHAIN' ? 'رقم السجل التجاري مطلوب للسلاسل' : false,
                         pattern: {
                           value: /^\d+$/,
                           message: 'رقم السجل التجاري يجب أن يحتوي على أرقام فقط',
@@ -2963,6 +3289,18 @@ export default function AddCustomerContract() {
                             </div>
 
                             <div className="flex shrink-0 flex-wrap items-center gap-2">
+                              {document.filePath && (
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  size="sm"
+                                  className="rounded-xl"
+                                  onClick={() => openExistingDocument(document)}
+                                >
+                                  <ExternalLink className="ml-2 h-4 w-4" />
+                                  عرض المستند كاملًا
+                                </Button>
+                              )}
                               {isRenaming ? (
                                 <>
                                   <Button
@@ -3016,6 +3354,10 @@ export default function AddCustomerContract() {
                                 size="icon"
                                 className="rounded-xl text-destructive hover:bg-destructive/10"
                                 onClick={() => {
+                                  if (workflowEdit && document.existing && Number.isInteger(Number(document.documentId))) {
+                                    setDeletedWorkflowDocumentIds((ids) => [...new Set([...ids, Number(document.documentId)])]);
+                                    setWorkflowDocumentsDirty(true);
+                                  }
                                   removeDocument(index);
                                   if (isRenaming) {
                                     setRenamingDocumentIndex(null);
@@ -3351,20 +3693,41 @@ export default function AddCustomerContract() {
                       <div>
                         <Label>موقع المنشأة على خرائط Google</Label>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          افتح الخريطة، حدّد موقع المنشأة، ثم الصق رابط المشاركة هنا.
+                          استخدم موقعك الحالي أولًا، ثم اضغط على الخريطة لتحديد موقع المنشأة بدقة.
                         </p>
                       </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="shrink-0 rounded-xl"
-                        onClick={openGoogleMaps}
-                      >
-                        <MapPinned className="ml-2 h-4 w-4" />
-                        فتح خرائط Google
-                        <ExternalLink className="mr-2 h-3.5 w-3.5" />
-                      </Button>
+                      <div className="flex flex-wrap gap-2">
+                        <Button type="button" variant="secondary" className="shrink-0 rounded-xl" onClick={useCurrentLocation} disabled={isLocating}>
+                          <Crosshair className={`ml-2 h-4 w-4 ${isLocating ? 'animate-spin' : ''}`} />
+                          {isLocating ? 'جارٍ تحديد موقعك...' : 'استخدم موقعي الحالي'}
+                        </Button>
+                        {/* <Button type="button" variant="outline" className="shrink-0 rounded-xl" onClick={openGoogleMaps}>
+                          <MapPinned className="ml-2 h-4 w-4" />
+                          فتح خرائط Google
+                          <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                        </Button> */}
+                      </div>
                     </div>
+
+                    {locationError && <p className="mt-3 text-xs text-destructive">{locationError}</p>}
+                    <div className="mt-4 overflow-hidden rounded-xl border border-border">
+                      <MapContainer
+                        center={[selectedMapPoint.latitude, selectedMapPoint.longitude]}
+                        zoom={hasPinnedLocation ? 16 : 7}
+                        scrollWheelZoom
+                        className="h-72 w-full"
+                        aria-label="خريطة تحديد موقع المنشأة"
+                      >
+                        <TileLayer
+                          attribution="&copy; OpenStreetMap contributors"
+                          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                        />
+                        <DraggableLocationMarker point={selectedMapPoint} onChange={setMapPoint} />
+                      </MapContainer>
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      اسحب العلامة أو اضغط على أي نقطة على الخريطة لتحديد موقع المنشأة بدقة. سيتم حفظ خط العرض وخط الطول ورابط Google Maps تلقائيًا.
+                    </p>
 
                     <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
                       <FormField
@@ -3783,7 +4146,7 @@ export default function AddCustomerContract() {
 
                       <div>
                         <Label>
-                          العرض
+                          نوع التعاقد
                           <span className="mr-1 text-red-500">*</span>
                         </Label>
 
@@ -3824,9 +4187,9 @@ export default function AddCustomerContract() {
                       </div>
 
                       <SelectField
-                        label="نوع التعاقد"
+                        label="نوع الاشتراك"
                         registration={register('mainSubscriptionServiceId', {
-                          required: 'يجب اختيار خدمة الاشتراك الأساسية',
+                          required: 'يجب اختيار نوع الاشتراك الأساسية',
                           valueAsNumber: true,
                         })}
                         options={[
@@ -4246,10 +4609,10 @@ export default function AddCustomerContract() {
                                     </div>
                                   );
                                 })}
-                                <div className="grid gap-3 rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:grid-cols-2">
+                                <div className="grid gap-3 rounded-2xl border border-primary/20 bg-primary/5 p-4 sm:grid-cols-3">
                                   <div>
                                     <p className="text-xs text-muted-foreground">
-                                      إجمالي اشتراك الإضافات الشهري
+                                      الزيادة الشهرية بعد الاعتماد
                                     </p>
                                     <p className="mt-1 font-bold">
                                       {additionalServicesMonthlySubscription.toLocaleString('ar-EG')} جنيه/شهر
@@ -4257,10 +4620,18 @@ export default function AddCustomerContract() {
                                   </div>
                                   <div>
                                     <p className="text-xs text-muted-foreground">
-                                      إجمالي الاشتراك الشهري
+                                   الاشتراك الشهري  قبل الاعتماد
                                     </p>
                                     <p className="mt-1 font-bold">
                                       {initialCollectedMonthlySubscription.toLocaleString('ar-EG')} جنيه/شهر
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">
+                                      الاشتراك الشهري  بعد الاعتماد
+                                    </p>
+                                    <p className="mt-1 font-bold text-primary">
+                                      {monthlySubscriptionAfterAdditionalApproval.toLocaleString('ar-EG')} جنيه/شهر
                                     </p>
                                   </div>
                                 </div>
@@ -4639,29 +5010,124 @@ export default function AddCustomerContract() {
                     </CardContent>
                   </Card>
 
-                  <AddOnReceiptSection
-                    total={addOnTotal}
-                    additionalServices={selectedAdditionalServiceRows}
-                    amount={addOnPaymentAmount}
-                    remainingAmount={addOnRemainingAmount}
-                    paidPercentage={addOnPaidPercentage}
-                    paymentMethodCode={addOnPaymentMethodCode}
-                    paymentMethodLabel={
-                      selectedAddOnPaymentMethod?.nameAr ??
-                      selectedAddOnPaymentMethod?.name_ar ??
-                      selectedAddOnPaymentMethod?.code ??
-                      '—'
+                  <FinalContractReview
+                    customerName={customerNameAr}
+                    customerCode={customerCode}
+                    customerType={
+                      customerTypeId === 1 ? 'صيدلي' : customerTypeId === 2 ? 'تجاري' : '—'
                     }
-                    paymentMethods={paymentMethods}
-                    banks={banks}
-                    isBanksLoading={isBanksLoading}
-                    register={register}
-                    control={control}
-                    errors={errors}
-                    onAmountInput={() => {
-                      hasManuallyEditedAddOnPaymentAmount.current = true;
-                    }}
+                    structure={
+                      structure === 'CHAIN' ? 'سلسلة' : structure === 'SINGLE' ? 'فرع واحد' : '—'
+                    }
+                    zoneName={selectedZone?.name_ar || 'لم يتم الاختيار'}
+                    contactCount={contactFields.length}
+                    subscriptionName={selectedMainSubscriptionService?.nameAr || '—'}
+                    contractType={currentContractTypeRule.label || '—'}
+                    selectedMonths={selectedMonths.length}
+                    mainMonthlySubscription={mainMonthlySubscription}
+                    discountedMainMonthlySubscription={discountedMainMonthlySubscription}
+                    additionalMonthlySubscription={additionalServicesMonthlySubscription}
+                    joiningFee={joiningFee}
+                    joiningFeeAfterDiscount={joiningFeeAfterDiscount}
+                    joiningFeeDiscount={joiningFeeDiscount}
+                    totalBeforeDiscount={totalBeforeDiscount}
+                    totalDiscount={discountAmount}
+                    contractTotal={totalContractValue}
+                    additionalServices={selectedAdditionalServiceRows}
+                    hardwareDevices={selectedHardwareDeviceRows}
+                    additionalServicesTotal={addOnTotal}
+                    hardwareDevicesTotal={hardwareDevicesTotal}
                   />
+
+                  <section className="space-y-4" aria-labelledby="collection-review-title">
+                    <div className="rounded-2xl border border-border bg-muted/25 p-4">
+                      <h2 id="collection-review-title" className="flex items-center gap-2 font-bold">
+                        <CreditCard className="h-5 w-5 text-muted-foreground" />
+                        التحصيل
+                      </h2>
+                      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                        تحصيل العقد وتحصيل الخدمات الإضافية عمليتان منفصلتان بإيصالات مستقلة، ويظهران هنا معًا بعد المراجعة النهائية.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                      <Card className="border-border bg-card shadow-sm">
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2 text-base">
+                            <CreditCard className="h-5 w-5 text-muted-foreground" />
+                            تحصيل العقد
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                            <MoneyCard label="إجمالي العقد" value={totalContractValue} />
+                            <MoneyCard label="المحصل" value={paymentAmount} />
+                            <MoneyCard label="المتبقي" value={remainingAmount} />
+                          </div>
+                          <InitialPaymentsSection
+                            total={totalContractValue}
+                            paymentMethods={paymentMethods}
+                            banks={banks}
+                            isBanksLoading={isBanksLoading}
+                            register={register}
+                            control={control}
+                            setValue={setValue}
+                            errors={errors}
+                            onAmountInput={() => {
+                              hasManuallyEditedInitialPayments.current = true;
+                            }}
+                          />
+                          <div className="rounded-2xl bg-muted p-4">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-muted-foreground">نسبة سداد العقد</span>
+                              <span className="font-bold">{paidPercentage.toFixed(0)}%</span>
+                            </div>
+                            <div className="mt-3 h-2 overflow-hidden rounded-full bg-background">
+                              <div className="h-full rounded-full bg-foreground transition-all" style={{ width: `${paidPercentage}%` }} />
+                            </div>
+                          </div>
+                          <div>
+                            <Label>ملاحظات العقد</Label>
+                            <Textarea
+                              {...register('notes')}
+                              placeholder="أضف أي ملاحظات مرتبطة بالعقد أو العميل..."
+                              className="mt-2 min-h-24 resize-none rounded-xl"
+                            />
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      <Card className="border-dashed border-amber-300 bg-amber-50/50 shadow-sm dark:border-amber-900 dark:bg-amber-950/20">
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2 text-base">
+                            <Wrench className="h-5 w-5 text-amber-700 dark:text-amber-400" />
+                            اعتماد الخدمات الإضافية وتحصلها
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3 text-sm">
+                          {addOnTotal > 0 ? (
+                            <>
+                              <p className="font-semibold text-amber-900 dark:text-amber-200">
+                                سيتم إنشاء طلب خدمات إضافية بقيمة {addOnTotal.toLocaleString('ar-EG')} جنيه.
+                              </p>
+                              <p className="leading-6 text-muted-foreground">
+                                يُرسل الطلب تلقائيًا إلى متابعة الخدمات الإضافية لاعتماده من مدير العمليات. عند الاعتماد تُنشأ الفاتورة ويظهر الطلب في تحصيل خدمات إضافية. لا يُسجّل تحصيل الآن.
+                              </p>
+                              {additionalServicesMonthlySubscription > 0 && (
+                                <p className="rounded-xl border border-amber-200 bg-background/70 p-3 text-xs leading-5 text-muted-foreground dark:border-amber-900">
+                                  الزيادة الشهرية المحتملة: {additionalServicesMonthlySubscription.toLocaleString('ar-EG')} جنيه. تُضاف إلى الاشتراك الرئيسي فقط بعد اعتماد الطلب.
+                                </p>
+                              )}
+                            </>
+                          ) : (
+                            <p className="text-muted-foreground">
+                              لم يتم اختيار خدمات إضافية، لذلك لن يتم إنشاء طلب أو فاتورة خدمات إضافية.
+                            </p>
+                          )}
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </section>
                 </>
               )}
 
@@ -4788,8 +5254,8 @@ export default function AddCustomerContract() {
                     </CardContent>
                   </Card>
 
-                  {/* Payment + Review */}
-
+                  {/* Collection and review moved to the final additional-services step. */}
+                  {false && (
                   <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.35fr_0.65fr]">
                     {/* Payment */}
 
@@ -4846,6 +5312,7 @@ export default function AddCustomerContract() {
                           isBanksLoading={isBanksLoading}
                           register={register}
                           control={control}
+                          setValue={setValue}
                           errors={errors}
                           onAmountInput={() => {
                             hasManuallyEditedInitialPayments.current = true;
@@ -4890,6 +5357,20 @@ export default function AddCustomerContract() {
                             placeholder="أضف أي ملاحظات مرتبطة بالعقد أو العميل..."
                             className="mt-2 min-h-[120px] resize-none rounded-xl"
                           />
+                          {workflowBillingEdit && (
+                            <div className="mt-4">
+                              <Label>سبب تعديل التحصيلات <span className="mr-1 text-red-500">*</span></Label>
+                              <Textarea
+                                {...register('financialCorrectionReason', {
+                                  validate: (value) =>
+                                    !workflowBillingEdit || String(value || '').trim().length >= 3 || 'سبب تعديل التحصيلات مطلوب',
+                                })}
+                                placeholder="اشرح سبب تعديل الفواتير أو التحصيلات..."
+                                className="mt-2 min-h-24 resize-none"
+                              />
+                              {errors.financialCorrectionReason?.message && <ErrorText>{String(errors.financialCorrectionReason.message)}</ErrorText>}
+                            </div>
+                          )}
                         </div>
                       </CardContent>
                     </Card>
@@ -4911,7 +5392,7 @@ export default function AddCustomerContract() {
                           <div className="mt-2 text-lg font-bold">{customerStatus}</div>
 
                           <div className="mt-4 flex items-center justify-between border-t border-background/10 pt-4">
-                            <span className="text-xs opacity-70">خدمة الاشتراك</span>
+                            <span className="text-xs opacity-70">نوع الاشتراك</span>
 
                             <span className="text-sm font-semibold">
                               {selectedMainSubscriptionService?.nameAr || '—'}
@@ -5044,6 +5525,7 @@ export default function AddCustomerContract() {
                       </CardContent>
                     </Card>
                   </div>
+                  )}
                 </>
               )}
             </div>
@@ -5127,7 +5609,7 @@ export default function AddCustomerContract() {
                       md:flex-none
                     "
                   >
-                    {isSubmitting ? 'جاري الإرسال...' : 'إرسال العقد'}
+                    {isSubmitting ? 'جاري الحفظ...' : workflowBillingEdit ? 'حفظ تعديل العقد' : 'إرسال العقد'}
 
                     <Check className="mr-2 h-4 w-4" />
                   </Button>
@@ -5209,7 +5691,10 @@ function ContactPhones({ control, register, contactIndex, governorate, errors }:
             >
               <div className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
                 <div>
-                  <Label className="text-xs text-muted-foreground">{phoneLabel} *</Label>
+                  <Label className="text-xs text-muted-foreground">
+                    {phoneLabel}
+                    {!isWhatsApp && <span className="mr-1 text-red-500">*</span>}
+                  </Label>
 
                   <div
                     className={isLandline ? 'mt-1 flex items-center gap-1.5' : 'mt-1'}
@@ -5320,6 +5805,7 @@ function InitialPaymentsSection({
   isBanksLoading,
   register,
   control,
+  setValue,
   errors,
   onAmountInput,
 }: any) {
@@ -5449,6 +5935,17 @@ function InitialPaymentsSection({
                   ])}
                   control={control}
                   error={entryErrors.paymentMethodId?.message}
+                  onValueChange={(nextValue: string) => {
+                    const selectedMethod = paymentMethods.find(
+                      (item: any) => String(item.id) === String(nextValue),
+                    );
+                    if (String(selectedMethod?.code || '').toUpperCase().replace(/_/g, '') === 'INSTAPAY') {
+                      setValue(`${prefix}.paymentDetails.transactionDate`, currentDate(), {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      });
+                    }
+                  }}
                 />
               </div>
               {code === 'BANKTRANSFER' && (
@@ -5511,6 +6008,7 @@ function InitialPaymentsSection({
                       required: 'تاريخ العملية مطلوب',
                     })}
                     error={entryErrors.paymentDetails?.transactionDate?.message}
+                    disabled={code === 'INSTAPAY'}
                   />
                 </div>
               )}
@@ -5551,7 +6049,7 @@ function InitialPaymentsSection({
                   />
                 </div>
               )}
-              {code === 'CASH' && (
+              {code && (
                 <div className="mt-4">
                   <TextField
                     label="رقم الإيصال"
@@ -5611,13 +6109,17 @@ function AddOnReceiptSection({
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.35fr_0.65fr]">
       <Card className="border-amber-200 bg-card shadow-sm dark:border-amber-900">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Receipt className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-            تحصيل الإضافات وإيصال مستقل
-          </CardTitle>
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Receipt className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              تحصيل الإضافات وإيصال مستقل
+            </CardTitle>
+            <Badge variant="secondary" className="rounded-full">
+              {additionalServices.length} خدمات
+            </Badge>
+          </div>
         </CardHeader>
         <CardContent className="space-y-5">
           {/* <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm dark:border-amber-900 dark:bg-amber-950/20">
@@ -5779,7 +6281,7 @@ function AddOnReceiptSection({
             </div>
           )}
 
-          {paymentMethodCode === 'CASH' && (
+          {paymentMethodCode && (
             <div className="rounded-xl border border-border bg-muted/20 p-4">
               <TextField
                 label="رقم إيصال الإضافات"
@@ -5831,29 +6333,177 @@ function AddOnReceiptSection({
               <span>المحصل: {amount.toLocaleString('ar-EG')} جنيه</span>
               <span>المتبقي: {remainingAmount.toLocaleString('ar-EG')} جنيه</span>
             </div>
+            <div className="mt-3 flex justify-between border-t border-border pt-3 text-xs">
+              <span className="text-muted-foreground">طريقة الدفع</span>
+              <span className="font-semibold">{paymentMethodLabel}</span>
+            </div>
           </div>
         </CardContent>
       </Card>
+  );
+}
 
-      <Card className="border-border bg-card shadow-sm">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Check className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-            مراجعة إيصال الإضافات
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <ReviewRow label="الخدمات الإضافية" value={`${additionalServices.length} عناصر`} />
-          <Separator />
-          <ReviewRow
-            label="إجمالي إيصال الإضافات"
-            value={`${total.toLocaleString('ar-EG')} جنيه`}
-          />
-          <ReviewRow label="المحصل" value={`${amount.toLocaleString('ar-EG')} جنيه`} />
-          <ReviewRow label="المتبقي" value={`${remainingAmount.toLocaleString('ar-EG')} جنيه`} />
-          <ReviewRow label="طريقة الدفع" value={paymentMethodLabel} />
-        </CardContent>
-      </Card>
+function FinalContractReview({
+  customerName,
+  customerCode,
+  customerType,
+  structure,
+  zoneName,
+  contactCount,
+  subscriptionName,
+  contractType,
+  selectedMonths,
+  mainMonthlySubscription,
+  discountedMainMonthlySubscription,
+  additionalMonthlySubscription,
+  joiningFee,
+  joiningFeeAfterDiscount,
+  joiningFeeDiscount,
+  totalBeforeDiscount,
+  totalDiscount,
+  contractTotal,
+  additionalServices,
+  hardwareDevices,
+  additionalServicesTotal,
+  hardwareDevicesTotal,
+}: any) {
+  const mainSubscriptionBeforeDiscount = mainMonthlySubscription * selectedMonths;
+  const mainSubscriptionAfterDiscount = discountedMainMonthlySubscription * selectedMonths;
+  const invoiceGrandTotal = contractTotal + hardwareDevicesTotal;
+
+  return (
+    <Card className="gap-4 border-border bg-card p-4 shadow-sm">
+      <CardHeader className="pb-0">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Check className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+              المراجعة النهائية قبل التحصيل
+            </CardTitle>
+            <p className="mt-1 text-xs text-muted-foreground">
+              راجع البيانات والخدمات أولًا، ثم سجّل كل تحصيل في القسم المستقل المخصص له.
+            </p>
+          </div>
+          <Badge variant="secondary" className="w-fit rounded-full">جاهز للمراجعة</Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3 p-0">
+        <ReviewGroup title="بيانات العميل" icon={<Users className="h-4 w-4" />}>
+          <ReviewRow label="العميل" value={customerName || '—'} />
+          <ReviewRow label="الكود" value={customerCode || '—'} />
+          <ReviewRow label="نوع العميل" value={customerType} />
+          <ReviewRow label="الهيكل" value={structure} />
+          <ReviewRow label="الفرع" value={zoneName} />
+          <ReviewRow label="جهات الاتصال" value={`${contactCount}`} />
+        </ReviewGroup>
+
+        <Separator />
+
+        <ReviewGroup title="بيانات العقد" icon={<FileText className="h-4 w-4" />}>
+          <ReviewRow label="نوع الاشتراك" value={subscriptionName} />
+          <ReviewRow label="نوع التعاقد" value={contractType} />
+          <ReviewRow label="الشهور المحددة" value={`${selectedMonths} شهور`} />
+        </ReviewGroup>
+
+        <Separator />
+
+        <InvoiceReviewSection title="فاتورة العقد" subtitle="رسوم الانضمام والاشتراكات المحددة" icon={<FileText className="h-4 w-4" />}>
+          <InvoiceDetailLine label="رسوم الانضمام" quantity="1" unitPrice={joiningFee} discount={joiningFeeDiscount} total={joiningFeeAfterDiscount} />
+          <InvoiceDetailLine label="الاشتراك الرئيسي" quantity={`${selectedMonths} شهور`} unitPrice={mainMonthlySubscription} subtotal={mainSubscriptionBeforeDiscount} discount={mainSubscriptionBeforeDiscount - mainSubscriptionAfterDiscount} total={mainSubscriptionAfterDiscount} />
+          <InvoiceTotals subtotal={totalBeforeDiscount} discount={totalDiscount} total={contractTotal} />
+        </InvoiceReviewSection>
+
+        <Separator />
+
+        <InvoiceReviewSection title="طلب الخدمات الإضافية" subtitle="بانتظار اعتماد مدير العمليات؛ لا تدخل قيمته في فاتورة العقد أو التحصيل الآن" icon={<Wrench className="h-4 w-4" />}>
+          {additionalServices.length ? additionalServices.map((service: any) => (
+            <InvoiceDetailLine key={`${service.id}-${service.quantity}`} label={service.nameAr} quantity={`${service.quantity}`} unitPrice={service.joining_fee} subtotal={service.total} discount={0} total={service.total} />
+          )) : <p className="text-sm text-muted-foreground">لا توجد خدمات إضافية مختارة.</p>}
+          <InvoiceTotals subtotal={additionalServicesTotal} discount={0} total={additionalServicesTotal} accent="amber" />
+          {additionalMonthlySubscription > 0 && (
+            <p className="mt-3 text-xs leading-5 text-muted-foreground">
+              زيادة الاشتراك الشهرية المحتملة: {additionalMonthlySubscription.toLocaleString('ar-EG')} جنيه، وتُطبق فقط بعد الاعتماد.
+            </p>
+          )}
+        </InvoiceReviewSection>
+
+        <Separator />
+
+        <InvoiceReviewSection title="فاتورة الأجهزة" subtitle="فاتورة فقط ولا تدخل في تحصيل الخدمات الإضافية" icon={<Wrench className="h-4 w-4" />}>
+          {hardwareDevices.length ? hardwareDevices.map((device: any) => (
+            <InvoiceDetailLine key={`${device.id}-${device.quantity}`} label={device.nameAr} quantity={`${device.quantity}`} unitPrice={device.joining_fee} subtotal={device.total} discount={0} total={device.total} />
+          )) : <p className="text-sm text-muted-foreground">لا توجد أجهزة مختارة.</p>}
+          <InvoiceTotals subtotal={hardwareDevicesTotal} discount={0} total={hardwareDevicesTotal} accent="muted" />
+        </InvoiceReviewSection>
+
+        <div className="rounded-xl border border-foreground/15 bg-foreground p-3 text-background">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs opacity-70">إجمالي الفواتير الحالية</p>
+              <p className="mt-0.5 text-xs opacity-70">العقد + الأجهزة؛ طلب الخدمات الإضافية بانتظار الاعتماد</p>
+            </div>
+            <p className="text-xl font-bold">{invoiceGrandTotal.toLocaleString('ar-EG')} جنيه</p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ReviewGroup({ title, icon, children }: any) {
+  return (
+    <section>
+      <h3 className="mb-2 flex items-center gap-2 text-sm font-bold">
+        <span className="rounded-md bg-muted p-1 text-muted-foreground">{icon}</span>
+        {title}
+      </h3>
+      <div className="grid gap-x-4 gap-y-1.5 rounded-lg border border-border bg-muted/15 p-2.5 sm:grid-cols-2">{children}</div>
+    </section>
+  );
+}
+
+function InvoiceReviewSection({ title, subtitle, icon, children }: any) {
+  return (
+    <section className="rounded-xl border border-border bg-muted/10 p-3">
+      <div className="mb-2 flex items-start gap-2">
+        <span className="rounded-md bg-muted p-1 text-muted-foreground">{icon}</span>
+        <div>
+          <h3 className="text-sm font-bold">{title}</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>
+        </div>
+      </div>
+      <div className="hidden grid-cols-[minmax(0,1fr)_72px_100px_100px_110px] gap-2 border-b border-border pb-1.5 text-xs text-muted-foreground md:grid">
+        <span>البند</span><span>الكمية</span><span>السعر</span><span>الخصم</span><span>الصافي</span>
+      </div>
+      <div className="divide-y divide-border">{children}</div>
+    </section>
+  );
+}
+
+function InvoiceDetailLine({ label, quantity, unitPrice, discount, total }: any) {
+  const money = (value: number) => `${Number(value || 0).toLocaleString('ar-EG')} جنيه`;
+
+  return (
+    <div className="grid gap-1.5 py-2 text-sm md:grid-cols-[minmax(0,1fr)_72px_100px_100px_110px] md:items-center md:gap-2">
+      <span className="font-medium">{label}</span>
+      <span className="text-muted-foreground">{quantity}</span>
+      <span className="text-muted-foreground">{money(unitPrice)}</span>
+      <span className={discount ? 'text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground'}>{discount ? `− ${money(discount)}` : '—'}</span>
+      <span className="font-bold">{money(total)}</span>
+    </div>
+  );
+}
+
+function InvoiceTotals({ subtotal, discount, total, accent = 'default' }: any) {
+  const tone = accent === 'amber' ? 'border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/20' : accent === 'muted' ? 'border-border bg-muted/40' : 'border-primary/20 bg-primary/5';
+  const money = (value: number) => `${Number(value || 0).toLocaleString('ar-EG')} جنيه`;
+
+  return (
+    <div className={`mt-2 space-y-1.5 rounded-lg border p-2.5 text-sm ${tone}`}>
+      <ReviewRow label="الإجمالي قبل الخصم" value={money(subtotal)} />
+      <ReviewRow label="إجمالي الخصم" value={discount ? `− ${money(discount)}` : '—'} />
+      <Separator />
+      <ReviewRow label="إجمالي الفاتورة" value={money(total)} />
     </div>
   );
 }
@@ -6001,6 +6651,7 @@ function SelectField({
   placeholder,
   searchPlaceholder,
   disabled = false,
+  onValueChange,
 }: any) {
   const value = useWatch({ control, name: registration.name });
 
@@ -6024,6 +6675,7 @@ function SelectField({
             target: { name: registration.name, value: nextValue },
             type: 'blur',
           });
+          onValueChange?.(nextValue);
         }}
       />
       {error && <ErrorText>{String(error)}</ErrorText>}

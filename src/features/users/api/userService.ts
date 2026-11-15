@@ -14,6 +14,11 @@ export const fetchUsers = async (filters = {}) => {
   return response.data;
 };
 
+export const fetchUserList = async () => {
+  const response = await api.get('/users/userslist');
+  return response.data;
+};
+
 
 
 
@@ -25,6 +30,7 @@ export const createUser = async(userData:any)=>{
         nameAr: userData.nameAr,
         password: userData.password,
         roles: userData.roles,
+        managerUserId: userData.managerUserId,
     });
     return response.data;
 };
@@ -42,6 +48,7 @@ export const updateUser = async (userId:any, userData:any) => {
     nameAr: userData.nameAr,
     ...(userData.password ? { password: userData.password } : {}),
     roles: userData.roles,
+    managerUserId: userData.managerUserId,
   });
   return response.data;
 };

@@ -272,7 +272,6 @@ export default function AdditionalServiceRequestPage() {
     try {
       setSaving(true);
       await createServiceRequest({
-        zoneId: Number(selectedContract.zoneId),
         contractId: selectedContract.id,
         notes: notes.trim(),
         items: items.map((item) => ({ serviceId: item.id, quantity: item.quantity })),

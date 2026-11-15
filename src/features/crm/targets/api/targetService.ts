@@ -8,6 +8,19 @@ export async function fetchPaidMonths(contractId: any) {
     .filter(Boolean);
 }
 
+export type SubscriptionMonthBalance = {
+  month: string;
+  invoicedAmount: number;
+  paidAmount: number;
+  outstandingAmount: number;
+  fullyPaid: boolean;
+};
+
+export async function fetchSubscriptionMonthBalances(contractId: number): Promise<SubscriptionMonthBalance[]> {
+  const response = await api.get(`/collections/subscription-month-balances/${contractId}`);
+  return response.data.data ?? [];
+}
+
 export type ScopedContract = {
   id: number;
   contract_number?: string | null;

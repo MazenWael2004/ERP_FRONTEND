@@ -10,7 +10,17 @@ const report = async (path: string, startDate?: string, endDate?: string) => {
 export const fetchCollectionsReport = (startDate?: string, endDate?: string) => report('/reports/collections', startDate, endDate);
 export const fetchAdditionalUnitsReport = (startDate?: string, endDate?: string) => report('/reports/additional-units', startDate, endDate);
 export const fetchReplicationServicesReport = (startDate?: string, endDate?: string) => report('/reports/replication-services', startDate, endDate);
-export const fetchSalesReport = (startDate?: string, endDate?: string) => report('/reports/sales', startDate, endDate);
+export const fetchSubscriptionDuesReport = (startDate?: string, endDate?: string) => report('/reports/subscription-dues', startDate, endDate);
+export const fetchSalesReport = async (startDate?: string, endDate?: string, workflowStatus?: string) => {
+  const response = await api.get('/reports/sales', {
+    params: {
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
+      workflowStatus: workflowStatus || undefined,
+    },
+  });
+  return response.data.data;
+};
 
 export const fetchMasterfileReport = async (filters: {
   search?: string;

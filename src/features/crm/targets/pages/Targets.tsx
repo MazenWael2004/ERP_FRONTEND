@@ -1,6 +1,6 @@
 import * as React from 'react';
 import axios from 'axios';
-import Swal from 'sweetalert2';
+import toast from 'react-hot-toast';
 
 import {
   Search,
@@ -43,9 +43,11 @@ import { masterfileColumns } from '../../reports/pages/MasterfileReport';
 import { createCollectionSchema, mapZodErrors } from '../validation';
 import {
   fetchPaidMonths,
+  fetchSubscriptionMonthBalances,
   getScopedContracts,
   paySelectedMonths,
   type ScopedContract,
+  type SubscriptionMonthBalance,
 } from '../api/targetService';
 
 // These sales aggregates belong to the masterfile report. Target rows are
@@ -147,6 +149,8 @@ const paymentMethods = [
   },
 ];
 
+const today = () => new Date().toISOString().split('T')[0];
+
 function money(value: any) {
   return `${Number(value || 0).toLocaleString('ar-EG')} ج.م`;
 }
@@ -191,10 +195,9 @@ export default function SubscriptionCollectionPage() {
   const [selectedMonths, setSelectedMonths] = React.useState<string[]>([]);
 
   const [monthAmounts, setMonthAmounts] = React.useState<any>({});
+  const [monthBalances, setMonthBalances] = React.useState<Record<string, SubscriptionMonthBalance>>({});
 
-  const [collectionDate, setCollectionDate] = React.useState(
-    new Date().toISOString().split('T')[0],
-  );
+  const [collectionDate, setCollectionDate] = React.useState(today());
 
   const [receiptNumber, setReceiptNumber] = React.useState('');
 
@@ -217,6 +220,25 @@ export default function SubscriptionCollectionPage() {
   const [paidMonthsLoadError, setPaidMonthsLoadError] = React.useState('');
 
   const monthOptions = React.useMemo(() => generateMonthOptions(), []);
+
+  const availableMonthOptions = React.useMemo(() => {
+    const byMonth = new Map(monthOptions.map((month) => [month.value, month]));
+
+    Object.keys(monthBalances).forEach((value) => {
+      if (byMonth.has(value)) return;
+      const [year, month] = value.split('-').map(Number);
+      const date = new Date(year, month - 1, 1);
+      byMonth.set(value, {
+        id: value,
+        value,
+        year,
+        month,
+        label: `${date.toLocaleDateString('ar-EG', { month: 'long' })} ${year}`,
+      });
+    });
+
+    return [...byMonth.values()].sort((left, right) => left.value.localeCompare(right.value));
+  }, [monthOptions, monthBalances]);
 
   const paymentMethodCode = paymentMethods.find((method) => method.id === paymentMethodId)?.value || '';
 
@@ -299,8 +321,9 @@ export default function SubscriptionCollectionPage() {
     }
 
     setMonthAmounts(defaultAmounts);
-    setCollectionDate(new Date().toISOString().split('T')[0]);
-    setReceiptNumber(`RCPT-${Date.now().toString().slice(-7)}`);
+    setMonthBalances({});
+    setCollectionDate(today());
+    setReceiptNumber(String(Date.now()));
     setPaymentMethodId('1');
     setPaymentDetails({ bankName: '', chequeNumber: '', chequeDueDate: '', referenceNumber: '', transactionDate: '' });
     setNotes('');
@@ -309,11 +332,21 @@ export default function SubscriptionCollectionPage() {
     setIsPaidMonthsLoading(true);
 
     try {
-      const paidMonths = await fetchPaidMonths(customer.id);
+      const [paidMonths, balances] = await Promise.all([
+        fetchPaidMonths(customer.id),
+        fetchSubscriptionMonthBalances(customer.id),
+      ]);
+      const balanceMap = Object.fromEntries(balances.map((balance) => [balance.month, balance]));
+      const amountsFromBalance = balances.reduce((amounts: Record<string, number>, balance) => {
+        amounts[balance.month] = balance.outstandingAmount;
+        return amounts;
+      }, {});
 
       setSelectedCustomer((current: any) =>
         current?.id === customer.id ? { ...current, paidMonths } : current,
       );
+      setMonthBalances(balanceMap);
+      setMonthAmounts((current: Record<string, number>) => ({ ...current, ...amountsFromBalance }));
     } catch (error) {
       console.error('Failed to load paid months:', error);
       setPaidMonthsLoadError('تعذر تحميل الشهور المسددة. يمكنك إعادة فتح العقد للمحاولة مرة أخرى.');
@@ -327,8 +360,12 @@ export default function SubscriptionCollectionPage() {
       return false;
     }
 
-    return (selectedCustomer.paidMonths || []).includes(monthValue);
+    return monthBalances[monthValue]?.fullyPaid || (selectedCustomer.paidMonths || []).includes(monthValue);
   };
+
+  const monthMaximum = (monthValue: string) => Number(
+    monthBalances[monthValue]?.outstandingAmount ?? selectedCustomer?.monthlyAmount ?? 0,
+  );
 
   const toggleMonth = (monthValue: string) => {
     if (isPaidMonthsLoading || isMonthPaid(monthValue)) {
@@ -396,7 +433,10 @@ export default function SubscriptionCollectionPage() {
     const schema = createCollectionSchema({
       monthlyAmount: Number(selectedCustomer.monthlyAmount),
       paidMonths: selectedCustomer.paidMonths || [],
-      allowedMonths: monthOptions.map((month: any) => month.value),
+      allowedMonths: availableMonthOptions.map((month: any) => month.value),
+      monthMaximums: Object.fromEntries(
+        availableMonthOptions.map((month: any) => [month.value, monthMaximum(month.value)]),
+      ),
     });
 
     const result = schema.safeParse(payload);
@@ -407,66 +447,22 @@ export default function SubscriptionCollectionPage() {
     }
 
     setValidationErrors({ monthAmounts: {} });
-
-    // Radix Dialog disables pointer events outside its content. Close it before
-    // mounting SweetAlert, which renders in document.body.
-    setCollectionOpen(false);
-    await new Promise<void>((resolve) => {
-      window.requestAnimationFrame(() => window.requestAnimationFrame(resolve));
-    });
-
-    const confirmation = await Swal.fire({
-      icon: 'question',
-      title: 'تأكيد عملية التحصيل',
-      text: `سيتم تسجيل تحصيل بقيمة ${money(result.data.amount)}. هل تريد المتابعة؟`,
-      showCancelButton: true,
-      confirmButtonText: 'تأكيد التحصيل',
-      cancelButtonText: 'إلغاء',
-      reverseButtons: true,
-    });
-
-    if (!confirmation.isConfirmed) {
-      setCollectionOpen(true);
-      return;
-    }
-
     setIsCollectionSubmitting(true);
-    void Swal.fire({
-      title: 'جارٍ تسجيل التحصيل...',
-      text: 'يرجى الانتظار حتى يتم حفظ العملية.',
-      allowOutsideClick: false,
-      allowEscapeKey: false,
-      didOpen: () => Swal.showLoading(),
-    });
+    const toastId = toast.loading('جارٍ تسجيل التحصيل...');
 
     try {
       const response = await paySelectedMonths(result.data);
 
-      Swal.close();
-      await Swal.fire({
-        icon: 'success',
-        title: 'تم تسجيل التحصيل بنجاح',
-        text: response?.message || 'تم حفظ عملية تحصيل الاشتراكات الشهرية.',
-        confirmButtonText: 'حسناً',
-      });
+      toast.success(response?.message || 'تم حفظ عملية تحصيل الاشتراكات الشهرية.', { id: toastId });
 
       setCollectionOpen(false);
       void loadScopedContracts();
     } catch (error) {
-      Swal.close();
-
       const message = axios.isAxiosError(error)
         ? error.response?.data?.message || error.response?.data?.error?.message
         : undefined;
 
-      await Swal.fire({
-        icon: 'error',
-        title: 'تعذر تسجيل التحصيل',
-        text: message || 'حدث خطأ أثناء حفظ عملية التحصيل. حاول مرة أخرى.',
-        confirmButtonText: 'حسناً',
-      });
-
-      setCollectionOpen(true);
+      toast.error(message || 'تعذر تسجيل التحصيل. حاول مرة أخرى.', { id: toastId });
     } finally {
       setIsCollectionSubmitting(false);
     }
@@ -658,7 +654,7 @@ export default function SubscriptionCollectionPage() {
       </div>
 
       {/* Collection Dialog */}
-      <Dialog open={collectionOpen} onOpenChange={setCollectionOpen}>
+      <Dialog open={collectionOpen} onOpenChange={(open) => { if (!isCollectionSubmitting) setCollectionOpen(open); }}>
         <DialogContent dir="rtl" className="max-h-[92vh] overflow-y-auto sm:max-w-5xl">
           <DialogHeader className="border-b pb-4">
             <DialogTitle className="flex items-center gap-2 text-xl">
@@ -733,7 +729,7 @@ export default function SubscriptionCollectionPage() {
                       <Input
                         value={receiptNumber}
                         onChange={(e) => {
-                          setReceiptNumber(e.target.value);
+                          setReceiptNumber(e.target.value.replace(/\D/g, ''));
                           clearValidationError('receiptNumber');
                         }}
                         className={`h-11 pr-10 ${
@@ -757,6 +753,10 @@ export default function SubscriptionCollectionPage() {
                       value={paymentMethodId}
                       onValueChange={(value) => {
                         setPaymentMethodId(value);
+                        const nextPaymentMethodCode = paymentMethods.find((method) => method.id === value)?.value;
+                        if (nextPaymentMethodCode === 'INSTAPAY') {
+                          setPaymentDetails((current) => ({ ...current, transactionDate: today() }));
+                        }
                         clearValidationError('paymentMethodId');
                       }}
                     >
@@ -841,7 +841,8 @@ export default function SubscriptionCollectionPage() {
                             setPaymentDetails((current) => ({ ...current, transactionDate: event.target.value }));
                             clearValidationError('paymentDetails');
                           }}
-                          className="h-11"
+                          disabled={paymentMethodCode === 'INSTAPAY'}
+                          className={`h-11 ${paymentMethodCode === 'INSTAPAY' ? 'cursor-not-allowed bg-muted/50' : ''}`}
                         />
                       </div>
                       <FieldError message={validationErrors.paymentDetails} />
@@ -893,11 +894,14 @@ export default function SubscriptionCollectionPage() {
                 <FieldError message={validationErrors.selectedMonths} className="mt-3" />
 
                 <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {monthOptions.map((month: any) => {
+                  {availableMonthOptions.map((month: any) => {
                     const selected = selectedMonths.includes(month.value);
 
                     const paid = isMonthPaid(month.value);
                     const disabled = paid || isPaidMonthsLoading;
+
+                    const maximum = monthMaximum(month.value);
+                    const balance = monthBalances[month.value];
 
                     const monthAmount = monthAmounts[month.value] ?? '';
 
@@ -930,7 +934,9 @@ export default function SubscriptionCollectionPage() {
                               <p className="font-semibold">{month.label}</p>
 
                               <p className="mt-1 text-xs text-muted-foreground">
-                                الاشتراك الكامل: {money(selectedCustomer.monthlyAmount)}
+                                {balance
+                                  ? `المتبقي بالفاتورة: ${money(maximum)}`
+                                  : `الاشتراك الكامل: ${money(selectedCustomer.monthlyAmount)}`}
                               </p>
                             </div>
                           </div>
@@ -953,7 +959,7 @@ export default function SubscriptionCollectionPage() {
                             <Input
                               type="number"
                               min={0}
-                              max={selectedCustomer.monthlyAmount}
+                              max={maximum}
                               step="0.01"
                               value={monthAmount}
                               disabled={disabled || !selected}
@@ -1013,7 +1019,7 @@ export default function SubscriptionCollectionPage() {
 
                 {selectedMonths.some(
                   (monthValue: string) =>
-                    Number(monthAmounts[monthValue]) < Number(selectedCustomer.monthlyAmount),
+                    Number(monthAmounts[monthValue]) < monthMaximum(monthValue),
                 ) && (
                   <div className="mt-4 flex items-start gap-2 rounded-xl bg-yellow-500/10 px-4 py-3 text-sm text-yellow-700">
                     <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />

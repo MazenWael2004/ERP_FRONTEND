@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import Swal from 'sweetalert2';
-import { Check, Pencil, Plus, Power, Search, UserRound, X } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { Check, ChevronsUpDown, Eye, EyeOff, Pencil, Plus, Power, Search, UserRound, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from 'src/components/ui/badge';
 import { Button } from 'src/components/ui/button';
@@ -15,6 +16,15 @@ import {
 } from 'src/components/ui/dialog';
 import { Input } from 'src/components/ui/input';
 import { Label } from 'src/components/ui/label';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from 'src/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from 'src/components/ui/popover';
 import {
   Select,
   SelectContent,
@@ -32,7 +42,7 @@ import {
 } from 'src/components/ui/table';
 import { useAuth } from 'src/features/auth/hooks/useAuth';
 import { fetchRolesWithoutAuth } from 'src/features/roles/api/roleService';
-import { createUser, fetchUsers, setUserStatus, updateUser } from '../api/userService';
+import { createUser, fetchUserList, fetchUsers, setUserStatus, updateUser } from '../api/userService';
 
 type Role = { id: number; name_en: string; name_ar: string; code?: string };
 type User = {
@@ -41,6 +51,10 @@ type User = {
   name_en: string;
   name_ar: string;
   is_enabled: boolean;
+  manager_user_id?: number | null;
+  manager_username?: string | null;
+  manager_name_en?: string | null;
+  manager_name_ar?: string | null;
   roles: Role[];
 };
 
@@ -49,6 +63,7 @@ type UserFormValues = {
   nameEn: string;
   nameAr: string;
   roles: number[];
+  managerUserId: string;
   password: string;
   confirmPassword: string;
 };
@@ -58,9 +73,12 @@ const emptyValues: UserFormValues = {
   nameEn: '',
   nameAr: '',
   roles: [],
+  managerUserId: '',
   password: '',
   confirmPassword: '',
 };
+
+const pageSizeOptions = [10, 25, 50];
 
 const isValidPassword = (value: string) => /^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(value);
 
@@ -72,15 +90,20 @@ export default function UserManagementPage() {
   const canEdit = hasPermission('/users', 'WRITE');
 
   const [users, setUsers] = useState<User[]>([]);
+  const [managerUsers, setManagerUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
   const [roleId, setRoleId] = useState('all');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [managerPickerOpen, setManagerPickerOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [changePassword, setChangePassword] = useState(false);
+  const [showPasswords, setShowPasswords] = useState(false);
 
   const {
     register,
@@ -93,6 +116,7 @@ export default function UserManagementPage() {
     defaultValues: emptyValues,
   });
   const selectedRoleIds = watch('roles') || [];
+  const selectedManagerUserId = watch('managerUserId') || '';
 
   const loadUsers = async () => {
     try {
@@ -103,13 +127,10 @@ export default function UserManagementPage() {
         roleId: roleId === 'all' ? undefined : Number(roleId),
       });
       setUsers(response.data || []);
+      setPage(1);
     } catch (error) {
       console.error(error);
-      await Swal.fire({
-        icon: 'error',
-        title: 'تعذر تحميل المستخدمين',
-        text: 'تحقق من الاتصال ثم أعد المحاولة.',
-      });
+      toast.error('تعذر تحميل المستخدمين. تحقق من الاتصال ثم أعد المحاولة.');
     } finally {
       setIsLoading(false);
     }
@@ -123,6 +144,19 @@ export default function UserManagementPage() {
     const timer = window.setTimeout(() => void loadUsers(), 300);
     return () => window.clearTimeout(timer);
   }, [search]);
+
+  const loadManagerUsers = async () => {
+    try {
+      const response = await fetchUserList();
+      setManagerUsers(response.data || []);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  useEffect(() => {
+    void loadManagerUsers();
+  }, []);
 
   useEffect(() => {
     const loadRoles = async () => {
@@ -142,6 +176,7 @@ export default function UserManagementPage() {
   const openCreate = () => {
     setEditingUser(null);
     setChangePassword(true);
+    setShowPasswords(false);
     reset(emptyValues);
     setDialogOpen(true);
   };
@@ -149,11 +184,13 @@ export default function UserManagementPage() {
   const openEdit = (account: User) => {
     setEditingUser(account);
     setChangePassword(false);
+    setShowPasswords(false);
     reset({
       userName: account.username,
       nameEn: account.name_en || '',
       nameAr: account.name_ar || '',
       roles: (account.roles || []).map((role) => Number(role.id)),
+      managerUserId: account.manager_user_id ? String(account.manager_user_id) : '',
       password: '',
       confirmPassword: '',
     });
@@ -178,6 +215,7 @@ export default function UserManagementPage() {
       nameEn: values.nameEn.trim(),
       nameAr: values.nameAr.trim(),
       roles: values.roles.map(Number),
+      managerUserId: values.managerUserId ? Number(values.managerUserId) : null,
     };
 
     if (
@@ -186,23 +224,15 @@ export default function UserManagementPage() {
       !normalized.nameAr ||
       !normalized.roles.length
     ) {
-      await Swal.fire({
-        icon: 'warning',
-        title: 'بيانات ناقصة',
-        text: 'أدخل اسم المستخدم والاسمين والدور واحدًا على الأقل.',
-      });
+      toast.error('بيانات ناقصة: أدخل اسم المستخدم والاسمين والدور واحدًا على الأقل.');
       return;
     }
     if (passwordRequired && !isValidPassword(values.password)) {
-      await Swal.fire({
-        icon: 'warning',
-        title: 'كلمة المرور غير صالحة',
-        text: 'يجب أن تتكون من 8 أحرف على الأقل وتحتوي حرفًا ورقمًا.',
-      });
+      toast.error('كلمة المرور غير صالحة: يجب أن تتكون من 8 أحرف على الأقل وتحتوي حرفًا ورقمًا.');
       return;
     }
     if (passwordRequired && values.password !== values.confirmPassword) {
-      await Swal.fire({ icon: 'warning', title: 'كلمتا المرور غير متطابقتين' });
+      toast.error('كلمتا المرور غير متطابقتين.');
       return;
     }
 
@@ -215,18 +245,12 @@ export default function UserManagementPage() {
         await createUser(payload);
       }
       setDialogOpen(false);
-      await Swal.fire({
-        icon: 'success',
-        title: editingUser ? 'تم تحديث المستخدم' : 'تم إنشاء المستخدم',
-      });
+      toast.success(editingUser ? 'تم تحديث المستخدم.' : 'تم إنشاء المستخدم.');
       await loadUsers();
+      await loadManagerUsers();
     } catch (error: any) {
       const message = error?.response?.data?.error?.message || error?.response?.data?.message;
-      await Swal.fire({
-        icon: 'error',
-        title: 'تعذر حفظ المستخدم',
-        text: message || 'حاول مرة أخرى.',
-      });
+      toast.error(`تعذر حفظ المستخدم: ${message || 'حاول مرة أخرى.'}`);
     } finally {
       setIsSaving(false);
     }
@@ -235,7 +259,7 @@ export default function UserManagementPage() {
   const changeStatus = async (account: User) => {
     const enable = !account.is_enabled;
     const confirmation = await Swal.fire({
-      icon: 'warning',
+      icon: 'question',
       title: enable ? 'تفعيل المستخدم؟' : 'تعطيل المستخدم؟',
       text: enable
         ? 'سيتمكن المستخدم من تسجيل الدخول فورًا.'
@@ -250,15 +274,13 @@ export default function UserManagementPage() {
     try {
       await setUserStatus(account.id, enable);
       await loadUsers();
+      toast.success(enable ? 'تم تفعيل المستخدم.' : 'تم تعطيل المستخدم.');
     } catch (error: any) {
-      await Swal.fire({
-        icon: 'error',
-        title: 'تعذر تغيير حالة المستخدم',
-        text:
-          error?.response?.data?.error?.message ||
-          error?.response?.data?.message ||
-          'حاول مرة أخرى.',
-      });
+      const message =
+        error?.response?.data?.error?.message ||
+        error?.response?.data?.message ||
+        'حاول مرة أخرى.';
+      toast.error(`تعذر تغيير حالة المستخدم: ${message}`);
     }
   };
 
@@ -270,6 +292,25 @@ export default function UserManagementPage() {
       })),
     [roles, isArabic],
   );
+  const managerOptions = useMemo(
+    () => managerUsers
+      .filter((account) => account.is_enabled && account.id !== editingUser?.id)
+      .sort((first, second) =>
+        (isArabic ? first.name_ar : first.name_en).localeCompare(isArabic ? second.name_ar : second.name_en),
+      ),
+    [editingUser?.id, isArabic, managerUsers],
+  );
+  const selectedManager = managerUsers.find(
+    (account) => String(account.id) === String(selectedManagerUserId),
+  );
+  const totalPages = Math.max(1, Math.ceil(users.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedUsers = useMemo(
+    () => users.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [currentPage, pageSize, users],
+  );
+  const firstVisibleUser = users.length ? (currentPage - 1) * pageSize + 1 : 0;
+  const lastVisibleUser = Math.min(currentPage * pageSize, users.length);
 
   return (
     <div dir={isArabic ? 'rtl' : 'ltr'} className="space-y-6 p-4 md:p-6">
@@ -347,7 +388,9 @@ export default function UserManagementPage() {
               <TableRow>
                 <TableHead>اسم المستخدم</TableHead>
                 <TableHead>الاسم</TableHead>
+                <TableHead>المدير المباشر</TableHead>
                 <TableHead>الأدوار</TableHead>
+
                 <TableHead>الحالة</TableHead>
                 {canEdit && <TableHead className="text-end">الإجراءات</TableHead>}
               </TableRow>
@@ -356,7 +399,7 @@ export default function UserManagementPage() {
               {isLoading ? (
                 <TableRow>
                   <TableCell
-                    colSpan={canEdit ? 5 : 4}
+                    colSpan={canEdit ? 6 : 5}
                     className="py-12 text-center text-muted-foreground"
                   >
                     جارٍ تحميل المستخدمين...
@@ -365,14 +408,14 @@ export default function UserManagementPage() {
               ) : users.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={canEdit ? 5 : 4}
+                    colSpan={canEdit ? 6 : 5}
                     className="py-12 text-center text-muted-foreground"
                   >
                     لا توجد نتائج.
                   </TableCell>
                 </TableRow>
               ) : (
-                users.map((account) => (
+                paginatedUsers.map((account) => (
                   <TableRow key={account.id} className="hover:bg-muted/40">
                     <TableCell className="font-medium" dir="ltr">
                       {account.username}
@@ -382,6 +425,16 @@ export default function UserManagementPage() {
                       <div className="mt-1 text-xs text-muted-foreground">
                         {isArabic ? account.name_en : account.name_ar}
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      {account.manager_user_id ? (
+                        <>
+                          <span>{isArabic ? account.manager_name_ar : account.manager_name_en}</span>
+                          <div className="mt-1 text-xs text-muted-foreground" dir="ltr">
+                            #{account.manager_user_id} · {account.manager_username}
+                          </div>
+                        </>
+                      ) : '—'}
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
@@ -439,6 +492,52 @@ export default function UserManagementPage() {
             </TableBody>
           </Table>
         </div>
+        {!isLoading && users.length > 0 && (
+          <div className="flex flex-col gap-3 border-t bg-muted/20 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+            <span className="text-muted-foreground">
+              عرض {firstVisibleUser.toLocaleString('ar-EG')}–{lastVisibleUser.toLocaleString('ar-EG')} من{' '}
+              {users.length.toLocaleString('ar-EG')} مستخدم
+            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-muted-foreground">عدد الصفوف:</span>
+              <Select
+                value={String(pageSize)}
+                onValueChange={(value) => {
+                  setPageSize(Number(value));
+                  setPage(1);
+                }}
+              >
+                <SelectTrigger className="h-8 w-20">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {pageSizeOptions.map((option) => (
+                    <SelectItem key={option} value={String(option)}>{option}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                disabled={currentPage <= 1}
+              >
+                السابق
+              </Button>
+              <span className="min-w-24 text-center text-xs text-muted-foreground">
+                صفحة {currentPage.toLocaleString('ar-EG')} من {totalPages.toLocaleString('ar-EG')}
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                disabled={currentPage >= totalPages}
+              >
+                التالي
+              </Button>
+            </div>
+          </div>
+        )}
       </section>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -481,6 +580,63 @@ export default function UserManagementPage() {
                 <p className="mt-1 text-xs text-destructive">الاسم بالعربية مطلوب.</p>
               )}
             </div>
+            <div className="md:col-span-2">
+              <Label>المدير المباشر (رقم المستخدم)</Label>
+              <Popover open={managerPickerOpen} onOpenChange={setManagerPickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={managerPickerOpen}
+                    className="mt-2 w-full justify-between font-normal"
+                  >
+                    <span className="truncate">
+                      {selectedManager
+                        ? `#${selectedManager.id} — ${isArabic ? selectedManager.name_ar : selectedManager.name_en} (${selectedManager.username})`
+                        : 'بدون مدير مباشر'}
+                    </span>
+                    <ChevronsUpDown className="ms-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="ابحث بالرقم أو الاسم أو اسم المستخدم..." />
+                    <CommandList>
+                      <CommandEmpty>لا يوجد مستخدم مطابق.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="بدون مدير مباشر"
+                          onSelect={() => {
+                            setValue('managerUserId', '', { shouldDirty: true });
+                            setManagerPickerOpen(false);
+                          }}
+                        >
+                          <Check className={`ms-2 h-4 w-4 ${selectedManagerUserId ? 'opacity-0' : 'opacity-100'}`} />
+                          بدون مدير مباشر
+                        </CommandItem>
+                        {managerOptions.map((account) => (
+                          <CommandItem
+                            key={account.id}
+                            value={`${account.id} ${account.username} ${account.name_ar} ${account.name_en}`}
+                            onSelect={() => {
+                              setValue('managerUserId', String(account.id), { shouldDirty: true });
+                              setManagerPickerOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={`ms-2 h-4 w-4 ${String(account.id) === String(selectedManagerUserId) ? 'opacity-100' : 'opacity-0'}`}
+                            />
+                            #{account.id} — {isArabic ? account.name_ar : account.name_en} ({account.username})
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              <p className="mt-1 text-xs text-muted-foreground">اختياري. يحدد خط التقارير للمستخدم.</p>
+            </div>
             {editingUser && (
               <div className="md:col-span-2 flex items-center gap-2 rounded-xl border bg-muted/30 p-3">
                 <Checkbox
@@ -497,19 +653,32 @@ export default function UserManagementPage() {
               <>
                 <div>
                   <Label htmlFor="password">كلمة المرور</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    dir="ltr"
-                    className="mt-2"
-                    {...register('password')}
-                  />
+                  <div className="relative mt-2">
+                    <Input
+                      id="password"
+                      type={showPasswords ? 'text' : 'password'}
+                      dir="ltr"
+                      className="pr-10"
+                      {...register('password')}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2"
+                      onClick={() => setShowPasswords((current) => !current)}
+                      aria-label={showPasswords ? 'إخفاء كلمات المرور' : 'إظهار كلمات المرور'}
+                      title={showPasswords ? 'إخفاء كلمات المرور' : 'إظهار كلمات المرور'}
+                    >
+                      {showPasswords ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
                 </div>
                 <div>
                   <Label htmlFor="confirmPassword">تأكيد كلمة المرور</Label>
                   <Input
                     id="confirmPassword"
-                    type="password"
+                    type={showPasswords ? 'text' : 'password'}
                     dir="ltr"
                     className="mt-2"
                     {...register('confirmPassword')}

@@ -41,10 +41,21 @@ const number = (input: unknown) =>
   Number(input || 0).toLocaleString('ar-EG', { maximumFractionDigits: 2 });
 const currency = (input: unknown) => `${number(input)} جنيه`;
 
+const labels: any = {
+  UNDER_CHECKING: 'تحت المراجعة',
+  PENDING: 'بانتظار قرار مدير العمليات',
+  UNDER_INSTALLATION: 'تحت التركيب',
+  INSTALLED: 'تم التركيب - بانتظار التأكيد',
+  ACTIVATED: 'مفعل',
+  REJECTED_PENDING_REFUND: 'مرفوض - بانتظار رد المبالغ',
+  REJECTED: 'مرفوض',
+};
+
 type MasterfileColumn = { key: string; header: string; value: (row: any) => string };
 const columns: MasterfileColumn[] = [
   { key: 'contractId', header: 'كود العميل', value: (row) => value(row.contract_id) },
   { key: 'contractDate', header: 'تاريخ العقد', value: (row) => date(row.contract_date) },
+  
    {
     key: 'createdBy',
     header: 'مسئول البيع',
@@ -62,21 +73,16 @@ const columns: MasterfileColumn[] = [
   },
   { key: 'customerAr', header: 'اسم العميل ', value: (row) => value(row.customer_name_ar) },
   {
-    key: 'parentCustomer',
-    header: 'العميل / الصيدلية الرئيسية',
-    value: (row) => bilingual(row.parent_customer_name_ar, row.parent_customer_name_en),
-  },
-  {
     key: 'customerType',
     header: 'نوع العميل',
     value: (row) => bilingual(row.customer_type_name_ar, row.customer_type_name_en),
   },
   { key: 'structure', header: 'الهيكل', value: (row) => value(row.customer_structure) },
-  { key: 'phone', header: 'هاتف العميل', value: (row) => value(row.customer_phone) },
-  { key: 'contactAr', header: 'اسم جهة الاتصال بالعربية', value: (row) => value(row.contact_name_ar) },
-  { key: 'contactType', header: 'صفة جهة الاتصال', value: (row) => contactType(row.contact_type) },
-  { key: 'contactNationalId', header: 'الرقم القومي لجهة الاتصال', value: (row) => value(row.contact_national_id) },
-  { key: 'contactEmail', header: 'بريد جهة الاتصال', value: (row) => value(row.contact_email) },
+  { key: 'phone', header: 'هاتف المتعاقد', value: (row) => value(row.customer_phone) },
+  { key: 'contactAr', header: 'اسم المتعاقد', value: (row) => value(row.contact_name_ar) },
+  { key: 'contactType', header: 'صفة المتعاقد', value: (row) => contactType(row.contact_type) },
+  { key: 'contactNationalId', header: 'رقم القومي المتعاقد', value: (row) => value(row.contact_national_id) },
+  { key: 'contactEmail', header: 'بريد المتعاقد', value: (row) => value(row.contact_email) },
   {
     key: 'taxRegistrationType',
     header: 'نوع التسجيل الضريبي',
@@ -116,7 +122,7 @@ const columns: MasterfileColumn[] = [
   },
   {
     key: 'nextDue',
-    header: 'الاستحقاق القادم',
+    header: 'تاريخ الاستحقاق القادم',
     value: (row) => date(row.next_subscription_due_date),
   },
   {
@@ -124,7 +130,11 @@ const columns: MasterfileColumn[] = [
     header: 'البرنامج',
     value: (row) => bilingual(row.program_name_ar, row.program_name_en),
   },
-  { key: 'plan', header: 'الخطة', value: (row) => bilingual(row.plan_name_ar, row.plan_name_en) },
+  {
+    key: 'subscriptionPrice',
+    header: 'سعر الاشتراك الشهري',
+    value: (row) => currency(row.subscription_price),
+  },
   {
     key: 'additionalServicesQuantity',
     header: 'كمية الخدمات الإضافية المباعة',
@@ -156,13 +166,7 @@ const columns: MasterfileColumn[] = [
     value: (row) => currency(row.replication_service_total),
   },
   { key: 'implementedAt', header: 'تاريخ التركيب الفعلي', value: (row) => date(row.implemented_at) },
-  { key: 'implementedBy', header: 'تم التركيب بواسطة', value: (row) => person(row, 'implemented_by') },
-  { key: 'activationCode', header: 'كود التفعيل', value: (row) => value(row.activation_code) },
-   {
-    key: 'workflow',
-    header: 'حالة العقد',
-    value: (row) => workflowLabels[row.workflow_status] || value(row.workflow_status),
-  },
+  { key: 'workflowStatus', header: 'حالة العقد', value: (row) => labels[row.workflow_status] },
 ];
 
 export const masterfileColumns = columns;
@@ -315,7 +319,7 @@ export default function MasterfileReport() {
             />
           </label>
           <label className="grid gap-1 text-sm">
-            <span>حالة سير العمل</span>
+            <span>حالة العقد</span>
             <SearchableSelect
               value={filters.workflowStatus}
               onValueChange={(workflowStatus: string) => setFilters({ ...filters, workflowStatus })}

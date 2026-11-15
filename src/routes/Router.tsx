@@ -8,6 +8,12 @@ import AddNewContract from 'src/features/crm/contracts/pages/AddContract';
 import { element } from 'prop-types';
 import ViewUsers from '../features/users/pages/UserManagementPage';
 import AddNewCollection from 'src/features/crm/collections/pages/AddCollection';
+import CollectionRemittancesPage from
+  '../features/crm/contracts/pages/CollectionRemittancesPage';
+import CollectionTransfersPage from 'src/features/crm/collection-transfers/pages/CollectionTransfersPage';
+import CollectionTransferSettlementsPage from 'src/features/crm/collection-transfers/pages/CollectionTransferSettlementsPage';
+import FinancialHistoryPage from 'src/features/crm/financial-history/pages/FinancialHistoryPage';
+import ContractRefundsPage from 'src/features/crm/contract-refunds/pages/ContractRefundsPage';
 import NewContact from '../features/contacts/pages/AddContact';
 import ViewZones from '../features/zones/pages/ViewZones';
 import RoleManagementPage from 'src/features/roles/pages/RoleManagementPage';
@@ -30,9 +36,12 @@ import ViewUncollectedTargets from 'src/features/crm/collections/pages/ViewUncol
 import OutstandingReport from 'src/features/crm/collections/pages/OutstandingRecivablesReport';
 
 import OperationalReports from 'src/features/crm/reports/pages/OperationalReports';
+import SubscriptionDuesReport from 'src/features/crm/reports/pages/SubscriptionDuesReport';
 import ActionHistoryReport from 'src/features/crm/reports/pages/ActionHistoryReport';
 import RejectedContractsReport from 'src/features/crm/reports/pages/RejectedContractsReport';
 import MasterfileReport from 'src/features/crm/reports/pages/MasterfileReport';
+import CustomerAccountStatement from 'src/features/crm/reports/pages/CustomerAccountStatement';
+import SubscriptionStatement from 'src/features/crm/reports/pages/SubscriptionStatement';
 import ContractContactsReport from 'src/features/crm/reports/pages/ContractContactsReport';
 import TicketingPage from 'src/features/crm/tickets/pages/TicketingPage';
 import AddTargetPlan from 'src/features/crm/targets/pages/AddTargetPlan';
@@ -41,12 +50,14 @@ import ToDoList from 'src/features/crm/tasks/pages/ToDoList';
 import TaskDetails from 'src/features/crm/tasks/pages/TaskDetails';
 import InstallationAssignment from 'src/features/crm/tasks/pages/AssignInstallation';
 import ManagerOfAll from 'src/features/crm/management/pages/ManagerOfAll';
-import CollectAdditionalUnits from 'src/features/crm/collections/pages/CollectAdditionalUnits';
+import CollectAdditionalServices from 'src/features/crm/collections/pages/CollectAdditionalServices';
+import CollectJoiningFees from 'src/features/crm/collections/pages/CollectJoiningFees';
 import SubscriptionCollectionPage from 'src/features/crm/targets/pages/Targets';
 import UserZoneAssignments from 'src/features/administration/user-zones/pages/UserZoneAssignments';
 import BankManagementPage from 'src/features/administration/banks/pages/BankManagementPage';
 import ContractFollowUp from 'src/features/crm/contracts/pages/ContractFollowUp';
 import ContractTypesManagementPage from 'src/features/contract-types/pages/ContractTypesManagementPage';
+import TopManagementDashboard from 'src/features/crm/dashboard/pages/TopManagementDashboard';
 /* ***Layouts**** */
 const FullLayout = Loadable(lazy(() => import('../layouts/full/FullLayout')));
 const BlankLayout = Loadable(lazy(() => import('../layouts/blank/BlankLayout')));
@@ -95,6 +106,14 @@ const Router = [
     ),
     children: [
       { index: true, element: <Modern /> },
+      {
+        path: '/dashboard',
+        element: (
+          <ProtectedRoute route="/dashboard" action_code="READ">
+            <TopManagementDashboard />
+          </ProtectedRoute>
+        ),
+      },
 
       { path: 'apps/notes', element: <Notes /> },
       { path: 'utilities/form', element: <Form /> },
@@ -169,6 +188,39 @@ const Router = [
           </ProtectedRoute>
         ),
       },
+      // {
+      //   path:'collection-remittances',
+      //   element: (
+         
+      //       <CollectionRemittancesPage />
+     
+      //   ),
+      // },
+      {
+        path:'collection-transfers',
+        element: (
+          <ProtectedRoute route="/collection-transfers" action_code="READ">
+            <CollectionTransfersPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path:'collection-transfer-settlements',
+        element: (
+          <ProtectedRoute route="/collection-transfer-settlements" action_code="READ">
+            <CollectionTransferSettlementsPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path:'contract-refunds',
+        element: (
+          <ProtectedRoute route="/contract-refunds" action_code="READ">
+            <ContractRefundsPage />
+          </ProtectedRoute>
+        ),
+      },
+      { path: 'financial-history', element: <FinancialHistoryPage /> },
       {
         path: 'roles',
         element: (
@@ -248,7 +300,15 @@ const Router = [
         path: '/collect-additional-services',
         element: (
           <ProtectedRoute route="/collect-additional-services" action_code="READ">
-            <CollectAdditionalUnits />
+            <CollectAdditionalServices />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: '/collect-joining-fees',
+        element: (
+          <ProtectedRoute route="/collect-joining-fees" action_code="READ">
+            <CollectJoiningFees />
           </ProtectedRoute>
         ),
       },
@@ -264,6 +324,23 @@ const Router = [
       {
         path: '/operational-reports',
         element: <OperationalReports />,
+      },
+      {
+        path: '/customer-account-statement',
+        element: (
+          <ProtectedRoute route="/customer-account-statement" action_code="READ">
+            <CustomerAccountStatement />
+          </ProtectedRoute>
+        ),
+      },
+      { path: '/subscription-statement', element: <ProtectedRoute route="/operational-reports" action_code="READ"><SubscriptionStatement /></ProtectedRoute> },
+      {
+        path: '/subscription-dues-report',
+        element: (
+          <ProtectedRoute route="/subscription-dues-report" action_code="READ">
+            <SubscriptionDuesReport />
+          </ProtectedRoute>
+        ),
       },
       {
         path: '/action-history-report',

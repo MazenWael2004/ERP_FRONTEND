@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router';
 import {
   CheckCircle2,
@@ -35,6 +36,13 @@ import {
 import { Input } from 'src/components/ui/input';
 import { Label } from 'src/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from 'src/components/ui/popover';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from 'src/components/ui/select';
 import { Textarea } from 'src/components/ui/textarea';
 import { cn } from 'src/lib/utils';
 import {
@@ -57,8 +65,10 @@ const labels: any = {
   UNDER_INSTALLATION: 'تحت التركيب',
   INSTALLED: 'تم التركيب - بانتظار التأكيد',
   ACTIVATED: 'مفعل',
+  REJECTED_PENDING_REFUND: 'مرفوض - بانتظار رد المبالغ',
   REJECTED: 'مرفوض',
 };
+const pageSizeOptions = [10, 25, 50];
 const money = (value: any) =>
   new Intl.NumberFormat('ar-EG', {
     style: 'currency',
@@ -91,6 +101,14 @@ const date = (value: any) =>
   value
     ? new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Cairo' }).format(new Date(value))
     : '—';
+const time12 = (value: any) => {
+  const match = String(value || '').match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return '—';
+  const hour = Number(match[1]);
+  const minute = match[2];
+  if (hour > 23) return '—';
+  return `${String(hour % 12 || 12).padStart(2, '0')}:${minute} ${hour >= 12 ? 'PM' : 'AM'}`;
+};
 const text = (value: any) =>
   value === null || value === undefined || value === '' ? '—' : String(value);
 const contactType = (value: any) => {
@@ -108,9 +126,15 @@ const auditChanges = (metadata: unknown) => {
   }
 };
 const historyActionLabel = (item: any) =>
-  item.action_code === 'WORKFLOW_CUSTOMER_EDITED' ? 'تعديل بيانات العميل' : item.action_code;
+  item.action_code === 'WORKFLOW_CUSTOMER_EDITED'
+    ? 'تعديل بيانات العميل'
+    : item.action_code === 'PENDING_CONTRACT_BILLING_EDITED'
+      ? 'تعديل العقد والاشتراك والإضافات'
+      : item.action_code;
 const customerEditHistory = (items: any[] | undefined) =>
-  (items || []).filter((item) => item.action_code === 'WORKFLOW_CUSTOMER_EDITED');
+  (items || []).filter((item) =>
+    ['WORKFLOW_CUSTOMER_EDITED', 'PENDING_CONTRACT_BILLING_EDITED'].includes(item.action_code),
+  );
 function SearchableSelect({
   value,
   onValueChange,
@@ -175,8 +199,9 @@ function SearchableSelect({
   );
 }
 const columns: any[] = [
-  { header: 'كود العميل', value: (c: any) => text(c.id) },
-  { header: 'تاريخ العقد', value: (c: any) => date(c.contract_date) },
+  { header: 'كود العميل (رقم العقد)', value: (c: any) => text(c.id) },
+  { header: 'تاريخ إنشاء العقد', value: (c: any) => date(c.contract_date) },
+  { header: 'وقت إنشاء العقد', value: (c: any) => time12(c.created_time), cellClassName: 'whitespace-nowrap' },
   {
     header: 'مسئول البيع',
     value: (c: any) => text(c.created_by_name_ar || c.created_by_name_en || c.created_by_username),
@@ -208,20 +233,25 @@ const columns: any[] = [
   { header: 'الشارع', value: (c: any) => text(c.street) },
   { header: 'رقم المبنى', value: (c: any) => text(c.building_number) },
   { header: 'رمز GLN', value: (c: any) => text(c.gln_code) },
-  { header: 'رابط الخريطة', value: (c: any) => text(c.google_maps_url) },
-  { header: 'خط العرض', value: (c: any) => text(c.latitude) },
-  { header: 'خط الطول', value: (c: any) => text(c.longitude) },
-  { header: 'موعد التركيب المخطط', value: (c: any) => date(c.installation_date) },
+  {
+    header: 'رابط الخريطة',
+    value: (c: any) => text(c.google_maps_url),
+    cellClassName: 'min-w-[280px] max-w-[360px] whitespace-normal break-all leading-5',
+  },
+  { header: 'خط العرض', value: (c: any) => text(c.latitude), cellClassName: 'whitespace-nowrap tabular-nums' },
+  { header: 'خط الطول', value: (c: any) => text(c.longitude), cellClassName: 'whitespace-nowrap tabular-nums' },
+  { header: 'تاريخ التركيب المخطط', value: (c: any) => date(c.installation_date) },
   { header: 'تاريخ تعيين مدير الدعم الفني', value: (c: any) => date(c.technician_assigned_at) },
   { header: 'تاريخ التركيب الفعلي', value: (c: any) => date(c.actual_installation_date) },
   { header: 'تاريخ إصدار كود التفعيل', value: (c: any) => date(c.activation_code_issued_at) },
   { header: 'تاريخ التفعيل', value: (c: any) => date(c.activated_at) },
-  {
+
+  { header: 'تاريخ الاستحقاق القادم', value: (c: any) => date(c.next_subscription_due_date) },
+   {
     header: 'مسئول التركيب',
     value: (c: any) =>
       text(c.implemented_by_name_ar || c.implemented_by_name_en || c.implemented_by_username),
   },
-  { header: 'تاريخ الاستحقاق القادم', value: (c: any) => date(c.next_subscription_due_date) },
   
   { header: 'إجمالي العقد بعد الخصم', value: (c: any) => Number(c.total_after_discount) },
   { header: 'المقدم', value: (c: any) => Number(c.advance_payment) },
@@ -238,18 +268,100 @@ const columns: any[] = [
   { header: 'حالة العقد', value: (c: any) => labels[c.workflow_status] || c.workflow_status },
 ];
 
+const ContractWorkflowRow = memo(function ContractWorkflowRow({
+  contract,
+  isBusy,
+  isHistoryOpen,
+  historyItems,
+  onToggleHistory,
+  onAction,
+  onEditCustomer,
+  onEditBilling,
+  onShowAuditDetails,
+}: any) {
+  const editHistory = useMemo(() => customerEditHistory(historyItems), [historyItems]);
+
+  return (
+    <tr className="border-t align-top">
+      {columns.map((column) => (
+        <td
+          key={column.header}
+          className={cn('px-4 py-3', column.cellClassName || 'max-w-xs whitespace-nowrap')}
+        >
+          {column.value(contract)}
+        </td>
+      ))}
+      <td className="min-w-[250px] px-4 py-3">
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" onClick={() => void onToggleHistory(contract.id)}>
+            <History className="ml-2 h-4 w-4" />
+            السجل
+          </Button>
+          {contract.availableActions.includes('EDIT_CUSTOMER') && (
+            <Button size="sm" variant="outline" disabled={isBusy} onClick={() => onEditCustomer(contract)}>
+              تعديل بيانات العميل
+            </Button>
+          )}
+          {contract.availableActions.includes('EDIT_BILLING') && (
+            <Button size="sm" variant="outline" disabled={isBusy} onClick={() => onEditBilling(contract)}>
+              تعديل العقد والاشتراك والإضافات
+            </Button>
+          )}
+          {contract.availableActions
+            .filter((availableAction: string) => !['EDIT_CUSTOMER', 'EDIT_BILLING'].includes(availableAction))
+            .map((availableAction: string) => (
+              <Button key={availableAction} size="sm" disabled={isBusy} onClick={() => void onAction(contract, availableAction)}>
+                {({
+                  CHECK: 'تمت المراجعة', APPROVE: 'موافقة', ASSIGN_TECHNICIAN: 'تعيين الفني', REJECT: 'رفض',
+                  INSTALL: 'تم التدريب', ACTIVATE: 'تأكيد التفعيل', RETURN_TO_MANAGER: 'إعادة لمدير الدعم الفني',
+                } as any)[availableAction]}
+              </Button>
+            ))}
+        </div>
+        {isHistoryOpen && (
+          <div className="mt-3 min-w-[420px] rounded-xl border bg-muted/30 p-3">
+            <p className="mb-2 font-semibold">سجل التعديلات</p>
+            {editHistory.length ? editHistory.map((item: any) => {
+              const changes = auditChanges(item.metadata);
+              return (
+                <div key={item.id} className="border-t py-2 first:border-0">
+                  <div className="flex flex-wrap gap-x-2 gap-y-1">
+                    <span className="font-medium">{historyActionLabel(item)}</span>
+                    <span className="text-muted-foreground">{dateTime(item.created_at)}</span>
+                    <span>{item.performed_by_name_ar || item.performed_by_name_en || 'النظام'}</span>
+                  </div>
+                  {(item.from_status || item.to_status) && item.from_status !== item.to_status && (
+                    <p className="text-xs text-muted-foreground">
+                      من: {labels[item.from_status || ''] || item.from_status || '—'} · إلى: {labels[item.to_status || ''] || item.to_status || '—'}
+                    </p>
+                  )}
+                  {item.description && <p className="text-sm text-muted-foreground">{item.description}</p>}
+                  {changes.length > 0 && (
+                    <Button size="sm" variant="outline" className="mt-2" onClick={() => onShowAuditDetails(contract, item, changes)}>
+                      عرض تفاصيل التعديل ({changes.length})
+                    </Button>
+                  )}
+                </div>
+              );
+            }) : <p className="text-sm text-muted-foreground">لا توجد تعديلات مسجلة على العقد أو بيانات العميل.</p>}
+          </div>
+        )}
+      </td>
+    </tr>
+  );
+});
+
 export default function ContractFollowUp() {
-  const pageSize = 25;
   const navigate = useNavigate();
-  const [contracts, setContracts] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [workflowStatus, setWorkflowStatus] = useState('');
   const [zoneId, setZoneId] = useState('');
   const [salesResponsibleId, setSalesResponsibleId] = useState('');
   const [dateRange, setDateRange] = useState(currentMonthDateRange);
+  const [appliedDateRange, setAppliedDateRange] = useState(currentMonthDateRange);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [busyId, setBusyId] = useState<any>(null);
   const [openHistory, setOpenHistory] = useState<any>(null);
   const [history, setHistory] = useState<any>({});
@@ -259,21 +371,18 @@ export default function ContractFollowUp() {
   const [assignmentTechnicianId, setAssignmentTechnicianId] = useState('');
   const [assignmentNote, setAssignmentNote] = useState('');
   const [assignmentError, setAssignmentError] = useState('');
-  const load = async (requestedDateRange = dateRange) => {
-    setLoading(true);
-    setError('');
-    try {
-      setContracts(await fetchContractWorkflow(requestedDateRange));
-    } catch {
-      setError('تعذر تحميل متابعة العقود. تحقق من الاتصال ثم أعد المحاولة.');
-    } finally {
-      setLoading(false);
-    }
-  };
-  useEffect(() => {
-    void load();
-  }, []);
-  const action = async (contract: any, type: any) => {
+  const contractsQuery = useQuery({
+    queryKey: ['contract-workflow', appliedDateRange.startDate, appliedDateRange.endDate],
+    queryFn: () => fetchContractWorkflow(appliedDateRange),
+  });
+  const contracts = contractsQuery.data || [];
+  const loading = contractsQuery.isPending || contractsQuery.isFetching;
+  const error = contractsQuery.isError ? 'تعذر تحميل متابعة العقود. تحقق من الاتصال ثم أعد المحاولة.' : '';
+  const refreshContracts = useCallback(
+    () => queryClient.invalidateQueries({ queryKey: ['contract-workflow'] }),
+    [queryClient],
+  );
+  const action = useCallback(async (contract: any, type: any) => {
     if (type === 'ASSIGN_TECHNICIAN') {
       try {
         const options = await fetchHierarchyAssignmentOptions(contract.id);
@@ -316,7 +425,7 @@ export default function ContractFollowUp() {
           'العقد الآن بانتظار مدير الدعم الفني لتعيين الفني.',
           'success',
         );
-        await load();
+        await refreshContracts();
       } catch (e: any) {
         await Swal.fire('تعذر الموافقة', e?.response?.data?.message || 'حاول مرة أخرى.', 'error');
       } finally {
@@ -351,7 +460,7 @@ export default function ContractFollowUp() {
           installResult.value.note,
         );
         await Swal.fire('تم حفظ الإجراء', '', 'success');
-        await load();
+        await refreshContracts();
       } catch (e: any) {
         await Swal.fire(
           'تعذر حفظ الإجراء',
@@ -387,13 +496,13 @@ export default function ContractFollowUp() {
       if (type === 'ACTIVATE') await activateContract(contract.id, result.value);
       if (type === 'RETURN_TO_MANAGER') await returnContractToManager(contract.id, result.value);
       await Swal.fire('تم حفظ الإجراء', '', 'success');
-      await load();
+      await refreshContracts();
     } catch (e: any) {
       await Swal.fire('تعذر حفظ الإجراء', e?.response?.data?.message || 'حاول مرة أخرى.', 'error');
     } finally {
       setBusyId(null);
     }
-  };
+  }, [refreshContracts]);
   const submitAssignment = async () => {
     if (!assignmentSupervisorId) {
       setAssignmentError('اختر المشرف الفني أولاً.');
@@ -414,14 +523,14 @@ export default function ContractFollowUp() {
       );
       setAssignment(null);
       await Swal.fire('تم تعيين الفني', 'يمكن للفني المختار بدء التركيب.', 'success');
-      await load();
+      await refreshContracts();
     } catch (e: any) {
       setAssignmentError(e?.response?.data?.message || 'تعذر حفظ التعيين. حاول مرة أخرى.');
     } finally {
       setBusyId(null);
     }
   };
-  const toggleHistory = async (id: any) => {
+  const toggleHistory = useCallback(async (id: any) => {
     if (openHistory === id) {
       setOpenHistory(null);
       return;
@@ -434,7 +543,7 @@ export default function ContractFollowUp() {
     } catch {
       setHistory((current) => ({ ...current, [id]: [] }));
     }
-  };
+  }, [history, openHistory]);
   const addNote = async (contract: any) => {
     const result = await Swal.fire({
       title: 'إضافة ملاحظة للمرحلة الحالية',
@@ -465,7 +574,14 @@ export default function ContractFollowUp() {
       setBusyId(null);
     }
   };
-  const count = (state: any) => contracts.filter((item) => item.workflow_status === state).length;
+  const statusCounts = useMemo(
+    () => contracts.reduce((counts: Record<string, number>, contract: any) => {
+      counts[contract.workflow_status] = (counts[contract.workflow_status] || 0) + 1;
+      return counts;
+    }, {}),
+    [contracts],
+  );
+  const count = (state: any) => statusCounts[state] || 0;
   const zones = useMemo(
     () =>
       Array.from(
@@ -534,9 +650,9 @@ export default function ContractFollowUp() {
   }, [contracts, search, workflowStatus, zoneId, salesResponsibleId]);
   const totalPages = Math.max(1, Math.ceil(filteredContracts.length / pageSize));
   const currentPage = Math.min(page, totalPages);
-  const paginatedContracts = filteredContracts.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize,
+  const paginatedContracts = useMemo(
+    () => filteredContracts.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [currentPage, filteredContracts, pageSize],
   );
   const firstVisibleRow = filteredContracts.length ? (currentPage - 1) * pageSize + 1 : 0;
   const lastVisibleRow = Math.min(currentPage * pageSize, filteredContracts.length);
@@ -548,14 +664,26 @@ export default function ContractFollowUp() {
     setSalesResponsibleId('');
     setDateRange(defaultDateRange);
     setPage(1);
-    void load(defaultDateRange);
+    setAppliedDateRange(defaultDateRange);
   };
-  const assignmentTechnicians =
-    assignment?.technicians.filter(
+  const assignmentTechnicians = useMemo(
+    () => assignment?.technicians.filter(
       (technician: any) => String(technician.supervisor_id) === assignmentSupervisorId,
-    ) || [];
-  const editWorkflowCustomer = (contract: any) =>
-    navigate('/add-new-contract', { state: { workflowCustomerEdit: true, contract } });
+    ) || [],
+    [assignment, assignmentSupervisorId],
+  );
+  const editWorkflowCustomer = useCallback(
+    (contract: any) => navigate('/add-new-contract', { state: { workflowCustomerEdit: true, contract } }),
+    [navigate],
+  );
+  const editWorkflowBilling = useCallback(
+    (contract: any) => navigate('/add-new-contract', { state: { workflowBillingEdit: true, contract } }),
+    [navigate],
+  );
+  const showAuditDetails = useCallback(
+    (contract: any, item: any, changes: any[]) => setAuditDetails({ contract, item, changes }),
+    [],
+  );
   return (
     <div dir="rtl" className="space-y-6">
       <BreadcrumbComp
@@ -584,7 +712,7 @@ export default function ContractFollowUp() {
               ← تأكيد الكول سنتر ← التفعيل
             </p>
           </div>
-          <Button variant="outline" onClick={() => void load()} disabled={loading}>
+          <Button variant="outline" onClick={() => void refreshContracts()} disabled={loading}>
             <RefreshCw className={`ml-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             تحديث
           </Button>
@@ -696,7 +824,14 @@ export default function ContractFollowUp() {
             <Button
               onClick={() => {
                 setPage(1);
-                void load();
+                if (
+                  dateRange.startDate === appliedDateRange.startDate &&
+                  dateRange.endDate === appliedDateRange.endDate
+                ) {
+                  void refreshContracts();
+                } else {
+                  setAppliedDateRange({ ...dateRange });
+                }
               }}
               disabled={loading || !dateRange.startDate || !dateRange.endDate}
             >
@@ -744,126 +879,18 @@ export default function ContractFollowUp() {
                 <tbody>
                   {paginatedContracts.length ? (
                     paginatedContracts.map((contract) => (
-                      <tr key={contract.id} className="border-t align-top">
-                        {columns.map((column) => (
-                          <td key={column.header} className="max-w-xs whitespace-nowrap px-4 py-3">
-                            {column.value(contract)}
-                          </td>
-                        ))}
-                        <td className="min-w-[250px] px-4 py-3">
-                          <div className="flex flex-wrap gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => void toggleHistory(contract.id)}
-                            >
-                              <History className="ml-2 h-4 w-4" />
-                              السجل
-                            </Button>
-                            {/* <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={busyId === contract.id}
-                              onClick={() => void addNote(contract)}
-                            >
-                              ملاحظة
-                            </Button> */}
-                            {contract.availableActions.includes('EDIT_CUSTOMER') && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={busyId === contract.id}
-                                onClick={() => void editWorkflowCustomer(contract)}
-                              >
-                                تعديل بيانات العميل
-                              </Button>
-                            )}
-                            {contract.availableActions
-                              .filter((availableAction) => availableAction !== 'EDIT_CUSTOMER')
-                              .map((availableAction) => (
-                                <Button
-                                  key={availableAction}
-                                  size="sm"
-                                  disabled={busyId === contract.id}
-                                  onClick={() => void action(contract, availableAction)}
-                                >
-                                  {
-                                    (
-                                      {
-                                        CHECK: 'تمت المراجعة',
-                                        APPROVE: 'موافقة',
-                                        ASSIGN_TECHNICIAN: 'تعيين الفني',
-                                        REJECT: 'رفض',
-                                        INSTALL: 'تم التدريب',
-                                        ACTIVATE: 'تأكيد التفعيل',
-                                        RETURN_TO_MANAGER: 'إعادة لمدير الدعم الفني',
-                                      } as any
-                                    )[availableAction]
-                                  }
-                                </Button>
-                              ))}
-                          </div>
-                          {openHistory === contract.id && (
-                            <div className="mt-3 min-w-[420px] rounded-xl border bg-muted/30 p-3">
-                              <p className="mb-2 font-semibold">سجل تعديل بيانات العميل</p>
-                              {customerEditHistory(history[contract.id]).length ? (
-                                customerEditHistory(history[contract.id]).map((item: any) => {
-                                  const changes = auditChanges(item.metadata);
-                                  return (
-                                    <div key={item.id} className="border-t py-2 first:border-0">
-                                      <div className="flex flex-wrap gap-x-2 gap-y-1">
-                                        <span className="font-medium">
-                                          {historyActionLabel(item)}
-                                        </span>
-                                        <span className="text-muted-foreground">
-                                          {dateTime(item.created_at)}
-                                        </span>
-                                        <span>
-                                          {item.performed_by_name_ar ||
-                                            item.performed_by_name_en ||
-                                            'النظام'}
-                                        </span>
-                                      </div>
-                                      {(item.from_status || item.to_status) &&
-                                        item.from_status !== item.to_status && (
-                                          <p className="text-xs text-muted-foreground">
-                                            من:{' '}
-                                            {labels[item.from_status || ''] ||
-                                              item.from_status ||
-                                              '—'}{' '}
-                                            · إلى:{' '}
-                                            {labels[item.to_status || ''] || item.to_status || '—'}
-                                          </p>
-                                        )}
-                                      {item.description && (
-                                        <p className="text-sm text-muted-foreground">
-                                          {item.description}
-                                        </p>
-                                      )}
-                                      {changes.length > 0 && (
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          className="mt-2"
-                                          onClick={() =>
-                                            setAuditDetails({ contract, item, changes })
-                                          }
-                                        >
-                                          عرض تفاصيل التعديل ({changes.length})
-                                        </Button>
-                                      )}
-                                    </div>
-                                  );
-                                })
-                              ) : (
-                                <p className="text-sm text-muted-foreground">
-                                  لا توجد تعديلات مسجلة على بيانات العميل.
-                                </p>
-                              )}
-                            </div>
-                          )}
-                        </td>
-                      </tr>
+                      <ContractWorkflowRow
+                        key={contract.id}
+                        contract={contract}
+                        isBusy={busyId === contract.id}
+                        isHistoryOpen={openHistory === contract.id}
+                        historyItems={history[contract.id]}
+                        onToggleHistory={toggleHistory}
+                        onAction={action}
+                        onEditCustomer={editWorkflowCustomer}
+                        onEditBilling={editWorkflowBilling}
+                        onShowAuditDetails={showAuditDetails}
+                      />
                     ))
                   ) : (
                     <tr>
@@ -884,7 +911,24 @@ export default function ContractFollowUp() {
                     {lastVisibleRow.toLocaleString('ar-EG')} من{' '}
                     {filteredContracts.length.toLocaleString('ar-EG')} عقد
                   </span>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-muted-foreground">عدد الصفوف:</span>
+                    <Select
+                      value={String(pageSize)}
+                      onValueChange={(value) => {
+                        setPageSize(Number(value));
+                        setPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="h-8 w-20">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {pageSizeOptions.map((option) => (
+                          <SelectItem key={option} value={String(option)}>{option}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <Button
                       size="sm"
                       variant="outline"

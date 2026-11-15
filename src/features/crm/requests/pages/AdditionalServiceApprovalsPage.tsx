@@ -49,6 +49,7 @@ type Request = {
   notes: string;
   workflowStatus?: string;
   contractId: number;
+  contractWorkflowStatus?: string;
   currentSubscriptionAmount?: number | string | null;
   zoneNameAr: string;
   zoneNameEn: string;
@@ -78,6 +79,19 @@ const workflowStatusLabel = (status?: string) =>
   ] ||
   status ||
   '—';
+const contractWorkflowStatusLabel = (status?: string) =>
+  ({
+    UNDER_CHECKING: 'تحت مراجعة خدمة العملاء',
+    PENDING: 'بانتظار موافقة العقد',
+    UNDER_INSTALLATION: 'تم موافقة العقد',
+    INSTALLED: 'تم التركيب',
+    ACTIVATED: 'مفعل',
+    REJECTED: 'العقد مرفوض',
+  })[String(status || '').toUpperCase()] || status || '—';
+const canReviewServiceRequest = (contractWorkflowStatus?: string) =>
+  ['UNDER_INSTALLATION', 'INSTALLED', 'ACTIVATED'].includes(
+    String(contractWorkflowStatus || '').toUpperCase(),
+  );
 
 function SearchableFilterSelect({
   value,
@@ -162,6 +176,7 @@ export default function AdditionalServiceApprovalsPage() {
     setEndDate('');
   };
   const openDecision = (request: Request, nextMode: 'approve' | 'reject') => {
+    if (!canReviewServiceRequest(request.contractWorkflowStatus)) return;
     setSelected(request);
     setMode(nextMode);
     setManagerNotes('');
@@ -210,7 +225,7 @@ export default function AdditionalServiceApprovalsPage() {
           <div>
             <h2 className="text-xl font-semibold">اعتمادات الخدمات الإضافية</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              الموافقة تُنشئ فاتورة فقط. التحصيل يتم لاحقًا من دورة التحصيل.
+              يجب اعتماد العقد أولًا. بعدها تُنشئ الموافقة فاتورة فقط، والتحصيل يتم لاحقًا من دورة التحصيل.
             </p>
           </div>
           <Button variant="outline" onClick={() => void load()} disabled={loading}>
@@ -220,18 +235,18 @@ export default function AdditionalServiceApprovalsPage() {
         </div>
         <div className="mb-5 grid gap-3 rounded-xl border bg-muted/20 p-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_150px_150px_auto]">
           <div className="space-y-2">
-            <Label htmlFor="contract-search">رقم العقد</Label>
+            <Label htmlFor="contract-search">كود العميل</Label>
             <Input
               id="contract-search"
               inputMode="numeric"
               value={contractSearch}
               onChange={(event) => setContractSearch(event.target.value)}
-              placeholder="ابحث برقم العقد، مثال: 125"
+              placeholder="ابحث بكود العميل"
             />
           </div>
           <div className="space-y-2">
-            <Label>المنطقة</Label>
-            <SearchableFilterSelect value={zoneFilter} onValueChange={setZoneFilter} placeholder="كل المناطق" options={[{ value: 'ALL', label: 'كل المناطق' }, ...zoneOptions.map(([value, label]) => ({ value, label }))]} />
+            <Label>الفرع</Label>
+            <SearchableFilterSelect value={zoneFilter} onValueChange={setZoneFilter} placeholder="كل الفروع" options={[{ value: 'ALL', label: 'كل الفروع' }, ...zoneOptions.map(([value, label]) => ({ value, label }))]} />
           </div>
           <div className="space-y-2">
             <Label>نوع البند</Label>
@@ -267,36 +282,35 @@ export default function AdditionalServiceApprovalsPage() {
             <TableHeader>
               <TableRow className="bg-muted/50">
                 <TableHead>رقم الطلب</TableHead>
-                <TableHead>حالة سير العمل</TableHead>
                 <TableHead>كود العميل</TableHead>
                 <TableHead>اسم العميل</TableHead>
-                <TableHead>رقم العقد</TableHead>
-                <TableHead>المنطقة</TableHead>
+                <TableHead>حالة العقد</TableHead>
+                <TableHead>الفرع</TableHead>
                 <TableHead>بنود الطلب</TableHead>
                 <TableHead className="text-left">الإجمالي</TableHead>
                 <TableHead className="text-left">الاشتراك الشهري الجديد</TableHead>
                 <TableHead>مقدم الطلب</TableHead>
-                <TableHead>الملاحظات</TableHead>
-                <TableHead>التاريخ</TableHead>
+                <TableHead>تاريخ الطلب</TableHead>
+                <TableHead>حالة الطلب</TableHead>
                 <TableHead className="w-36" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={13} className="py-10 text-center">
+                  <TableCell colSpan={12} className="py-10 text-center">
                     <Loader2 className="mx-auto h-5 w-5 animate-spin" />
                   </TableCell>
                 </TableRow>
               ) : !requests.length ? (
                 <TableRow>
-                  <TableCell colSpan={13} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={12} className="py-10 text-center text-muted-foreground">
                     لا توجد طلبات بانتظار المراجعة.
                   </TableCell>
                 </TableRow>
               ) : !filteredRequests.length ? (
                 <TableRow>
-                  <TableCell colSpan={13} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={12} className="py-10 text-center text-muted-foreground">
                     لا توجد طلبات مطابقة للفلاتر المحددة.
                   </TableCell>
                 </TableRow>
@@ -309,14 +323,10 @@ export default function AdditionalServiceApprovalsPage() {
                   const newMonthlySubscription =
                     safeAmount(request.currentSubscriptionAmount) +
                     safeAmount(request.newSubscriptionAmount);
+                  const canReview = canReviewServiceRequest(request.contractWorkflowStatus);
                   return (
                     <TableRow key={request.id} className="align-top">
-                      <TableCell className="font-semibold">#{request.id}</TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">
-                          {workflowStatusLabel(request.workflowStatus)}
-                        </Badge>
-                      </TableCell>
+                      <TableCell className="font-semibold">{request.id}</TableCell>
                       <TableCell className="font-medium">{request.customerCode || '—'}</TableCell>
                       <TableCell>
                         <p className="min-w-36 font-medium">
@@ -326,7 +336,11 @@ export default function AdditionalServiceApprovalsPage() {
                           {request.customerNameEn || '—'}
                         </p>
                       </TableCell>
-                      <TableCell>#{request.contractId}</TableCell>
+                      <TableCell>
+                        <Badge variant={canReview ? 'secondary' : 'outline'}>
+                          {contractWorkflowStatusLabel(request.contractWorkflowStatus)}
+                        </Badge>
+                      </TableCell>
                       <TableCell className="min-w-28">
                         {request.zoneNameAr || request.zoneNameEn || '—'}
                       </TableCell>
@@ -354,17 +368,24 @@ export default function AdditionalServiceApprovalsPage() {
                       <TableCell>
                         {request.requesterNameAr || request.requesterNameEn || '—'}
                       </TableCell>
-                      <TableCell className="max-w-52 whitespace-normal text-sm text-muted-foreground">
-                        {request.notes || '—'}
-                      </TableCell>
                       <TableCell className="whitespace-nowrap">
                         {formatDate(request.requestedAt)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">
+                          {workflowStatusLabel(request.workflowStatus)}
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">
                           {canWrite && (
                             <>
-                              <Button size="sm" onClick={() => openDecision(request, 'approve')}>
+                              <Button
+                                size="sm"
+                                onClick={() => openDecision(request, 'approve')}
+                                disabled={!canReview}
+                                title={canReview ? undefined : 'اعتمد العقد أولًا'}
+                              >
                                 <Check className="me-1 h-4 w-4" />
                                 موافقة
                               </Button>
@@ -372,6 +393,8 @@ export default function AdditionalServiceApprovalsPage() {
                                 size="sm"
                                 variant="destructive"
                                 onClick={() => openDecision(request, 'reject')}
+                                disabled={!canReview}
+                                title={canReview ? undefined : 'اعتمد العقد أولًا'}
                               >
                                 <X className="me-1 h-4 w-4" />
                                 رفض

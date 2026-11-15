@@ -11,7 +11,7 @@ export const fetchApprovedServiceRequestsForCollection = async (contractId: numb
 export const createAdditionalServiceCollection = async (payload: unknown) =>
   (await api.post('/collections', payload)).data;
 export const fetchRequestCatalog = async () => (await api.get('/service-requests/catalog')).data;
-export const createServiceRequest = async (payload: { zoneId: number; contractId: number; notes: string; items: ServiceRequestItemPayload[] }) =>
+export const createServiceRequest = async (payload: { contractId: number; notes: string; items: ServiceRequestItemPayload[] }) =>
   (await api.post('/service-requests', payload)).data;
 export const fetchPendingServiceRequests = async () => (await api.get('/service-requests/pending')).data;
 export const approveServiceRequest = async (id: number, managerNotes: string) => (await api.post(`/service-requests/${id}/approve`, { managerNotes })).data;
