@@ -8,6 +8,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from 'src/components/ui/popover';
 import { cn } from 'src/lib/utils';
 import { fetchContractContactsReport } from '../api/reportsService';
+import { excelDate } from '../excelDate';
 
 const workflowLabels: Record<string, string> = {
   UNDER_CHECKING: 'تحت المراجعة', PENDING: 'بانتظار قرار الدعم الفني',
@@ -68,7 +69,7 @@ export default function ContractContactsReport() {
       row.mobile_phone || '', row.landline_phone || '', row.whatsapp_phone || '',
       row.contact_email || '', row.contact_national_id || '',
       row.zone_name_ar || row.zone_name_en || '', workflowLabels[row.workflow_status] || row.workflow_status || '',
-      row.contract_date ? String(row.contract_date).slice(0, 10) : '',
+      excelDate(row.contract_date),
     ]);
     const sheet = XLSX.utils.aoa_to_sheet([['تقرير جهات اتصال العقود'], [], headers, ...exportRows]);
     sheet['!cols'] = headers.map((header) => ({ wch: Math.max(header.length + 5, 16) }));

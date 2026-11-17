@@ -111,6 +111,13 @@ const time12 = (value: any) => {
 };
 const text = (value: any) =>
   value === null || value === undefined || value === '' ? '—' : String(value);
+const customerStructure = (value: any) => {
+  const structure = String(value || '').toUpperCase();
+  if (structure === 'SINGLE') return 'فرع مستقل';
+  if (structure === 'CHAIN') return 'المقر الرئيسي لسلسلة';
+  if (structure === 'BRANCH') return 'فرع تابع لسلسلة';
+  return text(value);
+};
 const contactType = (value: any) => {
   const type = String(value || '').toUpperCase();
   if (type === 'OWNER') return 'مالك';
@@ -199,12 +206,20 @@ function SearchableSelect({
   );
 }
 const columns: any[] = [
-  { header: 'كود العميل (رقم العقد)', value: (c: any) => text(c.id) },
+  { header: 'كود العميل', value: (c: any) => text(c.id) },
   { header: 'تاريخ إنشاء العقد', value: (c: any) => date(c.contract_date) },
   { header: 'وقت إنشاء العقد', value: (c: any) => time12(c.created_time), cellClassName: 'whitespace-nowrap' },
   {
     header: 'مسئول البيع',
     value: (c: any) => text(c.created_by_name_ar || c.created_by_name_en || c.created_by_username),
+  },
+  {
+    header: 'المشرف',
+    value: (c: any) => text(c.sales_supervisor_name_ar || c.sales_supervisor_name_en || c.sales_supervisor_username),
+  },
+  {
+    header: 'المدير',
+    value: (c: any) => text(c.sales_manager_name_ar || c.sales_manager_name_en || c.sales_manager_username),
   },
   {
     header: 'مشارك',
@@ -218,7 +233,11 @@ const columns: any[] = [
     header: 'نوع العميل',
     value: (c: any) => text(c.customer_type_name_ar || c.customer_type_name_en),
   },
-  { header: 'الهيكل', value: (c: any) => text(c.structure) },
+  { header: 'الهيكل', value: (c: any) => customerStructure(c.structure) },
+  {
+    header: 'تابع لسلسلة',
+    value: (c: any) => text(c.parent_customer_name_ar || c.parent_customer_name_en),
+  },
   { header: 'رقم المحمول المتعاقد', value: (c: any) => text(c.customer_phone) },
   { header: 'اسم المتعاقد', value: (c: any) => text(c.contact_name_ar || c.contact_name_en) },
   { header: 'صفة المتعاقد', value: (c: any) => contactType(c.contact_type) },
@@ -437,28 +456,19 @@ export default function ContractFollowUp() {
     if (type === 'INSTALL') {
       const installResult = await Swal.fire({
         title: 'تأكيد التركيب',
-        html: '<input id="activation-code" class="swal2-input" placeholder="كود التفعيل اليدوي"><textarea id="workflow-note" class="swal2-textarea" placeholder="ملاحظة اختيارية"></textarea>',
+        html: '<textarea id="workflow-note" class="swal2-textarea" placeholder="ملاحظة اختيارية"></textarea>',
         showCancelButton: true,
         confirmButtonText: 'تم التدريب',
         cancelButtonText: 'إلغاء',
         preConfirm: () => {
-          const activationCode = (document.getElementById('activation-code') as any)?.value?.trim();
           const note = (document.getElementById('workflow-note') as any)?.value;
-          if (!activationCode) {
-            Swal.showValidationMessage('كود التفعيل اليدوي مطلوب');
-            return false;
-          }
-          return { activationCode, note };
+          return { note };
         },
       });
       if (!installResult.isConfirmed) return;
       setBusyId(contract.id);
       try {
-        await installContract(
-          contract.id,
-          installResult.value.activationCode,
-          installResult.value.note,
-        );
+        await installContract(contract.id, installResult.value.note);
         await Swal.fire('تم حفظ الإجراء', '', 'success');
         await refreshContracts();
       } catch (e: any) {
@@ -708,7 +718,7 @@ export default function ContractFollowUp() {
           <div>
             <h2 className="font-bold">رحلة العقد</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              مراجعة الكول سنتر ← قرار مدير العمليات ← تعيين مدير الدعم الفني ← التركيب وكود التفعيل
+              مراجعة الكول سنتر ← قرار مدير العمليات ← تعيين مدير الدعم الفني ← التركيب
               ← تأكيد الكول سنتر ← التفعيل
             </p>
           </div>

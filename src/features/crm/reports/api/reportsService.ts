@@ -8,9 +8,12 @@ const report = async (path: string, startDate?: string, endDate?: string) => {
 };
 
 export const fetchCollectionsReport = (startDate?: string, endDate?: string) => report('/reports/collections', startDate, endDate);
-export const fetchAdditionalUnitsReport = (startDate?: string, endDate?: string) => report('/reports/additional-units', startDate, endDate);
-export const fetchReplicationServicesReport = (startDate?: string, endDate?: string) => report('/reports/replication-services', startDate, endDate);
+export const fetchAdditionalUnitsReport = async (startDate?: string, endDate?: string, requestWorkflowStatus?: string) =>
+  (await api.get('/reports/additional-units', { params: { startDate: startDate || undefined, endDate: endDate || undefined, requestWorkflowStatus: requestWorkflowStatus || undefined } })).data.data;
+export const fetchReplicationServicesReport = async (startDate?: string, endDate?: string, requestWorkflowStatus?: string) =>
+  (await api.get('/reports/replication-services', { params: { startDate: startDate || undefined, endDate: endDate || undefined, requestWorkflowStatus: requestWorkflowStatus || undefined } })).data.data;
 export const fetchSubscriptionDuesReport = (startDate?: string, endDate?: string) => report('/reports/subscription-dues', startDate, endDate);
+export const fetchRefundedCollectionsReport = (startDate?: string, endDate?: string) => report('/reports/refunded-collections', startDate, endDate);
 export const fetchSalesReport = async (startDate?: string, endDate?: string, workflowStatus?: string) => {
   const response = await api.get('/reports/sales', {
     params: {

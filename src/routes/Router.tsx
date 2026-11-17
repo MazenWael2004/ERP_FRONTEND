@@ -37,6 +37,7 @@ import OutstandingReport from 'src/features/crm/collections/pages/OutstandingRec
 
 import OperationalReports from 'src/features/crm/reports/pages/OperationalReports';
 import SubscriptionDuesReport from 'src/features/crm/reports/pages/SubscriptionDuesReport';
+import RefundedCollectionsReport from 'src/features/crm/reports/pages/RefundedCollectionsReport';
 import ActionHistoryReport from 'src/features/crm/reports/pages/ActionHistoryReport';
 import RejectedContractsReport from 'src/features/crm/reports/pages/RejectedContractsReport';
 import MasterfileReport from 'src/features/crm/reports/pages/MasterfileReport';
@@ -52,7 +53,7 @@ import InstallationAssignment from 'src/features/crm/tasks/pages/AssignInstallat
 import ManagerOfAll from 'src/features/crm/management/pages/ManagerOfAll';
 import CollectAdditionalServices from 'src/features/crm/collections/pages/CollectAdditionalServices';
 import CollectJoiningFees from 'src/features/crm/collections/pages/CollectJoiningFees';
-import SubscriptionCollectionPage from 'src/features/crm/targets/pages/Targets';
+import SubscriptionCollections from 'src/features/crm/collections/pages/SubscriptionCollections';
 import UserZoneAssignments from 'src/features/administration/user-zones/pages/UserZoneAssignments';
 import BankManagementPage from 'src/features/administration/banks/pages/BankManagementPage';
 import ContractFollowUp from 'src/features/crm/contracts/pages/ContractFollowUp';
@@ -222,6 +223,14 @@ const Router = [
       },
       { path: 'financial-history', element: <FinancialHistoryPage /> },
       {
+        path: 'refunded-collections-report',
+        element: (
+          <ProtectedRoute route="/refunded-collections-report" action_code="READ">
+            <RefundedCollectionsReport />
+          </ProtectedRoute>
+        ),
+      },
+      {
         path: 'roles',
         element: (
           <ProtectedRoute route="/roles" action_code="READ">
@@ -313,6 +322,14 @@ const Router = [
         ),
       },
       {
+        path: '/collect-subscriptions',
+        element: (
+          <ProtectedRoute route="/collect-subscriptions" action_code="READ">
+            <SubscriptionCollections />
+          </ProtectedRoute>
+        ),
+      },
+      {
         
         path: '/contract-follow-up',
         element:( 
@@ -366,9 +383,7 @@ const Router = [
       },
       {
         path:'/targets',
-        element:(
-          <SubscriptionCollectionPage />
-        )
+        element: <Navigate to="/collect-subscriptions" replace />,
       }
     ],
   },

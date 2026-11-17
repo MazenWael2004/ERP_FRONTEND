@@ -5,6 +5,7 @@ import { Button } from 'src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from 'src/components/ui/card';
 import { Input } from 'src/components/ui/input';
 import { fetchSubscriptionDuesReport } from '../api/reportsService';
+import { excelDate } from '../excelDate';
 
 const money = (value: unknown) => `${Number(value || 0).toLocaleString('en-GB', { maximumFractionDigits: 2 })} ج.م`;
 const date = (value: unknown) => value ? new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Cairo' }).format(new Date(String(value))) : '—';
@@ -54,11 +55,11 @@ export default function SubscriptionDuesReport() {
   const exportToExcel = () => {
     const worksheet = XLSX.utils.aoa_to_sheet([
       ['تقرير الاشتراكات المستحقة'],
-      ['من شهر الاستحقاق', filters.startDate || 'كل الشهور السابقة'],
-      ['إلى شهر الاستحقاق', filters.endDate || 'كل الشهور'],
+      ['من شهر الاستحقاق', filters.startDate ? excelDate(filters.startDate) : 'كل الشهور السابقة'],
+      ['إلى شهر الاستحقاق', filters.endDate ? excelDate(filters.endDate) : 'كل الشهور'],
       [],
       columns.map((column) => column.header),
-      ...rows.map((row: any) => columns.map((column) => column.value(row))),
+      ...rows.map((row: any) => columns.map((column, index) => index === 0 ? excelDate(row.billing_month) : column.value(row))),
     ]);
     worksheet['!cols'] = columns.map((column) => ({ wch: Math.max(column.header.length + 5, 16) }));
     const workbook = XLSX.utils.book_new();

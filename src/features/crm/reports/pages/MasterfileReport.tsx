@@ -9,6 +9,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from 'src/components/ui/popover';
 import { cn } from 'src/lib/utils';
 import { fetchMasterfileReport } from '../api/reportsService';
+import { excelDate } from '../excelDate';
 
 const workflowLabels: Record<string, string> = {
   UNDER_CHECKING: 'تحت المراجعة',
@@ -29,6 +30,13 @@ const date = (value?: string | null) =>
 const value = (input: unknown) =>
   input === null || input === undefined || input === '' ? '—' : String(input);
 const bilingual = (ar?: string | null, en?: string | null) => value(ar || en);
+const customerStructure = (input: unknown) => {
+  const structure = String(input || '').toUpperCase();
+  if (structure === 'SINGLE') return 'فرع مستقل';
+  if (structure === 'CHAIN') return 'المقر الرئيسي لسلسلة';
+  if (structure === 'BRANCH') return 'فرع تابع لسلسلة';
+  return value(input);
+};
 const contactType = (input: unknown) => {
   const type = String(input || '').toUpperCase();
   if (type === 'OWNER') return 'مالك';
@@ -77,7 +85,12 @@ const columns: MasterfileColumn[] = [
     header: 'نوع العميل',
     value: (row) => bilingual(row.customer_type_name_ar, row.customer_type_name_en),
   },
-  { key: 'structure', header: 'الهيكل', value: (row) => value(row.customer_structure) },
+  { key: 'structure', header: 'الهيكل', value: (row) => customerStructure(row.customer_structure) },
+  {
+    key: 'parentChain',
+    header: 'تابع لسلسلة',
+    value: (row) => bilingual(row.parent_customer_name_ar, row.parent_customer_name_en),
+  },
   { key: 'phone', header: 'هاتف المتعاقد', value: (row) => value(row.customer_phone) },
   { key: 'contactAr', header: 'اسم المتعاقد', value: (row) => value(row.contact_name_ar) },
   { key: 'contactType', header: 'صفة المتعاقد', value: (row) => contactType(row.contact_type) },
@@ -169,6 +182,13 @@ const columns: MasterfileColumn[] = [
   { key: 'workflowStatus', header: 'حالة العقد', value: (row) => labels[row.workflow_status] },
 ];
 
+const excelDateFieldByColumnKey: Record<string, string> = {
+  contractDate: 'contract_date',
+  installation: 'installation_date',
+  nextDue: 'next_subscription_due_date',
+  implementedAt: 'implemented_at',
+};
+
 export const masterfileColumns = columns;
 
 const toDateInputValue = (date: Date) => {
@@ -246,7 +266,10 @@ export default function MasterfileReport() {
 
   const exportToExcel = () => {
     const headers = columns.map((column) => column.header);
-    const exportRows = rows.map((row: any) => columns.map((column) => column.value(row)));
+    const exportRows = rows.map((row: any) => columns.map((column) => {
+      const dateField = excelDateFieldByColumnKey[column.key];
+      return dateField ? excelDate(row[dateField]) : column.value(row);
+    }));
     const sheet = XLSX.utils.aoa_to_sheet([
       ['Masterfile - العقود والعملاء'],
       [],

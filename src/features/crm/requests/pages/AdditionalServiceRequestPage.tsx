@@ -444,7 +444,7 @@ export default function AdditionalServiceRequestPage() {
                     <div className="bg-card p-4">
                       <p className="flex items-center gap-1 text-xs text-muted-foreground">
                         <MapPin className="h-3.5 w-3.5" />
-                        المنطقة
+                        الفرع
                       </p>
                       <p className="mt-1 font-semibold">
                         {selectedContract.zoneNameAr || selectedContract.zoneNameEn || '—'}

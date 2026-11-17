@@ -10,6 +10,7 @@ import {
   type CustomerStatement,
   type CustomerStatementCustomer,
 } from '../api/customerStatementService';
+import { excelDate } from '../excelDate';
 
 const pageSize = 25;
 
@@ -162,13 +163,13 @@ export default function CustomerAccountStatement() {
         'الرصيد',
       ],
       ...statement.transactions.map((transaction) => [
-        transactionDate(transaction.transaction_date),
+        excelDate(transaction.transaction_date),
         transactionTime(transaction.transaction_time),
         transaction.request_id || '',
         transaction.transaction_type === 'COLLECTION' ? transaction.receipt_number || '' : '',
         transaction.transaction_type === 'COLLECTION' ? transaction.payment_method || '' : '',
         transaction.transaction_type === 'COLLECTION' ? transaction.reference_number || '' : '',
-        transaction.transaction_type === 'COLLECTION' ? date(transaction.transfer_date) : '',
+        transaction.transaction_type === 'COLLECTION' ? excelDate(transaction.transfer_date) : '',
         transaction.description,
         transaction.debit,
         transaction.credit,
@@ -319,7 +320,7 @@ export default function CustomerAccountStatement() {
                 value={searchValue}
                 onChange={(event) => setSearchValue(event.target.value)}
                 className="pr-9"
-                placeholder="كود العميل أو اسم الصيدلية أو رقم العقد"
+                placeholder="كود العميل أو اسم الصيدلية"
                 aria-label="البحث عن عميل أو عقد"
               />
             </div>

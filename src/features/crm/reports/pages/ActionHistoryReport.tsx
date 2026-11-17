@@ -5,6 +5,7 @@ import { Button } from 'src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from 'src/components/ui/card';
 import { Input } from 'src/components/ui/input';
 import { fetchActionHistoryReport } from '../api/reportsService';
+import { excelDateTime } from '../excelDate';
 
 const actionLabels: Record<string, string> = {
   CONTRACT_CREATED: 'إنشاء العقد',
@@ -43,7 +44,7 @@ export default function ActionHistoryReport() {
   const rows = data?.rows || [];
   const summary = data?.summary || {};
   const exportRows = useMemo(() => rows.map((row: any) => [
-    dateTime(row.created_at),
+    excelDateTime(row.created_at),
     actionLabels[row.action_code] || row.action_code,
     row.performed_by_name_ar || row.performed_by_name_en || row.performed_by_username || 'النظام',
     row.contract_id || '',

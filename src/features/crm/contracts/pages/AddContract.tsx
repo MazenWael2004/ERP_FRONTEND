@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import axios from 'axios';
 import Swal from 'sweetalert2';
 import * as L from 'leaflet';
@@ -63,7 +64,7 @@ import {
   fetchPaymentMethods,
 } from '../api/contractService';
 
-function generateMonthOptions() {
+function generateMonthOptions(locale: string) {
   const now = new Date();
 
   return Array.from({ length: 12 }, (_, offset) => {
@@ -72,7 +73,7 @@ function generateMonthOptions() {
     const month = String(date.getMonth() + 1).padStart(2, '0');
 
     return {
-      label: date.toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' }),
+      label: date.toLocaleDateString(locale, { month: 'long', year: 'numeric' }),
       value: `${year}-${month}-01`,
     };
   });
@@ -310,9 +311,12 @@ type ContractTypeOffer = {
   auto_select_consecutive: boolean | number;
 };
 export default function AddCustomerContract() {
-  const isRtl = true;
+  const { t, i18n } = useTranslation();
+  const isRtl = (i18n.resolvedLanguage ?? i18n.language) === 'ar';
+  const languageLocale = isRtl ? 'ar-EG' : 'en-US';
+  const text = (arabic: string, english: string) => (isRtl ? arabic : english);
   const { user } = useAuth();
-  const currentUserName = user?.username || 'المستخدم الحالي';
+  const currentUserName = user?.username || t('CONTRACT.CURRENT_USER');
   const installationDateMin = new Date().toISOString().split('T')[0];
 
   const [activeStep, setActiveStep] = useState(1);
@@ -831,7 +835,7 @@ export default function AddCustomerContract() {
   }, []);
 
   useEffect(() => {
-    if (structure !== 'CHAIN' && parentCustomerId) {
+    if (structure !== 'BRANCH' && parentCustomerId) {
       setValue('parentCustomerId', '', { shouldDirty: true, shouldValidate: true });
     }
   }, [parentCustomerId, setValue, structure]);
@@ -1207,7 +1211,7 @@ export default function AddCustomerContract() {
         : false,
   );
 
-  const monthOptions = useMemo(() => generateMonthOptions(), []);
+  const monthOptions = useMemo(() => generateMonthOptions(languageLocale), [languageLocale]);
 
   const mainSubscriptionServices = availableServices.filter(
     (service) =>
@@ -2058,7 +2062,7 @@ export default function AddCustomerContract() {
         registrationNumber: data.registrationNumber,
         licenseNumber: data.licenseNumber,
         structure: data.structure,
-        parentCustomerId: data.structure === 'CHAIN' ? Number(data.parentCustomerId) : null,
+        parentCustomerId: data.structure === 'BRANCH' ? Number(data.parentCustomerId) : null,
         customerTypeId: data.customerTypeId,
         commercialActivityId:
           Number(data.customerTypeId) === 2 ? Number(data.commercialActivityId) : null,
@@ -2206,7 +2210,7 @@ export default function AddCustomerContract() {
       commercialActivityId:
         Number(data.customerTypeId) === 2 ? Number(data.commercialActivityId) : null,
       structure: data.structure,
-      parentCustomerId: data.structure === 'CHAIN' ? Number(data.parentCustomerId) : null,
+      parentCustomerId: data.structure === 'BRANCH' ? Number(data.parentCustomerId) : null,
       taxRegistrationType: data.taxRegistrationType,
       taxNumber: data.taxRegistrationType === 'TAX_NUMBER' ? data.taxNumber : null,
       taxExemptionNationalId:
@@ -2356,14 +2360,32 @@ export default function AddCustomerContract() {
       nav('/contract-follow-up');
     } catch (error) {
       Swal.close();
-      const message = axios.isAxiosError(error)
-        ? error.response?.data?.error?.message || error.response?.data?.message
-        : undefined;
+      const apiError = axios.isAxiosError(error) ? error.response?.data?.error : undefined;
+      const message = apiError?.message || (axios.isAxiosError(error) ? error.response?.data?.message : undefined);
+      const duplicateValue = apiError?.details?.value;
+      const duplicateAlert = {
+        DUPLICATE_RECEIPT_NUMBER: {
+          title: 'رقم الإيصال مكرر',
+          text: `رقم الإيصال ${duplicateValue ? `(${duplicateValue}) ` : ''}مستخدم بالفعل في تحصيل نشط. أدخل رقم إيصال مختلفاً.`,
+        },
+        DUPLICATE_REFERENCE_NUMBER: {
+          title: 'الرقم المرجعي مكرر',
+          text: `الرقم المرجعي ${duplicateValue ? `(${duplicateValue}) ` : ''}مستخدم بالفعل. راجع بيانات التحويل أو الدفع الإلكتروني.`,
+        },
+        DUPLICATE_CHEQUE_NUMBER: {
+          title: 'رقم الشيك مكرر',
+          text: `رقم الشيك ${duplicateValue ? `(${duplicateValue}) ` : ''}مسجل بالفعل. أدخل رقم شيك مختلفاً.`,
+        },
+        INVALID_CHEQUE_NUMBER: {
+          title: 'رقم الشيك غير صالح',
+          text: 'رقم الشيك يجب أن يحتوي على أرقام فقط.',
+        },
+      }[String(apiError?.code || '')];
 
       await Swal.fire({
         icon: 'error',
-        title: 'تعذر إنشاء العقد',
-        text: message || 'حدث خطأ أثناء حفظ العقد. يرجى المحاولة مرة أخرى.',
+        title: duplicateAlert?.title || 'تعذر إنشاء العقد',
+        text: duplicateAlert?.text || message || 'حدث خطأ أثناء حفظ العقد. يرجى المحاولة مرة أخرى.',
         confirmButtonText: 'حسناً',
       });
     }
@@ -2450,10 +2472,10 @@ export default function AddCustomerContract() {
           ================================================= */}
 
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">إنشاء عميل وعقد جديد</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{t('CONTRACT.TITLE')}</h1>
 
             <p className="mt-1 text-sm text-muted-foreground">
-              قم بإدخال بيانات العميل ثم تفاصيل العقد والاشتراك والتحصيل.
+              {t('CONTRACT.SUBTITLE')}
             </p>
           </div>
 
@@ -2467,20 +2489,20 @@ export default function AddCustomerContract() {
                 {[
                   {
                     id: 1,
-                    title: 'بيانات العميل',
-                    description: 'العميل، المستندات، جهات الاتصال، العنوان ',
+                    title: t('CONTRACT.STEP_CUSTOMER'),
+                    description: t('CONTRACT.STEP_CUSTOMER_DESCRIPTION'),
                     icon: Users,
                   },
                   {
                     id: 2,
-                    title: 'العقد والاشتراك',
-                    description: 'التعاقد، الاشتراك، وتحصيل العقد',
+                    title: t('CONTRACT.STEP_CONTRACT'),
+                    description: t('CONTRACT.STEP_CONTRACT_DESCRIPTION'),
                     icon: FileText,
                   },
                   {
                     id: 3,
-                    title: 'الإضافات والأجهزة',
-                    description: 'وحدات إضافية، نسخ، أجهزة، وإيصال مستقل',
+                    title: t('CONTRACT.STEP_ADDONS'),
+                    description: t('CONTRACT.STEP_ADDONS_DESCRIPTION'),
                     icon: Wrench,
                   },
                 ].map((step: any) => {
@@ -2575,7 +2597,7 @@ export default function AddCustomerContract() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
                     <Building2 className="h-5 w-5 text-muted-foreground" />
-                    نوع العميل
+                    {text('نوع العميل', 'Customer type')}
                     <span className="text-red-500">*</span>
                   </CardTitle>
                 </CardHeader>
@@ -2591,8 +2613,8 @@ export default function AddCustomerContract() {
 
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     {[
-                      { value: 1, label: 'صيدلي', description: 'صيدليات وسلاسل الصيدليات' },
-                      { value: 2, label: 'تجاري', description: 'المنشآت والأنشطة التجارية' },
+                      { value: 1, label: text('صيدلي', 'Pharmacy'), description: text('صيدليات وسلاسل الصيدليات', 'Pharmacies and pharmacy chains') },
+                      { value: 2, label: text('تجاري', 'Commercial'), description: text('المنشآت والأنشطة التجارية', 'Commercial establishments and activities') },
                     ].map((item) => {
                       const isSelected = customerTypeId === item.value;
 
@@ -2666,7 +2688,7 @@ export default function AddCustomerContract() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
                     <UserRound className="h-5 w-5 text-muted-foreground" />
-                    نوع العملية
+                    {text('نوع العملية', 'Operation type')}
                     <span className="text-red-500">*</span>
                   </CardTitle>
                 </CardHeader>
@@ -2701,7 +2723,7 @@ export default function AddCustomerContract() {
                     >
                       <div className="flex items-start justify-between">
                         <div>
-                          <div className="text-sm font-bold">عميل جديد</div>
+                          <div className="text-sm font-bold">{text('عميل جديد', 'New customer')}</div>
 
                           <p
                             className={`
@@ -2714,7 +2736,7 @@ export default function AddCustomerContract() {
                               }
                             `}
                           >
-                            إنشاء سجل عميل جديد وإدخال جميع البيانات.
+                            {text('إنشاء سجل عميل جديد وإدخال جميع البيانات.', 'Create a new customer record and enter all details.')}
                           </p>
                         </div>
 
@@ -2755,10 +2777,10 @@ export default function AddCustomerContract() {
                     >
                       <div className="flex items-start justify-between">
                         <div>
-                          <div className="text-sm font-bold">إعادة تفعيل عميل غير نشط</div>
+                          <div className="text-sm font-bold">{text('إعادة تفعيل عميل غير نشط', 'Reactivate inactive customer')}</div>
 
                           <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                            اختيار عميل سابق وإعادة تفعيل العقد مع إمكانية تعديل بياناته.
+                            {text('اختيار عميل سابق وإعادة تفعيل العقد مع إمكانية تعديل بياناته.', 'Select a previous customer and reactivate the contract, with the option to edit their details.')}
                           </p>
                         </div>
 
@@ -2771,7 +2793,7 @@ export default function AddCustomerContract() {
 
                   {!customerTypeId && (
                     <p className="rounded-xl bg-muted px-3 py-2 text-xs text-muted-foreground">
-                      اختر نوع العميل أولاً ثم حدد نوع العملية.
+                      {text('اختر نوع العميل أولاً ثم حدد نوع العملية.', 'Select the customer type first, then choose the operation type.')}
                     </p>
                   )}
 
@@ -2781,7 +2803,7 @@ export default function AddCustomerContract() {
 
                   {customerMode === 'reactivate' && (
                     <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
-                      <Label>اختر العميل غير النشط</Label>
+                      <Label>{text('اختر العميل غير النشط', 'Select inactive customer')}</Label>
 
                       <div>
                         {' '}
@@ -2789,15 +2811,15 @@ export default function AddCustomerContract() {
                           value={customerId}
                           onValueChange={handleInactiveCustomer}
                           options={[
-                            ['', 'اختر العميل...'],
+                            ['', text('اختر العميل...', 'Select customer...')],
                             ...inactiveCustomersForSelectedType.map((customer) => [
                               customer.id,
                               `${customer.nameAr} — ${customer.code}`,
                             ]),
                           ]}
                           error={Boolean(errors.customerId)}
-                          placeholder="اختر العميل..."
-                          searchPlaceholder="ابحث باسم العميل أو الكود..."
+                          placeholder={text('اختر العميل...', 'Select customer...')}
+                          searchPlaceholder={text('ابحث باسم العميل أو الكود...', 'Search by customer name or code...')}
                         />
                       </div>
 
@@ -2806,7 +2828,7 @@ export default function AddCustomerContract() {
                       {customerId && (
                         <div className="mt-3 flex items-center gap-2 text-xs text-amber-800 dark:text-amber-300">
                           <Check className="h-4 w-4" />
-                          تم تحميل بيانات العميل ويمكنك تعديلها قبل المتابعة.
+                          {text('تم تحميل بيانات العميل ويمكنك تعديلها قبل المتابعة.', 'Customer details are loaded and can be edited before continuing.')}
                         </div>
                       )}
                     </div>
@@ -2820,7 +2842,7 @@ export default function AddCustomerContract() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base">
                     <Building2 className="h-5 w-5 text-muted-foreground" />
-                    البيانات الأساسية للعميل
+                    {text('البيانات الأساسية للعميل', 'Customer basic information')}
                   </CardTitle>
                 </CardHeader>
 
@@ -2829,7 +2851,7 @@ export default function AddCustomerContract() {
                     <FormField
                       label={
                         <>
-                          اسم العميل
+                          {text('اسم العميل', 'Customer name')}
                           <span className="mr-1 text-red-500">*</span>
                         </>
                       }
@@ -2854,7 +2876,7 @@ export default function AddCustomerContract() {
                     />
 
                     <div>
-                      <Label>كود العميل (رقم العقد)</Label>
+                      <Label>{text('كود العميل (رقم العقد)', 'Customer code (contract number)')}</Label>
 
                       <div className="relative mt-2">
                         <Input
@@ -2877,7 +2899,7 @@ export default function AddCustomerContract() {
                     <SelectField
                       label={
                         <>
-                          هيكل العميل
+                          {text('هيكل العميل', 'Customer structure')}
                           <span className="mr-1 text-red-500">*</span>
                         </>
                       }
@@ -2885,8 +2907,9 @@ export default function AddCustomerContract() {
                         required: 'هيكل العميل مطلوب',
                       })}
                       options={[
-                        ['SINGLE', 'فردي'],
-                        ['CHAIN', 'سلاسل'],
+                        ['SINGLE', text('فرع مستقل', 'Independent branch')],
+                        ['CHAIN', text('المقر الرئيسي لسلسلة', 'Chain headquarters')],
+                        ['BRANCH', text('فرع تابع لسلسلة', 'Branch in a chain')],
                       ]}
                       control={control}
                       error={errors.structure?.message}
@@ -2896,7 +2919,7 @@ export default function AddCustomerContract() {
                       <SelectField
                         label={
                           <>
-                            النشاط التجاري
+                            {text('النشاط التجاري', 'Commercial activity')}
                             <span className="mr-1 text-red-500">*</span>
                           </>
                         }
@@ -2907,7 +2930,7 @@ export default function AddCustomerContract() {
                             'النشاط التجاري مطلوب للعميل التجاري',
                         })}
                         options={[
-                          ['', 'اختر النشاط التجاري'],
+                          ['', text('اختر النشاط التجاري', 'Select commercial activity')],
                           ...commercialActivities.map((activity) => [
                             activity.id,
                             activity.name_ar || activity.name_en,
@@ -2917,26 +2940,26 @@ export default function AddCustomerContract() {
                         disabled={isCommercialActivitiesLoading}
                         placeholder={
                           isCommercialActivitiesLoading
-                            ? 'جارٍ تحميل الأنشطة التجارية...'
-                            : 'اختر النشاط التجاري'
+                            ? text('جارٍ تحميل الأنشطة التجارية...', 'Loading commercial activities...')
+                            : text('اختر النشاط التجاري', 'Select commercial activity')
                         }
-                        searchPlaceholder="ابحث باسم النشاط التجاري..."
+                        searchPlaceholder={text('ابحث باسم النشاط التجاري...', 'Search commercial activity...')}
                         error={errors.commercialActivityId?.message}
                       />
                     )}
 
-                    {structure === 'CHAIN' && (
+                    {structure === 'BRANCH' && (
                       <div data-validation-anchor={errors.parentCustomerId ? 'true' : undefined}>
                         <Label>
-                          تابع لأي صيدلية / عميل؟ <span className="mr-1 text-red-500">*</span>
+                          {text('السلسلة الرئيسية', 'Parent chain')} <span className="mr-1 text-red-500">*</span>
                         </Label>
                         <input
                           type="hidden"
                           {...register('parentCustomerId', {
                             validate: (value) =>
-                              structure !== 'CHAIN' ||
+                              structure !== 'BRANCH' ||
                               Number(value) > 0 ||
-                              'اختر الصيدلية أو العميل الرئيسي',
+                              'اختر السلسلة الرئيسية',
                           })}
                         />
                         <SearchableSelect
@@ -2953,12 +2976,12 @@ export default function AddCustomerContract() {
                           placeholder={
                             isParentCustomersLoading
                               ? 'جارٍ تحميل العملاء...'
-                              : 'اختر الصيدلية أو العميل الرئيسي'
+                              : text('اختر السلسلة الرئيسية', 'Select parent chain')
                           }
-                          searchPlaceholder="ابحث بالاسم أو كود العميل..."
-                          emptyMessage="لا يوجد عملاء متاحون"
+                          searchPlaceholder={text('ابحث بالاسم أو كود العميل...', 'Search by name or customer code...')}
+                          emptyMessage={text('لا يوجد عملاء متاحون', 'No customers available')}
                           options={[
-                            ['', 'اختر الصيدلية أو العميل الرئيسي'],
+                            ['', text('اختر السلسلة الرئيسية', 'Select parent chain')],
                             ...parentCustomerOptions.map((customer) => [
                               customer.id,
                               customer.name || 'عميل',
@@ -2966,7 +2989,7 @@ export default function AddCustomerContract() {
                           ]}
                         />
                         <p className="mt-1.5 text-xs text-muted-foreground">
-                          ستظهر الصيدلية/العميل الرئيسي في التقارير لتسهيل متابعة فروع السلاسل.
+                          سيُربط هذا العقد بالفرع فقط، مع ظهور السلسلة الرئيسية في التقارير.
                         </p>
                         {errors.parentCustomerId?.message && (
                           <ErrorText>{String(errors.parentCustomerId.message)}</ErrorText>
@@ -2977,7 +3000,7 @@ export default function AddCustomerContract() {
                     <FormField
                       label={
                         <>
-                          رقم الترخيص
+                          {text('رقم الترخيص', 'License number')}
                           <span className="mr-1 text-red-500">*</span>
                         </>
                       }
@@ -3007,7 +3030,7 @@ export default function AddCustomerContract() {
                       }
                     >
                       <Label>
-                        الرقم الضريبي <span className="mr-1 text-red-500">*</span>
+                        {text('الرقم الضريبي', 'Tax number')} <span className="mr-1 text-red-500">*</span>
                       </Label>
 
                       <input
@@ -3025,8 +3048,8 @@ export default function AddCustomerContract() {
                         aria-label="حالة الرقم الضريبي"
                       >
                         {[
-                          { value: 'TAX_NUMBER', label: 'لديه رقم ضريبي' },
-                          { value: 'NATIONAL_ID', label: 'لا يوجد رقم ضريبي' },
+                          { value: 'TAX_NUMBER', label: text('لديه رقم ضريبي', 'Has tax number') },
+                          { value: 'NATIONAL_ID', label: text('لا يوجد رقم ضريبي', 'No tax number') },
                         ].map((option) => (
                           <button
                             key={option.value}
@@ -3110,7 +3133,7 @@ export default function AddCustomerContract() {
                           <FormField
                             label={
                               <>
-                                الرقم القومي لصاحب المنشأة
+                                {text('الرقم القومي لصاحب المنشأة', 'Owner national ID')}
                                 <span className="mr-1 text-red-500">*</span>
                               </>
                             }
@@ -3132,7 +3155,7 @@ export default function AddCustomerContract() {
                           />
                           <div>
                             <Label htmlFor="taxExemptionComment">
-                              سبب عدم وجود رقم ضريبي <span className="mr-1 text-red-500">*</span>
+                              {text('سبب عدم وجود رقم ضريبي', 'Reason for no tax number')} <span className="mr-1 text-red-500">*</span>
                             </Label>
                             <Textarea
                               id="taxExemptionComment"
@@ -3160,12 +3183,12 @@ export default function AddCustomerContract() {
                     <FormField
                       label={
                         <>
-                          السجل التجاري
+                          {text('السجل التجاري', 'Commercial registration')}
                           {structure === 'CHAIN' && <span className="mr-1 text-red-500">*</span>}
                         </>
                       }
                       registration={register('registrationNumber', {
-                        required: structure === 'CHAIN' ? 'رقم السجل التجاري مطلوب للسلاسل' : false,
+                        required: structure === 'CHAIN' ? 'رقم السجل التجاري مطلوب للمقر الرئيسي للسلسلة' : false,
                         pattern: {
                           value: /^\d+$/,
                           message: 'رقم السجل التجاري يجب أن يحتوي على أرقام فقط',
@@ -3190,7 +3213,7 @@ export default function AddCustomerContract() {
                     <div>
                       <CardTitle className="flex items-center gap-2 text-base">
                         <FileText className="h-5 w-5 text-muted-foreground" />
-                        مستندات العميل
+                        {text('مستندات العميل', 'Customer documents')}
                       </CardTitle>
 
                       <p className="mt-1 text-xs text-muted-foreground">
@@ -3416,7 +3439,7 @@ export default function AddCustomerContract() {
                   <div>
                     <CardTitle className="flex items-center gap-2 text-base">
                       <MapPin className="h-5 w-5 text-muted-foreground" />
-                      عنوان المنشأة
+                      {text('عنوان المنشأة', 'Facility address')}
                     </CardTitle>
 
                     <p className="mt-1 text-xs text-muted-foreground">
@@ -3445,7 +3468,7 @@ export default function AddCustomerContract() {
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                     <div>
                       <Label>
-                        المحافظة
+                        {text('المحافظة', 'Governorate')}
                         <span className="mr-1 text-red-500">*</span>
                       </Label>
                       <Controller
@@ -3478,7 +3501,7 @@ export default function AddCustomerContract() {
                             placeholder={
                               isGeographyLoading ? 'جارٍ تحميل المحافظات...' : 'اختر المحافظة'
                             }
-                            searchPlaceholder="ابحث عن محافظة..."
+                            searchPlaceholder={text('ابحث عن محافظة...', 'Search governorate...')}
                             options={[
                               [
                                 '',
@@ -3501,7 +3524,7 @@ export default function AddCustomerContract() {
                       <SelectField
                         label={
                           <>
-                            الفرع
+                            {text('الفرع', 'Branch')}
                             <span className="mr-1 text-red-500">*</span>
                           </>
                         }
@@ -3528,7 +3551,7 @@ export default function AddCustomerContract() {
                         placeholder={
                           governorateId ? 'اختر الفرع' : 'اختر المحافظة أولاً'
                         }
-                        searchPlaceholder="ابحث عن فرع..."
+                        searchPlaceholder={text('ابحث عن فرع...', 'Search branch...')}
                         error={errors.zoneId?.message}
                       />
                       <p className="mt-1.5 text-xs text-muted-foreground">
@@ -3538,7 +3561,7 @@ export default function AddCustomerContract() {
 
                     <div>
                       <Label>
-                        المركز / القسم
+                        {text('المركز / القسم', 'District / division')}
                         <span className="mr-1 text-red-500">*</span>
                       </Label>
                       <Controller
@@ -3564,7 +3587,7 @@ export default function AddCustomerContract() {
                             placeholder={
                               governorateId ? 'اختر المركز أو القسم' : 'اختر المحافظة أولاً'
                             }
-                            searchPlaceholder="ابحث عن مركز أو قسم..."
+                            searchPlaceholder={text('ابحث عن مركز أو قسم...', 'Search district or division...')}
                             options={[
                               ['', governorateId ? 'اختر المركز أو القسم' : 'اختر المحافظة أولاً'],
                               ...districts.map((district) => [
@@ -3582,7 +3605,7 @@ export default function AddCustomerContract() {
 
                     <div>
                       <Label>
-                        الحي / الشياخة
+                        {text('الحي / الشياخة', 'Neighborhood / shiyakha')}
                         {shiyakhas.length > 0 && <span className="mr-1 text-red-500">*</span>}
                       </Label>
                       <Controller
@@ -3639,7 +3662,7 @@ export default function AddCustomerContract() {
                     <FormField
                       label={
                         <>
-                          الشارع
+                          {text('الشارع', 'Street')}
                           <span className="mr-1 text-red-500">*</span>
                         </>
                       }
@@ -3653,7 +3676,7 @@ export default function AddCustomerContract() {
                     <FormField
                       label={
                         <>
-                          رقم المبنى
+                          {text('رقم المبنى', 'Building number')}
                           <span className="mr-1 text-red-500">*</span>
                         </>
                       }
@@ -3673,7 +3696,7 @@ export default function AddCustomerContract() {
                     />
 
                     <FormField
-                      label="رمز الموقع العالمي (GLN)"
+                      label={text('رمز الموقع العالمي (GLN)', 'Global Location Number (GLN)')}
                       registration={register('address.glnCode', {
                         validate: (value) =>
                           !value ||
@@ -3691,7 +3714,7 @@ export default function AddCustomerContract() {
                   <div className="md:col-span-2 lg:col-span-3 rounded-xl border border-border bg-muted/20 p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                       <div>
-                        <Label>موقع المنشأة على خرائط Google</Label>
+                        <Label>{text('موقع المنشأة على خرائط Google', 'Facility location on Google Maps')}</Label>
                         <p className="mt-1 text-xs text-muted-foreground">
                           استخدم موقعك الحالي أولًا، ثم اضغط على الخريطة لتحديد موقع المنشأة بدقة.
                         </p>
@@ -3731,7 +3754,7 @@ export default function AddCustomerContract() {
 
                     <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
                       <FormField
-                        label="رابط موقع Google Maps"
+                        label={text('رابط موقع Google Maps', 'Google Maps URL')}
                         registration={register('address.googleMapsUrl', {
                           validate: (value) => {
                             if (!value) return true;
@@ -3756,7 +3779,7 @@ export default function AddCustomerContract() {
                       />
 
                       <FormField
-                        label="خط العرض (Latitude)"
+                        label={text('خط العرض (Latitude)', 'Latitude')}
                         registration={register('address.latitude', {
                           validate: (value) => {
                             const longitude = getValues('address.longitude');
@@ -3774,7 +3797,7 @@ export default function AddCustomerContract() {
                       />
 
                       <FormField
-                        label="خط الطول (Longitude)"
+                        label={text('خط الطول (Longitude)', 'Longitude')}
                         registration={register('address.longitude', {
                           validate: (value) => {
                             const latitude = getValues('address.latitude');
@@ -3803,7 +3826,7 @@ export default function AddCustomerContract() {
                   <div className="flex items-center justify-between">
                     <CardTitle className="flex items-center gap-2 text-base">
                       <Users className="h-5 w-5 text-muted-foreground" />
-                      بيانات المتعاقد
+                      {text('بيانات المتعاقد', 'Contracting party details')}
                     </CardTitle>
 
                     <Button
@@ -3930,7 +3953,7 @@ export default function AddCustomerContract() {
                               </div>
 
                               <div>
-                                <Label>صفة</Label>
+                                <Label>{text('صفة', 'Role')}</Label>
                                 <Input
                                   value={primaryRoleLabel}
                                   readOnly
@@ -3983,7 +4006,7 @@ export default function AddCustomerContract() {
                           />
 
                           {/* <FormField
-                            label="الاسم بالإنجليزية"
+                            label={text('الاسم بالإنجليزية', 'Name in English')}
                             registration={register(`contacts.${contactIndex}.nameEn`)}
                             placeholder="English name"
                           /> */}
@@ -4014,7 +4037,7 @@ export default function AddCustomerContract() {
                           />
 
                           <FormField
-                            label="البريد الإلكتروني"
+                            label={text('البريد الإلكتروني', 'Email address')}
                             registration={register(`contacts.${contactIndex}.email`, {
                               validate: (value) =>
                                 !value ||
@@ -4064,7 +4087,7 @@ export default function AddCustomerContract() {
                       {/* Contract Date */}
 
                       <div>
-                        <Label>تاريخ العقد</Label>
+                        <Label>{text('تاريخ العقد', 'Contract date')}</Label>
 
                         <div className="relative mt-2">
                           <CalendarDays className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -4083,7 +4106,7 @@ export default function AddCustomerContract() {
                       {/* <FormField
                     label={
                       <>
-                        رقم العقد
+                        {text('رقم العقد', 'Contract number')}
                         <span className="mr-1 text-red-500">*</span>
                       </>
                     }
@@ -4098,7 +4121,7 @@ export default function AddCustomerContract() {
                       {/* <SelectField
                     label={
                       <>
-                        الفرع التابع للعميل
+                        {text('الفرع التابع للعميل', 'Customer branch')}
                         <span className="mr-1 text-red-500">*</span>
                       </>
                     }
@@ -4126,7 +4149,7 @@ export default function AddCustomerContract() {
                       <SelectField
                         label={
                           <>
-                            اسم البرنامج
+                            {text('اسم البرنامج', 'Program')}
                             <span className="mr-1 text-red-500">*</span>
                           </>
                         }
@@ -4146,7 +4169,7 @@ export default function AddCustomerContract() {
 
                       <div>
                         <Label>
-                          نوع التعاقد
+                          {text('نوع التعاقد', 'Contract type')}
                           <span className="mr-1 text-red-500">*</span>
                         </Label>
 
@@ -4187,7 +4210,7 @@ export default function AddCustomerContract() {
                       </div>
 
                       <SelectField
-                        label="نوع الاشتراك"
+                        label={text('نوع الاشتراك', 'Subscription type')}
                         registration={register('mainSubscriptionServiceId', {
                           required: 'يجب اختيار نوع الاشتراك الأساسية',
                           valueAsNumber: true,
@@ -4205,7 +4228,7 @@ export default function AddCustomerContract() {
 
                       {/* Responsible Representative */}
                       <div className="rounded-xl border border-border bg-card p-4 md:col-span-2 lg:col-span-1">
-                        <Label className="text-sm font-medium">المندوب</Label>
+                        <Label className="text-sm font-medium">{text('المندوب', 'Representative')}</Label>
                         <Input
                           value={currentUserName}
                           readOnly
@@ -4221,7 +4244,7 @@ export default function AddCustomerContract() {
                       <div className="rounded-xl border border-border bg-card p-4 md:col-span-2 lg:col-span-1">
                         <div className="flex items-center justify-between gap-4">
                           <div>
-                            <Label className="text-sm font-medium">يوجد مشارك في العقد؟</Label>
+                            <Label className="text-sm font-medium">{text('يوجد مشارك في العقد؟', 'Is there a contract participant?')}</Label>
 
                             <p className="mt-1 text-xs text-muted-foreground">
                               يمكنك إضافة مستخدم آخر كمشارك في هذا العقد.
@@ -4247,7 +4270,7 @@ export default function AddCustomerContract() {
 
                         {hasParticipant && (
                           <div className="mt-4">
-                            <Label>المشارك</Label>
+                            <Label>{text('المشارك', 'Participant')}</Label>
 
                             <Popover open={participantOpen} onOpenChange={setParticipantOpen}>
                               <PopoverTrigger asChild>
@@ -4335,7 +4358,7 @@ export default function AddCustomerContract() {
                       {/* Next Due Date */}
 
                       {/* <div>
-                    <Label>تاريخ استحقاق الاشتراك القادم</Label>
+                    <Label>{text('تاريخ استحقاق الاشتراك القادم', 'Next subscription due date')}</Label>
 
                     <div className="relative mt-2">
                       <CalendarDays className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -4381,7 +4404,7 @@ export default function AddCustomerContract() {
                       {/* Installation */}
 
                       <div>
-                        <Label>تاريخ التركيب</Label>
+                        <Label>{text('تاريخ التركيب', 'Installation date')}</Label>
 
                         <div className="relative mt-2">
                           <Wrench className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -4413,7 +4436,7 @@ export default function AddCustomerContract() {
                         <div>
                           <CardTitle className="flex items-center gap-2 text-base">
                             <Wrench className="h-5 w-5 text-muted-foreground" />
-                            الخدمات الإضافية والأجهزة
+                            {text('الخدمات الإضافية والأجهزة', 'Additional services and devices')}
                           </CardTitle>
                           <p className="mt-1 text-xs text-muted-foreground">
                             الخدمات الإضافية تُفوتر وتُحصّل عند اعتماد العقد، بينما الأجهزة تُفوتر
@@ -4455,7 +4478,7 @@ export default function AddCustomerContract() {
                             <div className="rounded-2xl border border-primary/15 bg-primary/[0.03] p-4">
                               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
-                                  <h4 className="font-semibold">أضف خدمة من الكتالوج</h4>
+                                  <h4 className="font-semibold">{text('أضف خدمة من الكتالوج', 'Add a service from the catalog')}</h4>
                                   <p className="mt-1 text-xs leading-5 text-muted-foreground">
                                     اختر الوحدة الإضافية أو خدمة النسخ. الخدمات حسب الكمية يمكن
                                     إضافتها أكثر من مرة.
@@ -4486,7 +4509,7 @@ export default function AddCustomerContract() {
 
                               <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
                                 <div>
-                                  <Label>الخدمة الإضافية</Label>
+                                  <Label>{text('الخدمة الإضافية', 'Additional service')}</Label>
                                   <SearchableSelect
                                     value={selectedAdditionalServiceId}
                                     options={additionalServicePickerOptions}
@@ -4558,7 +4581,7 @@ export default function AddCustomerContract() {
                                         </p>
                                       </div>
                                       <div>
-                                        <Label>الكمية</Label>
+                                        <Label>{text('الكمية', 'Quantity')}</Label>
                                         {service.isQuantityBased ? (
                                           <Input
                                             type="number"
@@ -4580,7 +4603,7 @@ export default function AddCustomerContract() {
                                         )}
                                       </div>
                                       <div>
-                                        <Label>إجمالي السعر</Label>
+                                        <Label>{text('إجمالي السعر', 'Total price')}</Label>
                                         <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-muted/20 px-3 text-sm font-semibold">
                                           {(service.joining_fee * quantity).toLocaleString('ar-EG')}{' '}
                                           جنيه
@@ -4709,7 +4732,7 @@ export default function AddCustomerContract() {
                                         </p>
                                       </div>
                                       <div>
-                                        <Label>الكمية</Label>
+                                        <Label>{text('الكمية', 'Quantity')}</Label>
                                         <Input
                                           type="number"
                                           min="1"
@@ -4725,7 +4748,7 @@ export default function AddCustomerContract() {
                                         />
                                       </div>
                                       <div>
-                                        <Label>إجمالي</Label>
+                                        <Label>{text('إجمالي', 'Total')}</Label>
                                         <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-background px-3 text-sm font-semibold">
                                           {(service.joining_fee * quantity).toLocaleString('ar-EG')}{' '}
                                           جنيه
@@ -4818,7 +4841,7 @@ export default function AddCustomerContract() {
                                         <div>
                                           {service.isQuantityBased ? (
                                             <>
-                                              <Label>الكمية</Label>
+                                              <Label>{text('الكمية', 'Quantity')}</Label>
                                               <Input
                                                 type="number"
                                                 min="1"
@@ -4838,7 +4861,7 @@ export default function AddCustomerContract() {
                                             </>
                                           ) : (
                                             <>
-                                              <Label>الكمية</Label>
+                                              <Label>{text('الكمية', 'Quantity')}</Label>
                                               <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-muted/40 px-3 text-sm">
                                                 خدمة واحدة
                                               </div>
@@ -4846,7 +4869,7 @@ export default function AddCustomerContract() {
                                           )}
                                         </div>
                                         <div>
-                                          <Label>الإجمالي</Label>
+                                          <Label>{text('الإجمالي', 'Total')}</Label>
                                           <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-background px-3 text-sm font-semibold">
                                             {(service.joining_fee * quantity).toLocaleString(
                                               'ar-EG',
@@ -4946,7 +4969,7 @@ export default function AddCustomerContract() {
                                   <div>
                                     {device.isQuantityBased ? (
                                       <>
-                                        <Label>الكمية</Label>
+                                        <Label>{text('الكمية', 'Quantity')}</Label>
                                         <Input
                                           type="number"
                                           min="1"
@@ -4963,7 +4986,7 @@ export default function AddCustomerContract() {
                                       </>
                                     ) : (
                                       <>
-                                        <Label>الكمية</Label>
+                                        <Label>{text('الكمية', 'Quantity')}</Label>
                                         <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-muted/40 px-3 text-sm">
                                           قطعة واحدة
                                         </div>
@@ -4971,7 +4994,7 @@ export default function AddCustomerContract() {
                                     )}
                                   </div>
                                   <div>
-                                    <Label>إجمالي الفاتورة</Label>
+                                    <Label>{text('إجمالي الفاتورة', 'Invoice total')}</Label>
                                     <div className="mt-2 flex h-11 items-center rounded-xl border border-input bg-background px-3 text-sm font-semibold">
                                       {(device.joining_fee * quantity).toLocaleString('ar-EG')} جنيه
                                     </div>
@@ -5017,7 +5040,7 @@ export default function AddCustomerContract() {
                       customerTypeId === 1 ? 'صيدلي' : customerTypeId === 2 ? 'تجاري' : '—'
                     }
                     structure={
-                      structure === 'CHAIN' ? 'سلسلة' : structure === 'SINGLE' ? 'فرع واحد' : '—'
+                      structure === 'CHAIN' ? 'المقر الرئيسي لسلسلة' : structure === 'BRANCH' ? 'فرع تابع لسلسلة' : structure === 'SINGLE' ? 'فرع مستقل' : '—'
                     }
                     zoneName={selectedZone?.name_ar || 'لم يتم الاختيار'}
                     contactCount={contactFields.length}
@@ -5043,7 +5066,7 @@ export default function AddCustomerContract() {
                     <div className="rounded-2xl border border-border bg-muted/25 p-4">
                       <h2 id="collection-review-title" className="flex items-center gap-2 font-bold">
                         <CreditCard className="h-5 w-5 text-muted-foreground" />
-                        التحصيل
+                        {text('التحصيل', 'Collection')}
                       </h2>
                       <p className="mt-1 text-xs leading-5 text-muted-foreground">
                         تحصيل العقد وتحصيل الخدمات الإضافية عمليتان منفصلتان بإيصالات مستقلة، ويظهران هنا معًا بعد المراجعة النهائية.
@@ -5055,14 +5078,14 @@ export default function AddCustomerContract() {
                         <CardHeader>
                           <CardTitle className="flex items-center gap-2 text-base">
                             <CreditCard className="h-5 w-5 text-muted-foreground" />
-                            تحصيل العقد
+                            {text('تحصيل العقد', 'Contract collection')}
                           </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-6">
                           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                            <MoneyCard label="إجمالي العقد" value={totalContractValue} />
-                            <MoneyCard label="المحصل" value={paymentAmount} />
-                            <MoneyCard label="المتبقي" value={remainingAmount} />
+                            <MoneyCard label={text('إجمالي العقد', 'Contract total')} value={totalContractValue} />
+                            <MoneyCard label={text('المحصل', 'Collected')} value={paymentAmount} />
+                            <MoneyCard label={text('المتبقي', 'Remaining')} value={remainingAmount} />
                           </div>
                           <InitialPaymentsSection
                             total={totalContractValue}
@@ -5087,7 +5110,7 @@ export default function AddCustomerContract() {
                             </div>
                           </div>
                           <div>
-                            <Label>ملاحظات العقد</Label>
+                            <Label>{text('ملاحظات العقد', 'Contract notes')}</Label>
                             <Textarea
                               {...register('notes')}
                               placeholder="أضف أي ملاحظات مرتبطة بالعقد أو العميل..."
@@ -5101,7 +5124,7 @@ export default function AddCustomerContract() {
                         <CardHeader>
                           <CardTitle className="flex items-center gap-2 text-base">
                             <Wrench className="h-5 w-5 text-amber-700 dark:text-amber-400" />
-                            اعتماد الخدمات الإضافية وتحصلها
+                            {text('اعتماد الخدمات الإضافية وتحصلها', 'Additional services approval and collection')}
                           </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-3 text-sm">
@@ -5145,7 +5168,7 @@ export default function AddCustomerContract() {
                     <CardHeader>
                       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                         <div>
-                          <CardTitle className="text-base">الشهور المطلوب سدادها</CardTitle>
+                          <CardTitle className="text-base">{text('الشهور المطلوب سدادها', 'Months to collect')}</CardTitle>
 
                           <p className="mt-1 text-xs text-muted-foreground">
                             اختر الشهور التي يريد العميل سدادها في التحصيل الحالي.
@@ -5401,30 +5424,32 @@ export default function AddCustomerContract() {
                         </div>
 
                         <div className="space-y-4">
-                          <ReviewRow label="العميل" value={customerNameAr || '—'} />
+                          <ReviewRow label={text('العميل', 'Customer')} value={customerNameAr || '—'} />
 
-                          <ReviewRow label="الكود" value={customerCode || '—'} />
+                          <ReviewRow label={text('الكود', 'Code')} value={customerCode || '—'} />
 
                           <ReviewRow
-                            label="نوع العميل"
+                            label={text('نوع العميل', 'Customer type')}
                             value={
                               customerTypeId === 1 ? 'صيدلي' : customerTypeId === 2 ? 'تجاري' : '—'
                             }
                           />
 
                           <ReviewRow
-                            label="نوع الصيدلية"
+                            label={text('نوع الصيدلية', 'Pharmacy structure')}
                             value={
                               structure === 'CHAIN'
-                                ? 'سلسلة'
+                                ? 'المقر الرئيسي لسلسلة'
+                                : structure === 'BRANCH'
+                                  ? 'فرع تابع لسلسلة'
                                 : structure === 'SINGLE'
-                                  ? 'فرع واحد'
+                                  ? 'فرع مستقل'
                                   : '—'
                             }
                           />
 
                           <ReviewRow
-                            label="الفرع"
+                            label={text('الفرع', 'Branch')}
                             value={
                               selectedZone
                                 ? `فرع ${selectedZone.name_ar || 'مدينة غير محددة'}`
@@ -5432,10 +5457,10 @@ export default function AddCustomerContract() {
                             }
                           />
 
-                          <ReviewRow label="المندوب المسؤول" value={currentUserName} />
+                          <ReviewRow label={text('المندوب المسؤول', 'Responsible representative')} value={currentUserName} />
 
                           <ReviewRow
-                            label="المشارك"
+                            label={text('المشارك', 'Participant')}
                             value={
                               hasParticipant
                                 ? selectedParticipant?.nameAr || 'لم يتم الاختيار'
@@ -5443,63 +5468,63 @@ export default function AddCustomerContract() {
                             }
                           />
 
-                          <ReviewRow label="عدد جهات الاتصال" value={`${contactFields.length}`} />
+                          <ReviewRow label={text('عدد جهات الاتصال', 'Contact count')} value={`${contactFields.length}`} />
 
-                          <ReviewRow label="المستندات" value={`${documentFields.length}`} />
+                          <ReviewRow label={text('المستندات', 'Documents')} value={`${documentFields.length}`} />
 
                           <ReviewRow
-                            label="الشهور المحددة"
+                            label={text('الشهور المحددة', 'Selected months')}
                             value={`${selectedMonths.length} شهور`}
                           />
 
                           <Separator />
 
                           <ReviewRow
-                            label="رسوم الانضمام قبل الخصم"
+                            label={text('رسوم الانضمام قبل الخصم', 'Joining fee before discount')}
                             value={`${joiningFee.toLocaleString('ar-EG')} جنيه`}
                           />
 
                           <ReviewRow
-                            label="رسوم الانضمام بعد الخصم"
+                            label={text('رسوم الانضمام بعد الخصم', 'Joining fee after discount')}
                             value={`${joiningFeeAfterDiscount.toLocaleString('ar-EG')} جنيه`}
                           />
 
                           <ReviewRow
-                            label="الاشتراك قبل الخصم"
+                            label={text('الاشتراك قبل الخصم', 'Subscription before discount')}
                             value={`${monthlySubscription.toLocaleString('ar-EG')} جنيه`}
                           />
 
                           <ReviewRow
-                            label="الاشتراك بعد الخصم"
+                            label={text('الاشتراك بعد الخصم', 'Subscription after discount')}
                             value={`${subscriptionFeeAfterDiscount.toLocaleString('ar-EG')} جنيه`}
                           />
 
                           <ReviewRow
-                            label="الإجمالي قبل الخصم"
+                            label={text('الإجمالي قبل الخصم', 'Total before discount')}
                             value={`${totalBeforeDiscount.toLocaleString('ar-EG')} جنيه`}
                           />
 
                           <ReviewRow
-                            label="إجمالي خصومات العقد"
+                            label={text('إجمالي خصومات العقد', 'Total contract discounts')}
                             value={`${discountAmount.toLocaleString('ar-EG')} جنيه`}
                           />
 
                           <ReviewRow
-                            label="الإجمالي بعد الخصم"
+                            label={text('الإجمالي بعد الخصم', 'Total after discount')}
                             value={`${grossContractValue.toLocaleString('ar-EG')} جنيه`}
                           />
 
                           <ReviewRow
-                            label="المحصل"
+                            label={text('المحصل', 'Collected')}
                             value={`${paymentAmount.toLocaleString('ar-EG')} جنيه`}
                           />
 
                           <ReviewRow
-                            label="المتبقي"
+                            label={text('المتبقي', 'Remaining')}
                             value={`${remainingAmount.toLocaleString('ar-EG')} جنيه`}
                           />
 
-                          <ReviewRow label="طرق الدفع" value={initialPaymentMethodLabel} />
+                          <ReviewRow label={text('طرق الدفع', 'Payment methods')} value={initialPaymentMethodLabel} />
                         </div>
 
                         <Separator />
@@ -5537,7 +5562,9 @@ export default function AddCustomerContract() {
 
           <Card className="sticky bottom-4 border-border bg-card shadow-lg">
             <CardContent className="flex flex-col-reverse gap-3 p-4 md:flex-row md:items-center md:justify-between">
-              <div className="text-xs text-muted-foreground">الخطوة {activeStep} من 3</div>
+              <div className="text-xs text-muted-foreground">
+                {t('CONTRACT.STEP_PROGRESS', { current: activeStep, total: 3 })}
+              </div>
 
               <div className="flex w-full items-center gap-3 md:w-auto">
                 {activeStep > 1 && (
@@ -5548,7 +5575,7 @@ export default function AddCustomerContract() {
                     className="h-11 flex-1 rounded-xl md:flex-none"
                   >
                     <ArrowRight className="ml-2 h-4 w-4" />
-                    السابق
+                    {t('PREVIOUS')}
                   </Button>
                 )}
 
@@ -5558,7 +5585,7 @@ export default function AddCustomerContract() {
                     onClick={() => void saveWorkflowCustomer()}
                     className="h-11 flex-1 rounded-xl bg-foreground text-background hover:bg-foreground/90 md:flex-none"
                   >
-                    حفظ بيانات العميل
+                    {t('CONTRACT.SAVE_CUSTOMER')}
                   </Button>
                 ) : activeStep === 1 ? (
                   <Button
@@ -5575,7 +5602,7 @@ export default function AddCustomerContract() {
                       md:flex-none
                     "
                   >
-                    التالي
+                    {t('NEXT')}
                     <ArrowLeft className="mr-2 h-4 w-4" />
                   </Button>
                 ) : activeStep === 2 ? (
@@ -5594,7 +5621,7 @@ export default function AddCustomerContract() {
                       md:flex-none
                     "
                   >
-                    التالي: الإضافات والأجهزة
+                    {t('CONTRACT.NEXT_ADDONS')}
                     <ArrowLeft className="mr-2 h-4 w-4" />
                   </Button>
                 ) : (
@@ -5609,7 +5636,11 @@ export default function AddCustomerContract() {
                       md:flex-none
                     "
                   >
-                    {isSubmitting ? 'جاري الحفظ...' : workflowBillingEdit ? 'حفظ تعديل العقد' : 'إرسال العقد'}
+                    {isSubmitting
+                      ? t('CONTRACT.SAVING')
+                      : workflowBillingEdit
+                        ? t('CONTRACT.SAVE_CONTRACT_UPDATE')
+                        : t('CONTRACT.SUBMIT')}
 
                     <Check className="mr-2 h-4 w-4" />
                   </Button>
@@ -5809,10 +5840,13 @@ function InitialPaymentsSection({
   errors,
   onAmountInput,
 }: any) {
+  const { i18n } = useTranslation();
+  const text = (arabic: string, english: string) =>
+    (i18n.resolvedLanguage ?? i18n.language) === 'ar' ? arabic : english;
   const { fields, append, remove } = useFieldArray({ control, name: 'initialPayments' });
   const payments = useWatch({ control, name: 'initialPayments' }) || [];
   const bankOptions = [
-    ['', isBanksLoading ? 'جارٍ تحميل البنوك...' : 'اختر البنك'],
+    ['', isBanksLoading ? text('جارٍ تحميل البنوك...', 'Loading banks...') : text('اختر البنك', 'Select bank')],
     ...banks.map((bank: any) => [
       bank.id,
       `${bank.nameAr ?? bank.name_ar ?? bank.nameEn ?? bank.name_en} — ${bank.nameEn ?? bank.name_en}`,
@@ -5845,7 +5879,7 @@ function InitialPaymentsSection({
     <div>
       <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h3 className="text-sm font-bold">تسجيل مبلغ التحصيل</h3>
+          <h3 className="text-sm font-bold">{text('تسجيل مبلغ التحصيل', 'Record collection amount')}</h3>
           <p className="mt-1 text-xs text-muted-foreground">
             يمكن توزيع المبلغ المحصل على أكثر من وسيلة دفع. سيُنشأ إيصال مستقل لكل وسيلة.
           </p>
@@ -5858,7 +5892,7 @@ function InitialPaymentsSection({
           disabled={remainingAmount <= 0.009}
           className="rounded-xl"
         >
-          <Plus className="ml-2 h-4 w-4" /> إضافة وسيلة دفع
+          <Plus className="ml-2 h-4 w-4" /> {text('إضافة وسيلة دفع', 'Add payment method')}
         </Button>
       </div>
 
@@ -5897,7 +5931,7 @@ function InitialPaymentsSection({
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <Label>المبلغ المحصل</Label>
+                  <Label>{text('المبلغ المحصل', 'Collected amount')}</Label>
                   <div className="relative mt-2">
                     <Input
                       type="number"
@@ -5924,7 +5958,7 @@ function InitialPaymentsSection({
                   {entryErrors.amount && <ErrorText>{entryErrors.amount.message}</ErrorText>}
                 </div>
                 <SelectField
-                  label="طريقة الدفع"
+                  label={text('طريقة الدفع', 'Payment method')}
                   registration={register(`${prefix}.paymentMethodId`, {
                     required: 'طريقة الدفع مطلوبة',
                     valueAsNumber: true,
@@ -5951,7 +5985,7 @@ function InitialPaymentsSection({
               {code === 'BANKTRANSFER' && (
                 <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
                   <TextField
-                    label="تاريخ الحوالة"
+                    label={text('تاريخ الحوالة', 'Transfer date')}
                     type="date"
                     registration={register(`${prefix}.paymentDetails.transferDate`, {
                       required: 'تاريخ الحوالة مطلوب',
@@ -5959,7 +5993,7 @@ function InitialPaymentsSection({
                     error={entryErrors.paymentDetails?.transferDate?.message}
                   />
                   <SelectField
-                    label="البنك"
+                    label={text('البنك', 'Bank')}
                     registration={register(`${prefix}.paymentDetails.bankId`, {
                       required: 'البنك مطلوب',
                       valueAsNumber: true,
@@ -5970,7 +6004,7 @@ function InitialPaymentsSection({
                     error={entryErrors.paymentDetails?.bankId?.message}
                   />
                   <TextField
-                    label="الرقم المرجعي"
+                    label={text('الرقم المرجعي', 'Reference number')}
                     registration={register(`${prefix}.paymentDetails.referenceNumber`, {
                       required: 'الرقم المرجعي مطلوب',
                       validate: (value: string) =>
@@ -6002,7 +6036,7 @@ function InitialPaymentsSection({
                     }}
                   />
                   <TextField
-                    label="تاريخ العملية"
+                    label={text('تاريخ العملية', 'Transaction date')}
                     type="date"
                     registration={register(`${prefix}.paymentDetails.transactionDate`, {
                       required: 'تاريخ العملية مطلوب',
@@ -6026,7 +6060,7 @@ function InitialPaymentsSection({
                     error={entryErrors.paymentDetails?.bankId?.message}
                   />
                   <TextField
-                    label="رقم الشيك"
+                    label={text('رقم الشيك', 'Cheque number')}
                     registration={register(`${prefix}.paymentDetails.chequeNumber`, {
                       required: 'رقم الشيك مطلوب',
                       validate: (value: string) =>
@@ -6040,7 +6074,7 @@ function InitialPaymentsSection({
                     }}
                   />
                   <TextField
-                    label="تاريخ استحقاق الشيك"
+                    label={text('تاريخ استحقاق الشيك', 'Cheque due date')}
                     type="date"
                     registration={register(`${prefix}.paymentDetails.chequeDueDate`, {
                       required: 'تاريخ الاستحقاق مطلوب',
@@ -6052,7 +6086,7 @@ function InitialPaymentsSection({
               {code && (
                 <div className="mt-4">
                   <TextField
-                    label="رقم الإيصال"
+                    label={text('رقم الإيصال', 'Receipt number')}
                     registration={register(`${prefix}.paymentDetails.receiptNumber`, {
                       required: 'رقم الإيصال مطلوب',
                       validate: (value: string) =>
@@ -6090,18 +6124,21 @@ function AddOnReceiptSection({
   errors,
   onAmountInput,
 }: any) {
+  const { i18n } = useTranslation();
+  const text = (arabic: string, english: string) =>
+    (i18n.resolvedLanguage ?? i18n.language) === 'ar' ? arabic : english;
   if (total <= 0) {
     return (
       <Card className="border-dashed border-border bg-muted/20 shadow-sm">
         <CardContent className="p-6 text-center text-sm text-muted-foreground">
-          لم يتم اختيار خدمات إضافية. لن يتم إنشاء فاتورة أو إيصال خدمات إضافية.
+          {text('لم يتم اختيار خدمات إضافية. لن يتم إنشاء فاتورة أو إيصال خدمات إضافية.', 'No additional services selected. No additional-service invoice or receipt will be created.')}
         </CardContent>
       </Card>
     );
   }
 
   const bankOptions = [
-    ['', isBanksLoading ? 'جارٍ تحميل البنوك...' : 'اختر البنك'],
+    ['', isBanksLoading ? text('جارٍ تحميل البنوك...', 'Loading banks...') : text('اختر البنك', 'Select bank')],
     ...banks.map((bank: any) => [
       bank.id,
       `${bank.nameAr ?? bank.name_ar ?? bank.nameEn ?? bank.name_en} — ${bank.nameEn ?? bank.name_en}`,
@@ -6114,7 +6151,7 @@ function AddOnReceiptSection({
           <div className="flex items-center justify-between gap-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <Receipt className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-              تحصيل الإضافات وإيصال مستقل
+              {text('تحصيل الإضافات وإيصال مستقل', 'Add-on collection and separate receipt')}
             </CardTitle>
             <Badge variant="secondary" className="rounded-full">
               {additionalServices.length} خدمات
@@ -6128,7 +6165,7 @@ function AddOnReceiptSection({
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-              <Label>مبلغ إيصال الإضافات</Label>
+              <Label>{text('مبلغ إيصال الإضافات', 'Add-on receipt amount')}</Label>
               <div className="relative mt-2">
                 <Input
                   type="number"
@@ -6157,7 +6194,7 @@ function AddOnReceiptSection({
             </div>
 
             <SelectField
-              label="طريقة دفع الإضافات"
+              label={text('طريقة دفع الإضافات', 'Add-on payment method')}
               registration={register('addOnPayment.paymentMethodId', {
                 required: 'طريقة دفع الإضافات مطلوبة',
                 valueAsNumber: true,
@@ -6174,7 +6211,7 @@ function AddOnReceiptSection({
           {paymentMethodCode === 'BANKTRANSFER' && (
             <div className="grid grid-cols-1 gap-4 rounded-xl border border-border bg-muted/20 p-4 md:grid-cols-3">
               <TextField
-                label="تاريخ الحوالة"
+                label={text('تاريخ الحوالة', 'Transfer date')}
                 type="date"
                 registration={register('addOnPayment.paymentDetails.transferDate', {
                   required: 'تاريخ الحوالة مطلوب',
@@ -6182,7 +6219,7 @@ function AddOnReceiptSection({
                 error={errors.addOnPayment?.paymentDetails?.transferDate?.message}
               />
               <SelectField
-                label="البنك"
+                label={text('البنك', 'Bank')}
                 registration={register('addOnPayment.paymentDetails.bankId', {
                   required: 'البنك مطلوب',
                   valueAsNumber: true,
@@ -6195,7 +6232,7 @@ function AddOnReceiptSection({
                 searchPlaceholder="ابحث عن بنك..."
               />
               <TextField
-                label="الرقم المرجعي"
+                label={text('الرقم المرجعي', 'Reference number')}
                 registration={register('addOnPayment.paymentDetails.referenceNumber', {
                   required: 'الرقم المرجعي مطلوب',
                   validate: (value: string) =>
@@ -6230,7 +6267,7 @@ function AddOnReceiptSection({
                 }}
               />
               <TextField
-                label="تاريخ العملية"
+                label={text('تاريخ العملية', 'Transaction date')}
                 type="date"
                 registration={register('addOnPayment.paymentDetails.transactionDate', {
                   required: 'تاريخ العملية مطلوب',
@@ -6256,7 +6293,7 @@ function AddOnReceiptSection({
                 searchPlaceholder="ابحث عن بنك..."
               />
               <TextField
-                label="رقم الشيك"
+                label={text('رقم الشيك', 'Cheque number')}
                 registration={register('addOnPayment.paymentDetails.chequeNumber', {
                   required: 'رقم الشيك مطلوب',
                   validate: (value: string) =>
@@ -6271,7 +6308,7 @@ function AddOnReceiptSection({
                 }}
               />
               <TextField
-                label="تاريخ استحقاق الشيك"
+                label={text('تاريخ استحقاق الشيك', 'Cheque due date')}
                 type="date"
                 registration={register('addOnPayment.paymentDetails.chequeDueDate', {
                   required: 'تاريخ استحقاق الشيك مطلوب',
@@ -6284,7 +6321,7 @@ function AddOnReceiptSection({
           {paymentMethodCode && (
             <div className="rounded-xl border border-border bg-muted/20 p-4">
               <TextField
-                label="رقم إيصال الإضافات"
+                label={text('رقم إيصال الإضافات', 'Add-on receipt number')}
                 registration={register('addOnPayment.paymentDetails.receiptNumber', {
                   required: 'رقم إيصال الإضافات مطلوب',
                   validate: (value) =>
@@ -6303,7 +6340,7 @@ function AddOnReceiptSection({
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {/* <TextField
-              label="سبب تحصيل الإضافات"
+              label={text('سبب تحصيل الإضافات', 'Add-on collection reason')}
               registration={register('addOnPayment.collectionReason', {
                 required: 'سبب تحصيل الإضافات مطلوب',
               })}
@@ -6311,7 +6348,7 @@ function AddOnReceiptSection({
               placeholder="إضافات العقد"
             /> */}
             <TextField
-              label="ملاحظات إيصال الإضافات"
+              label={text('ملاحظات إيصال الإضافات', 'Add-on receipt notes')}
               registration={register('addOnPayment.notes')}
               error={errors.addOnPayment?.notes?.message}
               placeholder="ملاحظات اختيارية"

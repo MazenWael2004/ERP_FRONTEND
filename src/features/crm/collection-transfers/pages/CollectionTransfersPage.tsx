@@ -19,7 +19,26 @@ import { Check, ChevronsUpDown, Landmark, RefreshCw, Send, WalletCards } from 'l
 const money = (value: any) =>
   `${Number(value || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })} EGP`;
 const date = (value: string) =>
-  value ? new Intl.DateTimeFormat('ar-EG', { dateStyle: 'medium' }).format(new Date(value)) : '—';
+  value
+    ? new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Africa/Cairo',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      }).format(new Date(value))
+    : '—';
+// SQL datetime values are business-local Cairo times. Keep their clock value as
+// stored instead of parsing them as UTC and adding a timezone offset.
+const time12 = (value: string) => {
+  const match = String(value || '').match(/(?:T|\s)(\d{1,2}):(\d{2})/);
+  if (!match) return '—';
+
+  const hour = Number(match[1]);
+  const minute = match[2];
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const hour12 = hour % 12 || 12;
+  return `${String(hour12).padStart(2, '0')}:${minute} ${period}`;
+};
 const status: any = {
   TRANSFERRED: 'تم التوريد',
   SETTLED: 'تمت التسوية',
@@ -81,18 +100,27 @@ export default function CollectionTransfersPage() {
     [transferDate, setTransferDate] = useState(''),
     [bankId, setBankId] = useState(''),
     [referenceNumber, setReferenceNumber] = useState(''),
+    [cashVoucherNumber, setCashVoucherNumber] = useState(''),
     [confirm, setConfirm] = useState(false),
     [receipt, setReceipt] = useState(''),
-    [customer, setCustomer] = useState('');
-  const load = async () => {
+    [customer, setCustomer] = useState(''),
+    [customerCode, setCustomerCode] = useState(''),
+    [contractId, setContractId] = useState(''),
+    [fromDate, setFromDate] = useState(''),
+    [toDate, setToDate] = useState('');
+  const load = async (filterValues = { receipt, customer, customerCode, contractId, fromDate, toDate }) => {
     setLoading(true);
     setError('');
     try {
       const [eligible, mine] = await Promise.all([
         api.get('/collection-transfers/eligible-collections', {
           params: {
-            receiptNumber: receipt || undefined,
-            customerName: customer || undefined,
+            receiptNumber: filterValues.receipt || undefined,
+            customerName: filterValues.customer || undefined,
+            customerCode: filterValues.customerCode || undefined,
+            contractId: filterValues.contractId || undefined,
+            fromDate: filterValues.fromDate || undefined,
+            toDate: filterValues.toDate || undefined,
             pageSize: 100,
           },
         }),
@@ -137,6 +165,7 @@ export default function CollectionTransfersPage() {
         transferDate: transferMethod === 'BANK_TRANSFER' ? transferDate : undefined,
         bankId: transferMethod === 'BANK_TRANSFER' ? Number(bankId) : undefined,
         referenceNumber: transferMethod === 'BANK_TRANSFER' ? referenceNumber.trim() : undefined,
+        cashVoucherNumber: transferMethod === 'CASH' ? cashVoucherNumber.trim() : undefined,
       };
       console.log('[CollectionTransfers] Creating transfer payload:', payload);
       await api.post('/collection-transfers', payload);
@@ -145,6 +174,7 @@ export default function CollectionTransfersPage() {
       setTransferDate('');
       setBankId('');
       setReferenceNumber('');
+      setCashVoucherNumber('');
       setConfirm(false);
       await load();
     } catch (e: any) {
@@ -156,6 +186,10 @@ export default function CollectionTransfersPage() {
   const openConfirmation = () => {
     if (transferMethod === 'BANK_TRANSFER' && (!transferDate || !bankId || !referenceNumber.trim())) {
       setError('أدخل تاريخ الحوالة والبنك والرقم المرجعي للتحويل البنكي.');
+      return;
+    }
+    if (transferMethod === 'CASH' && !cashVoucherNumber.trim()) {
+      setError('أدخل رقم الإذن للتوريد النقدي.');
       return;
     }
     setError('');
@@ -181,29 +215,24 @@ export default function CollectionTransfersPage() {
         </div>
       )}
       <div className="grid gap-4 lg:grid-cols-[1fr_330px]">
-        <Card>
+        <Card className="min-w-0">
           <CardHeader>
-            <div className="flex flex-wrap gap-2">
-              {/* <Input
-                value={receipt}
-                onChange={(e) => setReceipt(e.target.value.replace(/\D/g, ''))}
-                placeholder="رقم الإيصال"
-                className="w-44"
-              /> */}
-              <Input
-                value={customer}
-                onChange={(e) => setCustomer(e.target.value)}
-                placeholder="اسم الصيدلية"
-                className="w-52"
-              />
-              <Button variant="secondary" onClick={() => void load()}>
-                بحث
-              </Button>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <Input value={receipt} onChange={(e) => setReceipt(e.target.value)} placeholder="رقم الإيصال" />
+              <Input value={contractId} onChange={(e) => setContractId(e.target.value)} placeholder="كود العميل" />
+              <Input value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder="اسم العميل / الصيدلية" />
+              <label className="grid gap-1 text-xs text-muted-foreground"><span>من تاريخ التحصيل</span><Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} /></label>
+              <label className="grid gap-1 text-xs text-muted-foreground"><span>إلى تاريخ التحصيل</span><Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} /></label>
+              <div className="flex gap-2 xl:col-span-3">
+                <Button variant="secondary" onClick={() => void load()}>بحث</Button>
+                <Button variant="outline" onClick={() => { const reset = { receipt: '', customer: '', customerCode: '', contractId: '', fromDate: '', toDate: '' }; setReceipt(''); setCustomer(''); setCustomerCode(''); setContractId(''); setFromDate(''); setToDate(''); void load(reset); }}>إعادة تعيين</Button>
+              </div>
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[820px] text-right text-sm">
+          <CardContent className="min-w-0">
+            <p className="mb-2 text-xs text-muted-foreground">اسحب الجدول أفقياً لعرض جميع الأعمدة.</p>
+            <div className="max-w-full overflow-x-scroll pb-3">
+              <table className="w-full min-w-[2450px] text-right text-sm">
                 <thead className="border-b text-muted-foreground">
                   <tr>
                     <th className="p-3">
@@ -212,13 +241,7 @@ export default function CollectionTransfersPage() {
                         onCheckedChange={() => setSelected(all ? [] : collections.map((r) => r.id))}
                       />
                     </th>
-                    <th>رقم الإيصال</th>
-                    <th>كود العميل</th>
-                    <th>اسم الصيدلية</th>
-                    <th>تاريخ التحصيل</th>
-                    <th>طريقة الدفع</th>
-                    <th>المبلغ</th>
-                    <th>الحالة</th>
+                    {['كود العميل', 'اسم العميل', 'تاريخ التحصيل', 'وقت إنشاء التحصيل', 'اسم المحصل', 'المشرف', 'المدير', 'رقم الإيصال', 'المبلغ', 'طريقة الدفع', 'اسم البنك', 'الرقم المرجعي', 'رقم الشيك', 'الخدمة', 'شهر الاشتراك', 'سنة الاشتراك', 'حالة التحصيل'].map((header) => <th key={header} className="whitespace-nowrap px-3">{header}</th>)}
                   </tr>
                 </thead>
                 <tbody>
@@ -230,19 +253,28 @@ export default function CollectionTransfersPage() {
                           onCheckedChange={() => toggle(row.id)}
                         />
                       </td>
-                      <td>{row.receipt_number}</td>
-                      <td>{row.contract_id}</td>
-                      <td>{row.customer_name}</td>
-  
-                      <td>{date(row.collected_at)}</td>
-                      <td>{row.payment_method_name}</td>
-                      <td className="font-semibold">{money(row.amount)}</td>
-                      <td>{status[row.workflow_status] || row.workflow_status}</td>
+                      <td className="px-3">{row.customer_code || '—'}</td>
+                      <td className="px-3">{row.customer_name || '—'}</td>
+                      <td className="whitespace-nowrap px-3">{date(row.collected_at)}</td>
+                      <td className="whitespace-nowrap px-3">{time12(row.collection_created_at)}</td>
+                      <td className="px-3">{row.collector_name || '—'}</td>
+                      <td className="px-3">{row.supervisor_name || '—'}</td>
+                      <td className="px-3">{row.manager_name || '—'}</td>
+                      <td className="px-3">{row.receipt_number || '—'}</td>
+                      <td className="whitespace-nowrap px-3 font-semibold">{money(row.amount)}</td>
+                      <td className="px-3">{row.payment_method_name || '—'}</td>
+                      <td className="px-3">{row.bank_name || '—'}</td>
+                      <td className="px-3">{row.reference_number || '—'}</td>
+                      <td className="px-3">{row.cheque_number || '—'}</td>
+                      <td className="px-3">{row.service_name || '—'}</td>
+                      <td className="px-3">{row.subscription_month ?? '—'}</td>
+                      <td className="px-3">{row.subscription_year ?? '—'}</td>
+                      <td className="px-3">{status[row.workflow_status] || row.workflow_status || '—'}</td>
                     </tr>
                   ))}
                   {!loading && !collections.length && (
                     <tr>
-                      <td colSpan={9} className="p-10 text-center text-muted-foreground">
+                      <td colSpan={18} className="p-10 text-center text-muted-foreground">
                         لا توجد تحصيلات متاحة للتوريد.
                       </td>
                     </tr>
@@ -292,6 +324,18 @@ export default function CollectionTransfersPage() {
                 </div>
                 <BankSelect banks={banks} value={bankId} onChange={setBankId} />
                 <Input value={referenceNumber} onChange={(e) => setReferenceNumber(e.target.value)} placeholder="الرقم المرجعي للحوالة" />
+              </div>
+            )}
+            {transferMethod === 'CASH' && (
+              <div className="space-y-2 rounded-lg border border-primary/20 bg-primary/5 p-3">
+                <label className="text-sm font-medium" htmlFor="collection-transfer-cash-voucher">رقم الإذن</label>
+                <Input
+                  id="collection-transfer-cash-voucher"
+                  value={cashVoucherNumber}
+                  onChange={(e) => setCashVoucherNumber(e.target.value)}
+                  placeholder="أدخل رقم إذن التوريد النقدي"
+                  maxLength={100}
+                />
               </div>
             )}
             <Button className="w-full" onClick={openConfirmation} disabled={saving || !selected.length}>

@@ -5,6 +5,7 @@ import { Button } from 'src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from 'src/components/ui/card';
 import { Input } from 'src/components/ui/input';
 import { fetchRejectedContractsReport } from '../api/reportsService';
+import { excelDate, excelDateTime } from '../excelDate';
 
 const date = (value?: string | null) =>
   value ? new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Cairo' }).format(new Date(value)) : '—';
@@ -127,7 +128,7 @@ export default function RejectedContractsReport() {
       ['تقرير العقود المرفوضة'],
       [],
       columns.map((column) => column.header),
-      ...rows.map((row: any) => columns.map((column) => column.value(row))),
+      ...rows.map((row: any) => columns.map((column, index) => index === 1 ? excelDate(row.contract_date) : index === 2 ? excelDateTime(row.rejected_at) : column.value(row))),
     ]);
     sheet['!cols'] = columns.map((column) => ({ wch: Math.max(column.header.length + 5, 16) }));
     const workbook = XLSX.utils.book_new();

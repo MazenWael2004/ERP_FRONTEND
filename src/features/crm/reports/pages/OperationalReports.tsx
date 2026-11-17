@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   BarChart3,
   Boxes,
+  Check,
+  ChevronsUpDown,
   Download,
   ReceiptText,
   RefreshCw,
@@ -16,6 +18,8 @@ import { Button } from 'src/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from 'src/components/ui/card';
 
 import { Input } from 'src/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from 'src/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from 'src/components/ui/command';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from 'src/components/ui/tabs';
 
@@ -25,6 +29,7 @@ import {
   fetchReplicationServicesReport,
   fetchSalesReport,
 } from '../api/reportsService';
+import { excelDate } from '../excelDate';
 
 const money = (value: unknown) =>
   new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(Number(value || 0)) + ' ج.م';
@@ -49,6 +54,7 @@ const arabicMonth = (value: unknown) => {
 
 const workflowStatusLabels: Record<string, string> = {
   PENDING: 'قيد الانتظار',
+  APPROVED: 'تمت الموافقة',
   UNDER_CHECKING: 'قيد المراجعة',
   UNDER_INSTALLATION: 'قيد التركيب',
   INSTALLED: 'تم التركيب',
@@ -100,6 +106,7 @@ export default function OperationalReports() {
   const [endDate, setEndDate] = useState(today);
 
   const [salesWorkflowStatus, setSalesWorkflowStatus] = useState('');
+  const [requestWorkflowStatus, setRequestWorkflowStatus] = useState('');
 
   const [active, setActive] = useState<ActiveReport>('collections');
 
@@ -115,16 +122,10 @@ export default function OperationalReports() {
     setError('');
 
     try {
-      const loader =
-        active === 'collections'
-          ? fetchCollectionsReport
-          : active === 'units'
-            ? fetchAdditionalUnitsReport
-            : active === 'replication'
-              ? fetchReplicationServicesReport
-              : (start: string, end: string) => fetchSalesReport(start, end, salesWorkflowStatus || undefined);
-
-      setData(await loader(startDate, endDate));
+      if (active === 'collections') setData(await fetchCollectionsReport(startDate, endDate));
+      else if (active === 'units') setData(await fetchAdditionalUnitsReport(startDate, endDate, requestWorkflowStatus || undefined));
+      else if (active === 'replication') setData(await fetchReplicationServicesReport(startDate, endDate, requestWorkflowStatus || undefined));
+      else setData(await fetchSalesReport(startDate, endDate, salesWorkflowStatus || undefined));
     } catch {
       setError('تعذر تحميل التقرير. حاول مرة أخرى.');
     } finally {
@@ -171,7 +172,7 @@ export default function OperationalReports() {
         [
           receipt.contract_id || '',
           receipt.customer_name_ar || receipt.customer_name || '',
-          receipt.collected_at ? String(receipt.collected_at).slice(0, 10) : '',
+          excelDate(receipt.collected_at),
           time12(receipt.created_time),
           receipt.collector_name_ar || receipt.collector_name || '',
           receipt.collector_supervisor_name_ar || receipt.collector_supervisor_name || '',
@@ -189,7 +190,7 @@ export default function OperationalReports() {
           receipt.subscription_month ? arabicMonth(receipt.subscription_month) : '',
           receipt.subscription_year || '',
           collectionStatusLabel(receipt.collection_workflow_status),
-          receipt.settled_at ? String(receipt.settled_at).slice(0, 10) : '',
+          excelDate(receipt.settled_at),
         ].reverse(),
       );
 
@@ -225,12 +226,12 @@ export default function OperationalReports() {
       const isReplicationReport = active === 'replication';
       const rows = (data?.rows || []).map((unit: any) =>
         [
-          date(unit.invoice_date),
-
+          date(unit.requested_at),
+          workflowStatusLabel(unit.request_workflow_status),
+          unit.requested_by_name_ar || unit.requested_by_name || '—',
+          `${unit.contract_id}`,
           unit.customer_name_ar || unit.customer_name || '—',
-          unit.parent_customer_name_ar || unit.parent_customer_name_en || '—',
 
-          `#${unit.contract_id}`,
 
           unit.service_name_ar || unit.service_name || '—',
 
@@ -244,19 +245,14 @@ export default function OperationalReports() {
 
       const exportRows = (data?.rows || []).map((unit: any) =>
         [
-          unit.invoice_date ? String(unit.invoice_date).slice(0, 10) : '',
-
-          unit.customer_name_ar || unit.customer_name || '',
-          unit.parent_customer_name_ar || unit.parent_customer_name_en || '',
-
+          excelDate(unit.requested_at),
+          workflowStatusLabel(unit.request_workflow_status),
+          unit.requested_by_name_ar || unit.requested_by_name || '',
           unit.contract_id || '',
-
+          unit.customer_name_ar || unit.customer_name || '',
           unit.service_name_ar || unit.service_name || '',
-
           toNumber(unit.quantity),
-
           toNumber(unit.unit_price),
-
           toNumber(unit.line_total),
         ].reverse(),
       );
@@ -267,10 +263,11 @@ export default function OperationalReports() {
         sheetName: isReplicationReport ? 'خدمة النسخ' : 'الوحدات الإضافية',
 
         headers: [
-          'التاريخ',
-          'اسم العميل',
-          'تابع لعميل/صيدلية',
+          'تاريخ الطلب',
+          'حالة الطلب',
+          'مقدم الطلب',
           'كود العميل',
+          'اسم العميل',
           'الخدمة',
           'الكمية',
           'سعر الوحدة',
@@ -311,7 +308,7 @@ export default function OperationalReports() {
 
     const exportRows = (data?.rows || []).map((sale: any) =>
       [
-        sale.contract_date ? String(sale.contract_date).slice(0, 10) : '',
+          excelDate(sale.contract_date),
         sale.contract_id || '',
         sale.sales_responsible_name_ar || sale.sales_responsible_name_en || '',
         sale.sales_supervisor_name_ar || sale.sales_supervisor_name_en || '',
@@ -374,9 +371,9 @@ export default function OperationalReports() {
     const worksheet = XLSX.utils.aoa_to_sheet([
       [table.title],
 
-      ['من تاريخ', startDate],
+      ['من تاريخ', excelDate(startDate)],
 
-      ['إلى تاريخ', endDate],
+      ['إلى تاريخ', excelDate(endDate)],
 
       [],
 
@@ -480,6 +477,20 @@ export default function OperationalReports() {
               ],
             },
           ]
+        : active === 'units' || active === 'replication'
+          ? [
+              primaryMetric,
+              {
+                label: amountMetric.label,
+                value: amountMetric.value,
+                icon: <BarChart3 />,
+                breakdown: [
+                  { label: 'تمت الموافقة', value: money(summary.approved_amount) },
+                  { label: 'مرفوض', value: money(summary.rejected_amount) },
+                  { label: 'قيد الانتظار', value: money(summary.pending_amount) },
+                ],
+              },
+            ]
         : [
           primaryMetric,
           { label: amountMetric.label, value: amountMetric.value, icon: <BarChart3 /> },
@@ -489,7 +500,7 @@ export default function OperationalReports() {
     <div dir="rtl" className="space-y-6 text-right">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">تقارير التعاقدات الجديدة</h1>
+          <h1 className="text-2xl font-bold">تقارير التعاقدات </h1>
 
           <p className="mt-1 text-sm text-muted-foreground">
             التحصيلات والوحدات الإضافية و خدمات الreplication والمبيعات حسب الفترة.
@@ -524,19 +535,35 @@ export default function OperationalReports() {
           {active === 'sales' && (
             <label className="grid gap-1 text-sm">
               <span>حالة العقد</span>
-              <select
+              <SearchableStatusSelect
                 value={salesWorkflowStatus}
-                onChange={(event) => setSalesWorkflowStatus(event.target.value)}
-                className="h-9 min-w-44 rounded-md border border-input bg-transparent px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              >
-                <option value="">كل الحالات</option>
-                <option value="PENDING">قيد الانتظار</option>
-                <option value="UNDER_CHECKING">قيد المراجعة</option>
-                <option value="UNDER_INSTALLATION">قيد التركيب</option>
-                <option value="INSTALLED">تم التركيب</option>
-                <option value="ACTIVATED">مفعل</option>
-                <option value="REJECTED">مرفوض</option>
-              </select>
+                onValueChange={setSalesWorkflowStatus}
+                options={[
+                  { value: '', label: 'كل الحالات' },
+                  { value: 'PENDING', label: 'قيد الانتظار' },
+                  { value: 'UNDER_CHECKING', label: 'قيد المراجعة' },
+                  { value: 'UNDER_INSTALLATION', label: 'قيد التركيب' },
+                  { value: 'INSTALLED', label: 'تم التركيب' },
+                  { value: 'ACTIVATED', label: 'مفعل' },
+                  { value: 'REJECTED', label: 'مرفوض' },
+                ]}
+              />
+            </label>
+          )}
+
+          {(active === 'units' || active === 'replication') && (
+            <label className="grid gap-1 text-sm">
+              <span>حالة الطلب</span>
+              <SearchableStatusSelect
+                value={requestWorkflowStatus}
+                onValueChange={setRequestWorkflowStatus}
+                options={[
+                  { value: '', label: 'كل الحالات' },
+                  { value: 'PENDING', label: 'قيد الانتظار' },
+                  { value: 'APPROVED', label: 'تمت الموافقة' },
+                  { value: 'REJECTED', label: 'مرفوض' },
+                ]}
+              />
             </label>
           )}
 
@@ -586,11 +613,12 @@ export default function OperationalReports() {
             <p>جارٍ تحميل التقرير…</p>
           ) : (
             <>
-              <div
-                className={`grid grid-cols-1 gap-4 ${active === 'sales' ? 'sm:grid-cols-2 xl:grid-cols-3' : 'sm:grid-cols-2'}`}
-              >
-                {metrics.map((metric) => <Metric key={metric.label} {...metric} />)}
-              </div>
+              {/* Sales report summary cards are temporarily hidden. */}
+              {active !== 'sales' && (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {metrics.map((metric) => <Metric key={metric.label} {...metric} compact={active === 'collections'} />)}
+                </div>
+              )}
 
               <ReportTable {...table} />
             </>
@@ -601,23 +629,69 @@ export default function OperationalReports() {
   );
 }
 
-function Metric({ label, value, icon, featured = false, helper, breakdown }: MetricData) {
+function SearchableStatusSelect({
+  value,
+  onValueChange,
+  options,
+}: {
+  value: string;
+  onValueChange: (value: string) => void;
+  options: Array<{ value: string; label: string }>;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find((option) => option.value === value) || options[0];
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="outline" className="min-w-44 justify-between font-normal">
+          <span>{selected?.label}</span>
+          <ChevronsUpDown className="mr-2 h-4 w-4 text-muted-foreground" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent dir="rtl" align="start" className="w-[--radix-popover-trigger-width] p-0">
+        <Command>
+          <CommandInput placeholder="ابحث في الحالات..." />
+          <CommandList>
+            <CommandEmpty>لا توجد نتائج مطابقة</CommandEmpty>
+            <CommandGroup>
+              {options.map((option) => (
+                <CommandItem
+                  key={option.value || 'all'}
+                  value={`${option.label} ${option.value}`}
+                  onSelect={() => {
+                    onValueChange(option.value);
+                    setOpen(false);
+                  }}
+                >
+                  <Check className={`ml-2 h-4 w-4 ${option.value === value ? 'opacity-100' : 'opacity-0'}`} />
+                  {option.label}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function Metric({ label, value, icon, featured = false, helper, breakdown, compact = false }: MetricData & { compact?: boolean }) {
   return (
     <Card className={featured ? 'border-primary/25 bg-gradient-to-br from-primary/10 via-card to-card shadow-sm sm:col-span-2' : 'transition-shadow hover:shadow-sm'}>
-      <CardHeader className="flex flex-row items-start justify-between gap-3 pb-2">
+      <CardHeader className={`flex flex-row items-start justify-between gap-3 ${compact ? 'p-4 pb-1.5' : 'pb-2'}`}>
         <div className="min-w-0">
           <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
           {helper && <p className="mt-1 text-xs text-muted-foreground">{helper}</p>}
         </div>
-        <div className={featured ? 'rounded-xl bg-primary p-2 text-primary-foreground' : 'rounded-xl bg-muted p-2 text-muted-foreground'}>
+        <div className={featured ? `rounded-xl bg-primary ${compact ? 'p-1.5' : 'p-2'} text-primary-foreground` : `rounded-xl bg-muted ${compact ? 'p-1.5' : 'p-2'} text-muted-foreground`}>
           {icon}
         </div>
       </CardHeader>
 
-      <CardContent>
-        <div className={featured ? 'text-3xl font-bold tracking-tight' : 'text-2xl font-bold tracking-tight'}>{value || '0'}</div>
+      <CardContent className={compact ? 'p-4 pt-1.5' : undefined}>
+        <div className={featured ? (compact ? 'text-2xl font-bold tracking-tight' : 'text-3xl font-bold tracking-tight') : (compact ? 'text-xl font-bold tracking-tight' : 'text-2xl font-bold tracking-tight')}>{value || '0'}</div>
         {breakdown && (
-          <div className="mt-3 grid grid-cols-2 gap-2 border-t pt-3 text-sm">
+          <div className={`${compact ? 'mt-2 pt-2' : 'mt-3 pt-3'} grid grid-cols-2 gap-2 border-t text-sm`}>
             {breakdown.map((item) => (
               <div key={item.label}>
                 <p className="text-xs text-muted-foreground">{item.label}</p>

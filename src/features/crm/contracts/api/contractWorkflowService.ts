@@ -68,7 +68,7 @@ export const checkContract = (contractId: number, note?: string) => api.post(`/c
 export const approveContract = (contractId: number, note?: string) => api.post(`/contract-workflow/${contractId}/approve`, { note });
 export const assignContractTechnician = (contractId: number, supervisorId: number, technicianId: number, note?: string) => api.post(`/contract-workflow/${contractId}/assign-technician`, { supervisorId, technicianId, note });
 export const rejectContract = (contractId: number, reason: string) => api.post(`/contract-workflow/${contractId}/reject`, { reason });
-export const installContract = (contractId: number, activationCode: string, note?: string) => api.post(`/contract-workflow/${contractId}/install`, { activationCode, note });
+export const installContract = (contractId: number, note?: string) => api.post(`/contract-workflow/${contractId}/install`, { note });
 export const activateContract = (contractId: number, note?: string) => api.post(`/contract-workflow/${contractId}/activate`, { note });
 export const returnContractToManager = (contractId: number, reason: string) => api.post(`/contract-workflow/${contractId}/return-to-manager`, { reason });
 export const addContractNote = (contractId: number, note: string) => api.post(`/contract-workflow/${contractId}/notes`, { note });

@@ -336,7 +336,24 @@
   "NUMBER_OF_MONTHS_PAID_ADVANCE_INVALID":"هذه القيمة غير مقبولة",
   "PRICING_CODE_EXISTS":"كود التسعير موجود بالفعل",
   "PRICING_NAME_ONLY_ENGLISH":"Pricing name must be in english",
-  "PRICING_NAME_ONLY_ARABIC":"يجب أن يكون اسم التسعير باللغة العربية"
+  "PRICING_NAME_ONLY_ARABIC":"يجب أن يكون اسم التسعير باللغة العربية",
+  "CONTRACT": {
+    "CURRENT_USER": "المستخدم الحالي",
+    "TITLE": "إنشاء عميل وعقد جديد",
+    "SUBTITLE": "قم بإدخال بيانات العميل ثم تفاصيل العقد والاشتراك والتحصيل.",
+    "STEP_CUSTOMER": "بيانات العميل",
+    "STEP_CUSTOMER_DESCRIPTION": "العميل، المستندات، جهات الاتصال، والعنوان",
+    "STEP_CONTRACT": "العقد والاشتراك",
+    "STEP_CONTRACT_DESCRIPTION": "التعاقد، الاشتراك، وتحصيل العقد",
+    "STEP_ADDONS": "الإضافات والأجهزة",
+    "STEP_ADDONS_DESCRIPTION": "وحدات إضافية، نسخ، أجهزة، وإيصال مستقل",
+    "STEP_PROGRESS": "الخطوة {{current}} من {{total}}",
+    "SAVE_CUSTOMER": "حفظ بيانات العميل",
+    "NEXT_ADDONS": "التالي: الإضافات والأجهزة",
+    "SAVING": "جارٍ الحفظ...",
+    "SAVE_CONTRACT_UPDATE": "حفظ تعديل العقد",
+    "SUBMIT": "إرسال العقد"
+  }
   
 
 }
